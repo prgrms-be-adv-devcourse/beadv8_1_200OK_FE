@@ -36,6 +36,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: '--append-system-prompt "모든 답변과 댓글은 반드시 한국어로 작성해 주세요."'
+          show_full_output: true
 
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
