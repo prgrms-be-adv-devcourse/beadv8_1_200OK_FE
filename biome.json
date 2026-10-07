@@ -1,0 +1,127 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": ["**", "!dist", "!node_modules", "!public"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "useExhaustiveDependencies": "warn"
+      },
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": [
+                  "@/features/*/api",
+                  "@/features/*/api/**",
+                  "@/features/*/queries",
+                  "@/features/*/schemas",
+                  "@/features/*/store",
+                  "@/features/*/components/**"
+                ],
+                "message": "feature 내부 모듈은 비공개입니다. 해당 feature의 index.ts 공개 계약만 import하세요 (ADR-0003)."
+              },
+              {
+                "group": ["@/mocks/**"],
+                "message": "mocks는 테스트에서만 import합니다 (ADR-0003)."
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/shared/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/features/**", "@/app/**"],
+                    "message": "shared는 features·app을 import할 수 없습니다 (ADR-0003: app → features → shared 단방향)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/features/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/app/**"],
+                    "message": "features는 app을 import할 수 없습니다 (ADR-0003)."
+                  },
+                  {
+                    "group": [
+                      "@/features/*/api",
+                      "@/features/*/api/**",
+                      "@/features/*/queries",
+                      "@/features/*/schemas",
+                      "@/features/*/store",
+                      "@/features/*/components/**"
+                    ],
+                    "message": "다른 feature의 내부 모듈은 비공개입니다 (ADR-0003)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/**/*.test.{ts,tsx}", "src/test/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
+}
