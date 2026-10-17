@@ -1,0 +1,371 @@
+.page {
+  max-width: var(--pd-console-max-width);
+  margin: 0 auto;
+  padding: var(--mantine-spacing-lg) var(--mantine-spacing-md) 6rem;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-bottom: var(--mantine-spacing-lg);
+  border-bottom: 1px solid var(--pd-color-border);
+}
+
+.wordmark {
+  font-size: 1.625rem;
+  line-height: 2.25rem;
+  color: var(--pd-color-primary);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+  padding-top: var(--mantine-spacing-lg);
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tocLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--pd-touch-min);
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--pd-color-primary);
+    text-decoration: underline;
+  }
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+  min-width: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  scroll-margin-top: var(--mantine-spacing-md);
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sectionMeta {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.panel {
+  padding: var(--mantine-spacing-md);
+  background: var(--pd-color-surface);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  min-width: 0;
+}
+
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: var(--mantine-spacing-md);
+}
+
+.stateItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  min-width: 0;
+
+  /* 버튼은 칸 너비로 늘리지 않고 제 너비로 보여 준다 */
+  & > button {
+    align-self: flex-start;
+  }
+}
+
+.stateLabel {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+  font-weight: 600;
+}
+
+.measureValue {
+  color: var(--pd-color-info);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.swatchGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: var(--mantine-spacing-sm);
+}
+
+.swatch {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  min-width: 0;
+}
+
+.swatchChip {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.swatchText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--pd-font-caption);
+  color: var(--pd-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.exampleTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--mantine-font-size-sm);
+
+  & th,
+  & td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--pd-color-divider);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  & th {
+    background: var(--pd-color-surface-subtle);
+    color: var(--pd-color-text-secondary);
+    font-weight: 600;
+  }
+
+  & tr:last-child td {
+    border-bottom: 0;
+  }
+}
+
+/* 가로 스크롤 영역. 포커스 링(2+2px)이 잘리지 않게 여백을 둔다 */
+.tableScroll {
+  overflow-x: auto;
+  margin: -0.25rem;
+  padding: 0.25rem;
+}
+
+/* 종류 × 상태 표 (버튼) */
+.stateTable {
+  display: grid;
+  grid-template-columns: 8rem repeat(6, minmax(7.5rem, 1fr));
+  gap: 1rem 0.75rem;
+  align-items: center;
+  min-width: 52rem;
+}
+
+.rowName {
+  font-size: var(--mantine-font-size-sm);
+}
+
+/* 열린 셀렉트: 목록이 아래로 펼쳐질 자리 */
+.openSelect {
+  position: relative;
+  min-height: 12rem;
+}
+
+/* 배지·꼬리표 한 줄 */
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-xs);
+}
+
+/* 상품 카드: 모바일 2열 · 태블릿 3열 · 데스크톱 4열 이상(간격 12/20/24) */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 48em) {
+  .cardGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (min-width: 64em) {
+  .cardGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+}
+
+/* 모바일 폭 미리보기 (390) */
+.phoneFrame {
+  width: 100%;
+  max-width: 24.375rem;
+  overflow: hidden;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--pd-color-bg);
+}
+
+/* 레이아웃 미리보기 iframe: 데스크톱 1440×900 → 50%, 모바일 390×844 → 75% */
+.frames {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--mantine-spacing-lg);
+}
+
+.frameBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.frameScroll {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.frameScaler {
+  overflow: hidden;
+
+  &[data-device="desktop"] {
+    width: 45rem;
+    height: 28.125rem;
+  }
+
+  &[data-device="mobile"] {
+    width: 18.28125rem;
+    height: 39.5625rem;
+  }
+
+  & iframe {
+    display: block;
+    border: 0;
+    transform-origin: 0 0;
+  }
+
+  &[data-device="desktop"] iframe {
+    transform: scale(0.5);
+  }
+
+  &[data-device="mobile"] iframe {
+    transform: scale(0.75);
+  }
+}
+
+/* 사이드바 + 표 */
+.consoleDemo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+}
+
+.sidebarDemo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.75rem;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+}
+
+.labelList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: 0.25rem var(--mantine-spacing-md);
+  margin: 0;
+
+  & div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--mantine-spacing-xs);
+    padding: 0.375rem 0;
+    border-bottom: 1px dashed var(--pd-color-divider);
+  }
+
+  & dt {
+    font-family: var(--mantine-font-family-monospace);
+    font-size: var(--pd-font-caption);
+    color: var(--pd-color-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  & dd {
+    margin: 0;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+/* 데스크톱 ≥ 1024 (= $mantine-breakpoint-md). Biome CSS 파서가 $변수를 읽지 못해 값을 그대로 쓴다 */
+@media (min-width: 64em) {
+  .page {
+    padding: var(--mantine-spacing-xl) var(--mantine-spacing-xl) 6rem;
+  }
+
+  .body {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: var(--mantine-spacing-xl);
+    align-items: start;
+  }
+
+  .tocNav {
+    position: sticky;
+    top: var(--mantine-spacing-lg);
+    max-height: calc(100dvh - var(--mantine-spacing-lg) * 2);
+    overflow-y: auto;
+  }
+
+  .toc {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .consoleDemo {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .sidebarDemo {
+    flex: none;
+    width: var(--pd-sidebar-width);
+  }
+}

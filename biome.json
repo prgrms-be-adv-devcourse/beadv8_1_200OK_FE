@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!dist", "!node_modules", "!public"]
+    "includes": ["**", "!dist", "!node_modules", "!public", "!design/screens"]
   },
   "formatter": {
     "enabled": true,

@@ -1,0 +1,78 @@
+/* 배지 · 안내 박스 · 토스트 · 스켈레톤 */
+
+/* ─── Badge: 높이 24, radius 6, 12/16 600, 아이콘 12 + 간격 4 ─── */
+
+.badge {
+  --badge-height-md: 1.5rem;
+  --badge-padding-x-md: 0.5rem;
+  --badge-fz-md: 0.75rem;
+
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.badgeSection {
+  --badge-section-margin: 0.25rem;
+
+  & svg {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+}
+
+/* ─── Alert: 패딩 16, radius 12, 아이콘 20 + 간격 12, 제목 15/22 600, 설명 14/22 ─── */
+
+.alert {
+  padding: 1rem;
+}
+
+.alertIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-inline-end: 0.75rem;
+}
+
+.alertBody {
+  gap: 0;
+}
+
+.alertTitle {
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.375rem;
+  font-weight: 600;
+}
+
+.alertMessage {
+  color: inherit;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.375rem;
+}
+
+/* ─── 토스트: toast-bg 배경 흰 글자, radius 12, 패딩 14·20, shadow md ─── */
+
+/* 문구 길이만큼의 너비로 가운데 (최대는 Notifications 컨테이너 440) */
+.toast {
+  width: fit-content;
+  margin-inline: auto;
+  padding: 0.875rem 1.25rem;
+  background-color: var(--pd-color-toast-bg);
+  box-shadow: var(--mantine-shadow-md);
+
+  &::before {
+    display: none;
+  }
+}
+
+.toastDescription {
+  color: var(--mantine-color-white);
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.375rem;
+}
+
+/* ─── Skeleton: disabled-bg 색 ─── */
+
+.skeleton[data-visible]::after {
+  background-color: var(--pd-color-disabled-bg);
+}
