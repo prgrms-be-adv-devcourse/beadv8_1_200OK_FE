@@ -39,8 +39,10 @@ export type CheckoutViewProps = {
   sellerNames?: Record<number, string>
   /** TODO(api): 📝 GET /wallets/me 잔액 */
   balance: number
-  /** TODO(api): 📝 회원 배송지 GET /members/me/address. 없으면 null */
+  /** 처음 배송지: 충전에 다녀오기 전 적어 둔 초안. TODO(api): 📝 회원 배송지 GET /members/me/address. 없으면 null */
   defaultAddress?: ShippingAddress | null
+  /** 배송지 모달에서 ‘이번 주문에 적용’을 눌렀을 때 (초안 저장) */
+  onAddressSave?: (address: ShippingAddress) => void
   paymentState?: PaymentState
   /** 409로 주문서를 다시 불러왔을 때 이전 금액 */
   previousTotal?: number | null
@@ -88,6 +90,7 @@ export function CheckoutView({
   previousTotal,
   errorMessage,
   loadErrorMessage,
+  onAddressSave,
   onPay,
   onRetry,
 }: CheckoutViewProps) {
@@ -373,6 +376,7 @@ export function CheckoutView({
         onSave={(next) => {
           setAddress(next)
           setAddressOpen(false)
+          onAddressSave?.(next)
         }}
       />
 
