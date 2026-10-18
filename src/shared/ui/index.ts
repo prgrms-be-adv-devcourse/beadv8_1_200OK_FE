@@ -30,6 +30,7 @@ export {
   PhotoUploader,
   type PhotoUploaderProps,
 } from './PhotoUploader/PhotoUploader'
+export { type SavedMedia, useMediaUploads } from './PhotoUploader/useMediaUploads'
 export { PriceText, type PriceTextProps, type PriceTextSize } from './PriceText/PriceText'
 export {
   ProductCard,

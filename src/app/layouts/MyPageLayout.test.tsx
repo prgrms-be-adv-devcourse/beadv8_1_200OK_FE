@@ -1,7 +1,11 @@
 import { screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import userEvent from '@testing-library/user-event'
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
+import { clearAccessToken, getAuthSession, setAccessToken } from '@/shared/api/authToken'
+import { MemberRole } from '@/shared/api/types'
 import { render } from '@/test/render'
-import { MyPageLayoutView } from './MyPageLayout'
+import { fakeToken } from '@/test/token'
+import { MyPageLayout, MyPageLayoutView } from './MyPageLayout'
 
 function renderLayout(path: string, sellerStatus: 'none' | 'applying' | 'approved' = 'none') {
   render(
@@ -37,5 +41,26 @@ describe('MyPageLayout', () => {
     expect(
       screen.queryByRole('navigation', { name: '마이페이지 메뉴 목록' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('로그아웃하면 홈으로 가고 토큰을 지운다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    const router = createMemoryRouter(
+      [
+        { path: '/', element: <h1>홈</h1> },
+        { path: '/me', Component: MyPageLayout, children: [{ index: true, element: <p>마이</p> }] },
+      ],
+      { initialEntries: ['/me'] },
+    )
+    render(<RouterProvider router={router} />)
+
+    await userEvent
+      .setup()
+      .click(screen.getAllByRole('button', { name: '로그아웃' })[0] as HTMLElement)
+
+    expect(await screen.findByRole('heading', { name: '홈' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+    expect(getAuthSession()).toBeNull()
+    clearAccessToken()
   })
 })

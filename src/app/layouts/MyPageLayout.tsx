@@ -2,6 +2,7 @@ import { NavLink, UnstyledButton } from '@mantine/core'
 import { ChevronRight, LogOut } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
+import { logout } from '@/features/auth'
 import { MemberRole } from '@/shared/api/types'
 import { showToast } from '@/shared/ui'
 import { useSession } from '../session'
@@ -139,9 +140,11 @@ export function MyPageLayout() {
     <MyPageLayoutView
       sellerStatus={sellerStatus}
       onLogout={() => {
-        // TODO(api): 2-1 로그아웃 = 클라이언트에서 토큰 삭제 + 캐시 정리(로그아웃 API 없음, A-12)
-        showToast({ message: '로그아웃했어요' })
-        navigate('/', { replace: true })
+        // 홈으로 옮긴 뒤 토큰을 지운다(마이페이지 가드가 로그인 화면으로 보내지 않게)
+        void Promise.resolve(navigate('/', { replace: true })).then(() => {
+          logout()
+          showToast({ message: '로그아웃했어요' })
+        })
       }}
     >
       <Outlet />
