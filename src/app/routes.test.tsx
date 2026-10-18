@@ -3,7 +3,9 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { render } from '@/test/render'
 import { appRoutes } from './routes'
 
-// SCREENS.md의 라우트가 모두 화면으로 이어지는지(만든 화면은 그 제목, 나머지는 빈 페이지 제목). 세션이 'unknown'이라 가드는 통과한다.
+// SCREENS.md의 라우트가 모두 화면으로 이어지는지(만든 화면은 그 제목, 나머지는 빈 페이지 제목).
+// 가드 동작은 guards.test에서 본다. 여기서는 세션을 'unknown'으로 두어 가드를 통과시킨다.
+vi.mock('./session', () => ({ useSession: () => ({ status: 'unknown' }) }))
 
 function renderAt(path: string) {
   const router = createMemoryRouter([{ path: '/', children: appRoutes }], {

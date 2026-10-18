@@ -1,4 +1,10 @@
 import '@testing-library/jest-dom/vitest'
+import { server } from '@/mocks/server'
+
+// API 요청은 MSW가 받는다. 핸들러가 없는 요청은 테스트 실패
+beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
+afterEach(() => server.resetHandlers())
+afterAll(() => server.close())
 
 // jsdom에 없는 브라우저 API. Mantine이 쓴다 (https://mantine.dev/guides/vitest/)
 Object.defineProperty(window, 'matchMedia', {

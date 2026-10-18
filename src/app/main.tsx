@@ -11,8 +11,17 @@ import '@/shared/styles/tokens.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
+import { registerAuthHandlers } from '@/features/auth'
+import { queryClient } from '@/shared/api/queryClient'
 import { AppProviders } from './providers/AppProviders'
 import { router } from './router'
+
+// 세션 종료 · 401 처리 (캐시 정리 + /login?returnTo=)
+registerAuthHandlers({
+  queryClient,
+  navigate: (to, options) => router.navigate(to, options),
+  getCurrentPath: () => `${router.state.location.pathname}${router.state.location.search}`,
+})
 
 const container = document.getElementById('root')
 if (!container) {

@@ -1,16 +1,26 @@
+import { useSyncExternalStore } from 'react'
+import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import type { MemberRole } from '@/shared/api/types'
 
-// 가드·헤더가 읽는 로그인 상태. 내 정보 API가 없어 역할 판단 방법이 아직 정해지지 않았다(DECISIONS.md A-12).
-// TODO(api): 2단계 2-0(0-4)에서 features/auth의 useMe() 결과로 바꾼다. 그 전까지는 'unknown'이라
-//   가드는 모두 통과시키고, 헤더는 비회원 모양을 그린다.
+// 가드·헤더가 읽는 로그인 상태. 내 정보 API가 없어 로그인 토큰 payload(sub · role)로 판단한다(DECISIONS.md A-12).
+// 토큰은 메모리에만 있어 새로고침하면 guest가 된다. TODO(api): 내 정보 API가 생기면 닉네임을 채운다.
+// 'unknown'은 내 정보 조회처럼 확인 중인 상태용으로 남겨 둔다(지금은 만들지 않는다). 가드는 통과시킨다.
 
 export type Session =
   | { status: 'unknown' }
   | { status: 'guest' }
-  | { status: 'authenticated'; role: MemberRole; nickname?: string }
+  | { status: 'authenticated'; role: MemberRole; memberId?: number; nickname?: string }
 
-const UNKNOWN: Session = { status: 'unknown' }
+const GUEST: Session = { status: 'guest' }
+const cache = new WeakMap<object, Session>()
 
 export function useSession(): Session {
-  return UNKNOWN
+  const auth = useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)
+  if (!auth) return GUEST
+  let session = cache.get(auth)
+  if (!session) {
+    session = { status: 'authenticated', role: auth.role, memberId: auth.memberId }
+    cache.set(auth, session)
+  }
+  return session
 }
