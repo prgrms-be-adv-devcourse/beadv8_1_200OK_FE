@@ -2,13 +2,14 @@ import axios from 'axios'
 import { apiBaseUrl } from '@/shared/lib/env'
 import { type ApiError, toApiError } from './ApiError'
 import { clearAccessToken, getFreshAuthSession } from './authToken'
-import { attachMemberHeaders } from './memberHeaders'
+import { attachMemberHeaders, needsMemberHeaders } from './memberHeaders'
 
 // API 요청은 이 인스턴스로만 보낸다 (ADR-0004). 경로는 Bruno 그대로 `/api/v1/...`.
 // - 로그인했으면 Authorization: Bearer (+ 임시 헤더가 필요한 API면 X-Member-*)
 // - 오류는 모두 ApiError로 바꿔 던진다
 // - 401: 토큰을 보냈다면 만료로 보고 토큰을 지운 뒤 토큰 없이 한 번 더 보낸다
 //   (서버는 공개 API도 잘못된 토큰이면 401을 준다). 그래도 401이면 onUnauthorized 핸들러를 부른다.
+//   임시 헤더 API는 다시 보내지 않는다: 세션이 없으면 X-Member-*도 빠져 400이 되므로 바로 로그인으로 보낸다.
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -52,8 +53,10 @@ apiClient.interceptors.response.use(
       const sentToken = config.headers?.has('Authorization') && !config.retriedWithoutToken
       if (sentToken) {
         clearAccessToken('expired')
-        config.headers.delete('Authorization')
-        return apiClient.request({ ...config, retriedWithoutToken: true })
+        if (!needsMemberHeaders(config.method, config.url)) {
+          config.headers.delete('Authorization')
+          return apiClient.request({ ...config, retriedWithoutToken: true })
+        }
       }
       if (!config.skipAuthRedirect) {
         for (const handler of unauthorizedHandlers) handler(apiError)

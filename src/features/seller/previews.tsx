@@ -303,6 +303,17 @@ export const sellerWorkPreviews: ScreenPreview[] = [
             },
           }),
       },
+      {
+        id: 'uploading',
+        label: '사진 올리는 중 (저장 막힘)',
+        session: 'seller',
+        render: () =>
+          form({
+            defaultValues: appleFormValues,
+            photos: [...photosOf(1), { id: 'up', url: '', alt: '상품 사진 2', progress: 40 }],
+            uploading: true,
+          }),
+      },
       { id: 'edit', label: '수정 (사진 순서)', session: 'seller', render: () => edit() },
       {
         id: 'conflict',
@@ -317,6 +328,15 @@ export const sellerWorkPreviews: ScreenPreview[] = [
         render: () =>
           edit({
             errorMessage: '옵션 ‘3kg (16~18과)’ 재고는 주문에 배정된 6개보다 적게 줄일 수 없어요.',
+          }),
+      },
+      {
+        id: 'field-errors',
+        label: '칸 오류 (서버 422)',
+        session: 'seller',
+        render: () =>
+          edit({
+            fieldErrors: { 'options.1.totalStock': '총재고는 0 이상이어야 합니다.' },
           }),
       },
       {

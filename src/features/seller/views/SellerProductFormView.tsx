@@ -16,7 +16,13 @@ import {
 } from '@mantine/core'
 import { CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Controller, type FieldErrors, useFieldArray, useForm } from 'react-hook-form'
+import {
+  Controller,
+  type FieldErrors,
+  type FieldPath,
+  useFieldArray,
+  useForm,
+} from 'react-hook-form'
 import { Link } from 'react-router'
 import {
   ProductCategory,
@@ -28,7 +34,8 @@ import {
 } from '@/shared/api/types'
 import { MAX_IMAGE_MB, PRODUCT_IMAGE_MAX } from '@/shared/lib/constants'
 import { categoryLabels, productStatusLabels, regionLabels } from '@/shared/lib/labels'
-import { PageHeader, type PhotoItem, PhotoUploader, ProductCard } from '@/shared/ui'
+import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
+import { DisabledReason, PageHeader, type PhotoItem, PhotoUploader, ProductCard } from '@/shared/ui'
 import { OPTION_MAX, type ProductFormValues, productSchema, textToHtml } from '../productSchema'
 import classes from './SellerProductFormView.module.css'
 
@@ -36,6 +43,7 @@ import classes from './SellerProductFormView.module.css'
 // API 기준(✅): 사진 1~10장, 옵션 1~50개(옵션명 중복 불가, 판매가 ≤ 정가 ≤ 1억), 판매 상태 4종 + 공개 여부.
 // 생산자·상세 지역·수확일·기본 옵션·설명 사진은 API에 없어 두지 않는다(A-2).
 // 제출에 실패하면 위에 오류 요약(누르면 그 칸으로)을 보여 준다. 수정은 version이 다르면 409.
+// 사진은 다 올린 것(서버 url)만 넘기고, 올리는 중이면 저장을 막는다.
 
 type MaybeAsync = unknown
 
@@ -51,10 +59,14 @@ export type SellerProductFormViewProps = {
   onMovePhoto: (id: string, direction: -1 | 1) => void
   /** 업로드 실패 등 사진 칸 오류 */
   photoError?: string | null
+  /** 사진을 올리는 중 → 저장을 막고 이유를 보여 준다 */
+  uploading?: boolean
   onSubmit: (values: ProductFormResult) => MaybeAsync
   submitting?: boolean
   /** 서버 오류 (서버 detail) */
   errorMessage?: string | null
+  /** 서버 422 errors[].path를 폼 경로로 바꾼 칸별 오류. 바뀔 때마다 붙이고 첫 칸으로 focus한다 */
+  fieldErrors?: Partial<Record<FieldPath<ProductFormValues>, string>>
   /** 수정 충돌(409): 다른 곳에서 먼저 고침 */
   conflict?: boolean
   onReload?: () => void
@@ -66,6 +78,18 @@ export type SellerProductFormViewProps = {
 }
 
 const emptyOption = { name: '', salePrice: undefined as unknown as number, totalStock: 0 }
+
+/**
+ * NumberInput 값 → 폼 숫자. Mantine은 '011'처럼 앞에 0이 붙은 값을 문자열로 넘기므로 숫자로 바꾼다.
+ * 빈 칸이나 숫자가 아닌 값은 undefined → 스키마의 ‘입력해 주세요’ 문구로 남긴다
+ */
+const toNumber = (value: string | number): number | undefined => {
+  if (typeof value === 'number') return value
+  const trimmed = value.replace(/,/g, '').trim()
+  if (trimmed === '') return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
 
 const defaults: ProductFormValues = {
   category: ProductCategory.FRUIT,
@@ -112,9 +136,11 @@ export function SellerProductFormView({
   onRemovePhoto,
   onMovePhoto,
   photoError,
+  uploading = false,
   onSubmit,
   submitting = false,
   errorMessage,
+  fieldErrors,
   conflict = false,
   onReload,
   onDelete,
@@ -130,14 +156,18 @@ export function SellerProductFormView({
     handleSubmit,
     watch,
     trigger,
+    setError,
     formState: { errors },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: { ...defaults, ...defaultValues },
   })
+  useServerFieldErrors(setError, fieldErrors)
   const { fields, append, remove } = useFieldArray({ control, name: 'options' })
   const values = watch()
   const title = mode === 'edit' ? '상품 수정' : '상품 등록'
+  // 다 올린 사진만 (올리는 중인 사진의 url은 브라우저 미리보기 주소다)
+  const uploaded = photos.filter((photo) => photo.progress === undefined)
   const photoMissing = submitted && photos.length === 0
   const errorList = submitted ? collectErrors(errors, photoMissing) : []
 
@@ -149,7 +179,7 @@ export function SellerProductFormView({
   const submit = handleSubmit(
     (form) => {
       setSubmitted(true)
-      if (photos.length === 0) return
+      if (uploading || uploaded.length === 0) return
       onSubmit({
         name: form.name,
         descriptionHtml: textToHtml(form.description),
@@ -157,7 +187,7 @@ export function SellerProductFormView({
         region: form.region,
         status: form.status,
         visibility: form.visibility,
-        imageUrls: photos.map((photo) => photo.url),
+        imageUrls: uploaded.map((photo) => photo.url),
         options: form.options.map(({ id, name, salePrice, listPrice, totalStock }) => ({
           ...(id === undefined ? {} : { id }),
           name,
@@ -387,8 +417,9 @@ export function SellerProductFormView({
                             rightSection={<span aria-hidden="true">원</span>}
                             classNames={{ input: 'pd-num' }}
                             value={f.value ?? ''}
-                            onChange={(v) => f.onChange(typeof v === 'number' ? v : undefined)}
+                            onChange={(v) => f.onChange(toNumber(v))}
                             onBlur={f.onBlur}
+                            ref={f.ref}
                             error={optionErrors?.salePrice?.message}
                           />
                         )}
@@ -407,8 +438,9 @@ export function SellerProductFormView({
                             rightSection={<span aria-hidden="true">원</span>}
                             classNames={{ input: 'pd-num' }}
                             value={f.value ?? ''}
-                            onChange={(v) => f.onChange(typeof v === 'number' ? v : undefined)}
+                            onChange={(v) => f.onChange(toNumber(v))}
                             onBlur={f.onBlur}
+                            ref={f.ref}
                             description={discount > 0 ? `${discount}% 할인으로 보여요` : undefined}
                             error={optionErrors?.listPrice?.message}
                           />
@@ -427,8 +459,9 @@ export function SellerProductFormView({
                             rightSection={<span aria-hidden="true">개</span>}
                             classNames={{ input: 'pd-num' }}
                             value={f.value ?? ''}
-                            onChange={(v) => f.onChange(typeof v === 'number' ? v : undefined)}
+                            onChange={(v) => f.onChange(toNumber(v))}
                             onBlur={f.onBlur}
+                            ref={f.ref}
                             description={f.value === 0 ? '재고 0이면 품절로 보여요' : undefined}
                             error={optionErrors?.totalStock?.message}
                           />
@@ -524,9 +557,17 @@ export function SellerProductFormView({
           <Button component={Link} to="/seller/products" variant="outline">
             취소
           </Button>
-          <Button type="submit" loading={submitting}>
-            {mode === 'edit' ? '저장' : '등록하기'}
-          </Button>
+          <DisabledReason
+            reason={
+              uploading
+                ? `사진을 다 올린 뒤 ${mode === 'edit' ? '저장' : '등록'}할 수 있어요`
+                : null
+            }
+          >
+            <Button type="submit" disabled={uploading} loading={submitting}>
+              {mode === 'edit' ? '저장' : '등록하기'}
+            </Button>
+          </DisabledReason>
         </div>
       </form>
 

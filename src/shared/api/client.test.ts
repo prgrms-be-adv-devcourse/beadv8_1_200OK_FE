@@ -105,6 +105,24 @@ describe('apiClient', () => {
     offEnd()
   })
 
+  it('임시 헤더 API는 토큰이 거절되면(401) 다시 보내지 않고 세션을 끝낸 뒤 onUnauthorized를 부른다', async () => {
+    let calls = 0
+    server.use(
+      http.get('*/api/v1/payouts', () => {
+        calls += 1
+        return problem(401, '토큰이 만료되었습니다.')
+      }),
+    )
+    const handler = vi.fn()
+    const off = onUnauthorized(handler)
+    setAccessToken(fakeToken({ memberId: 6, role: MemberRole.SELLER }))
+    await expect(apiClient.get('/api/v1/payouts')).rejects.toMatchObject({ status: 401 })
+    expect(calls).toBe(1)
+    expect(getAuthSession()).toBeNull()
+    expect(handler).toHaveBeenCalledTimes(1)
+    off()
+  })
+
   it('임시 헤더 API에는 토큰의 회원 번호 · 역할을 X-Member-*로 붙인다', async () => {
     let headers: Headers | null = null
     server.use(

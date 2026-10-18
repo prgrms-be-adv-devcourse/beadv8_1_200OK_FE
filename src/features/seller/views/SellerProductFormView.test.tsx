@@ -92,6 +92,27 @@ describe('SellerProductFormView', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('재고 0 뒤에 이어서 입력해도(011) 숫자 11로 넘기고, 비우면 입력해 달라고 한다', async () => {
+    const { user, onSubmit } = renderForm({ photos })
+    await user.type(screen.getByLabelText('상품명'), '청송 꿀사과')
+    await user.type(screen.getByLabelText('설명'), '아삭한 사과예요')
+    await user.type(screen.getByLabelText('옵션명'), '2kg')
+    await user.type(screen.getByLabelText('판매가'), '23900')
+    await user.type(screen.getByLabelText('재고'), '11')
+    await user.click(screen.getByRole('button', { name: '등록하기' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ options: [{ name: '2kg', salePrice: 23900, totalStock: 11 }] }),
+    )
+
+    await user.clear(screen.getByLabelText('재고'))
+    await user.click(screen.getByRole('button', { name: '등록하기' }))
+    expect(
+      await screen.findByRole('link', { name: '옵션 1: 재고를 입력해 주세요' }),
+    ).toBeInTheDocument()
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
   it('마지막 옵션은 삭제할 수 없다', () => {
     renderForm()
     expect(screen.getByRole('button', { name: '옵션 1 삭제' })).toBeDisabled()

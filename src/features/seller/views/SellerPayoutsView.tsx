@@ -1,6 +1,6 @@
 import { Alert, Button, Pagination, Skeleton, Stack, Table, VisuallyHidden } from '@mantine/core'
 import { Info, Wallet } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import type { PayoutSummary } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { formatAmount, formatDate } from '@/shared/lib/format'
@@ -30,6 +30,8 @@ export type SellerPayoutsViewProps = {
   totalPages?: number
   onPageChange?: (page: number) => void
   onRetry?: () => void
+  /** 목록 오류 문구 (서버 detail) */
+  errorMessage?: string
   /** 열린 정산 상세. null이면 닫힘 */
   detail: Omit<PayoutDetailModalProps, 'opened'> | null
 }
@@ -73,7 +75,6 @@ function Summary({
   )
 }
 
-const detailLink = (payout: PayoutSummary) => `/seller/payouts/${payout.payoutId}`
 const detailLabel = (payout: PayoutSummary) =>
   `${formatDate(payout.createdAt, 'monthDay')} 정산 ${payout.payoutId} 상세 보기`
 
@@ -86,8 +87,13 @@ export function SellerPayoutsView({
   totalPages = 1,
   onPageChange,
   onRetry,
+  errorMessage,
   detail,
 }: SellerPayoutsViewProps) {
+  // 상세를 열어도 목록 쪽(?page=)을 그대로 둔다
+  const { search } = useLocation()
+  const detailLink = (payout: PayoutSummary) => `/seller/payouts/${payout.payoutId}${search}`
+
   return (
     <div className={classes.root}>
       <PageHeader title="정산 내역" hideOnMobile />
@@ -114,6 +120,7 @@ export function SellerPayoutsView({
           }
           loadingLabel="정산 내역을 불러오고 있어요"
           onRetry={onRetry}
+          errorMessage={errorMessage}
           empty={{
             icon: <Wallet />,
             title: '아직 정산된 내역이 없어요',
