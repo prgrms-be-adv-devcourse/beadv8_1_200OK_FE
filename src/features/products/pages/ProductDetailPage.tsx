@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import { useParams } from 'react-router'
+import { useAddToCart } from '@/features/cart'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { type LoginReason, showToast } from '@/shared/ui'
 import { sellerOfProduct } from '../fixtures'
@@ -14,7 +15,7 @@ import { type DetailStatus, ProductDetailView } from '../views/ProductDetailView
 
 // B-02 상품 상세 라우트 /products/:productId. 상세 + 리뷰 목록(최신순, 더 보기).
 // 로그인했으면 이 상품의 내 리뷰(GET /products/{productId}/reviews/me)를 목록 맨 위에 둔다. ‘내 리뷰’ 표시는 리뷰의 memberId와 토큰의 회원 번호로 판단한다.
-// 비회원이 담기를 누르면 로그인 안내 모달을 띄운다. TODO(api): 2-3 담기는 features/cart 공개 hook으로.
+// 담기는 features/cart 공개 hook(products → cart 예외). 비회원이면 로그인 안내 모달을 띄운다.
 // TODO(api): 판매자 정보·관심·팔로우는 API가 없어 fixtures·화면 안 상태 유지.
 
 const asProductId = (value: string | undefined) => {
@@ -35,6 +36,7 @@ export function ProductDetailPage() {
   )
   // TODO(api): 상세 API에 판매자가 없다(📝 GET /sellers/{sellerId}). fixtures 상품만 판매자가 보인다
   const seller = id === null ? undefined : sellerOfProduct(id)
+  const { addToCart, adding } = useAddToCart()
   const [loginPrompt, setLoginPrompt] = useState<LoginReason | null>(null)
   const [liked, setLiked] = useState(false)
   const [following, setFollowing] = useState(false)
@@ -82,9 +84,10 @@ export function ProductDetailPage() {
       currentMemberId={auth?.memberId}
       onRetry={() => product.refetch()}
       errorMessage={errorMessageOf(product.error)}
-      onAddToCart={() => {
+      adding={adding}
+      onAddToCart={({ optionId, quantity }) => {
         if (!auth) return setLoginPrompt('cart')
-        showToast({ message: '장바구니에 담았어요' })
+        if (id !== null) addToCart({ productId: id, optionId, quantity })
       }}
       loginPrompt={loginPrompt}
       onLoginPromptClose={() => setLoginPrompt(null)}

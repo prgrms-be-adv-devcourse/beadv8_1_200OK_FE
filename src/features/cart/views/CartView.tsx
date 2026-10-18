@@ -56,7 +56,8 @@ function Line({
 }: { line: CartLine } & Pick<CartViewProps, 'onQuantityChange' | 'onToggleSelect' | 'onRemove'>) {
   const unavailable = Boolean(line.unavailableReason)
   const label = `${line.productName} ${line.optionName}`
-  const productPath = `/products/${line.productId}`
+  const productPath = line.productId === null ? null : `/products/${line.productId}`
+  const thumb = line.thumbnailUrl ? <img src={line.thumbnailUrl} alt="" /> : <ImageIcon size={24} />
 
   return (
     <li className={classes.line} data-unavailable={unavailable || undefined}>
@@ -66,15 +67,26 @@ function Line({
         checked={line.selected}
         onChange={(event) => onToggleSelect(line.cartItemId, event.currentTarget.checked)}
       />
-      <Link to={productPath} className={classes.thumb} tabIndex={-1} aria-hidden="true">
-        {line.thumbnailUrl ? <img src={line.thumbnailUrl} alt="" /> : <ImageIcon size={24} />}
-      </Link>
-      <div className={classes.lineBody}>
-        <Link to={productPath} className={classes.lineName}>
-          {line.productName}
+      {productPath ? (
+        <Link to={productPath} className={classes.thumb} tabIndex={-1} aria-hidden="true">
+          {thumb}
         </Link>
+      ) : (
+        <span className={classes.thumb} aria-hidden="true">
+          {thumb}
+        </span>
+      )}
+      <div className={classes.lineBody}>
+        {productPath ? (
+          <Link to={productPath} className={classes.lineName}>
+            {line.productName}
+          </Link>
+        ) : (
+          <span className={classes.lineName}>{line.productName}</span>
+        )}
         <span className={`pd-num ${classes.help}`}>
-          {line.optionName} · {formatPrice(line.unitPrice)}
+          {line.optionName}
+          {line.unitPrice !== null && ` · ${formatPrice(line.unitPrice)}`}
         </span>
         {unavailable ? (
           <span className={classes.unavailable}>
@@ -95,7 +107,7 @@ function Line({
         <ActionIcon aria-label={`${label} 삭제`} onClick={() => onRemove(line.cartItemId)}>
           <Trash2 size={20} aria-hidden="true" />
         </ActionIcon>
-        <PriceText amount={line.unitPrice * line.quantity} size="S" />
+        {line.unitPrice !== null && <PriceText amount={line.unitPrice * line.quantity} size="S" />}
       </div>
     </li>
   )
@@ -122,7 +134,7 @@ export function CartView({
   const allSelected = lines.length > 0 && selected.length === lines.length
   const goodsAmount = selected
     .filter((line) => !line.unavailableReason)
-    .reduce((sum, line) => sum + line.unitPrice * line.quantity, 0)
+    .reduce((sum, line) => sum + (line.unitPrice ?? 0) * line.quantity, 0)
   const orderReason =
     selected.length === 0
       ? '주문할 상품을 골라 주세요'
@@ -191,15 +203,24 @@ export function CartView({
 
             {groups.map((group) => (
               <section
-                key={group.sellerId}
+                key={group.sellerId ?? 'unknown'}
                 className={classes.group}
-                aria-labelledby={`cart-farm-${group.sellerId}`}
+                aria-labelledby={`cart-farm-${group.sellerId ?? 'unknown'}`}
               >
                 <div className={classes.groupHead}>
-                  <FarmAvatar name={group.sellerName} size={32} />
-                  <h2 id={`cart-farm-${group.sellerId}`} className={classes.groupName}>
-                    <Link to={`/farms/${group.sellerId}`}>{group.sellerName}</Link>
-                  </h2>
+                  {group.sellerId !== null && group.sellerName !== null ? (
+                    <>
+                      <FarmAvatar name={group.sellerName} size={32} />
+                      <h2 id={`cart-farm-${group.sellerId}`} className={classes.groupName}>
+                        <Link to={`/farms/${group.sellerId}`}>{group.sellerName}</Link>
+                      </h2>
+                    </>
+                  ) : (
+                    // TODO(api): 판매자 정보가 없어 농가별로 나누지 못한다
+                    <h2 id="cart-farm-unknown" className={classes.groupName}>
+                      담은 상품
+                    </h2>
+                  )}
                 </div>
                 <ul className={classes.lines}>
                   {group.lines.map((line) => (

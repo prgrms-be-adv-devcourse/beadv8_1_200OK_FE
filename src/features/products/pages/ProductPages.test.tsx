@@ -1,3 +1,4 @@
+import { notifications } from '@mantine/notifications'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
@@ -161,5 +162,82 @@ describe('ProductDetailPage', () => {
       '리뷰를 잠시 불러올 수 없습니다.',
     )
     expect(screen.getAllByRole('button', { name: '장바구니 담기' }).length).toBeGreaterThan(0)
+  })
+})
+
+describe('ProductDetailPage 장바구니 담기', () => {
+  const addButton = async () => {
+    const [add] = await screen.findAllByRole('button', { name: '장바구니 담기' })
+    if (!add) throw new Error('담기 버튼 없음')
+    return add
+  }
+
+  afterEach(() => {
+    localStorage.clear()
+    notifications.clean()
+  })
+
+  it('비회원이면 담지 않고 로그인 안내를 띄운다', async () => {
+    let posted = false
+    server.use(
+      http.post('*/api/v1/cart/items', () => {
+        posted = true
+        return HttpResponse.json({ cartItemId: 1 }, { status: 201 })
+      }),
+    )
+    const { user } = renderAt('/products/101')
+
+    await user.click(await addButton())
+    expect(await screen.findByText('로그인하고 장바구니에 담아 보세요.')).toBeInTheDocument()
+    expect(posted).toBe(false)
+  })
+
+  it('로그인했으면 고른 옵션·수량을 담고 알린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    const bodies: unknown[] = []
+    server.use(
+      http.post('*/api/v1/cart/items', async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ cartItemId: 1 }, { status: 201 })
+      }),
+    )
+    const { user } = renderAt('/products/101')
+
+    await user.click(await addButton())
+    expect(await screen.findByText('장바구니에 담았어요')).toBeInTheDocument()
+    expect(bodies).toEqual([{ productOptionId: 1011, quantity: 1 }])
+  })
+
+  it('이미 담긴 옵션(409)이면 담긴 수량에 더하고, 장바구니에 없으면 서버 문구를 알린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    let inCart = true
+    const patched: unknown[] = []
+    server.use(
+      http.post('*/api/v1/cart/items', () =>
+        problem(409, inCart ? '이미 장바구니에 담긴 상품입니다.' : '판매 중인 상품이 아닙니다.'),
+      ),
+      http.get('*/api/v1/cart', () =>
+        HttpResponse.json({
+          cartId: 1,
+          items: inCart
+            ? [{ cartItemId: 5, productOptionId: 1011, quantity: 2, selected: true }]
+            : [],
+        }),
+      ),
+      http.patch('*/api/v1/cart/items/:cartItemId', async ({ request, params }) => {
+        patched.push({ cartItemId: params.cartItemId, ...((await request.json()) as object) })
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/products/101')
+
+    await user.click(await addButton())
+    expect(await screen.findByText('이미 담긴 상품이라 수량을 더했어요')).toBeInTheDocument()
+    expect(patched).toEqual([{ cartItemId: '5', quantity: 3 }])
+
+    inCart = false
+    await user.click(await addButton())
+    expect(await screen.findByText('판매 중인 상품이 아닙니다.')).toBeInTheDocument()
+    expect(patched).toHaveLength(1)
   })
 })

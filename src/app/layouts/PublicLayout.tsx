@@ -2,6 +2,7 @@ import { ActionIcon, Button, VisuallyHidden } from '@mantine/core'
 import { Heart, House, ShoppingCart, User } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
+import { useCartCount } from '@/features/cart'
 import { useCategories } from '@/features/products'
 import { MemberRole, type ProductCategory } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
@@ -192,10 +193,12 @@ export function PublicLayout() {
   const session = useSession()
   const handle = useRouteHandle()
   const { data: categories } = useCategories()
-  // TODO(api): 장바구니 개수는 2단계에서 장바구니 조회로 채운다
+  // 장바구니 개수: 로그인했을 때만 장바구니 조회(담긴 줄 수)
+  const cartCount = useCartCount()
   return (
     <PublicLayoutView
       session={session}
+      cartCount={cartCount}
       categories={categories}
       showMobileHeader={handle.mobileHeader}
       showTabBar={handle.tabBar}
