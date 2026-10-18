@@ -1,10 +1,11 @@
-import { Badge, Button } from '@mantine/core'
+import { Badge, Button, Skeleton, Stack } from '@mantine/core'
 import { Image as ImageIcon, MessageSquareText, Play } from 'lucide-react'
 import { Link } from 'react-router'
 import { type ProductReview, ReviewMediaType } from '@/shared/api/types'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import { toStarRating } from '@/shared/lib/rating'
-import { EmptyView, RatingStars } from '@/shared/ui'
+import { EmptyView, QueryState, RatingStars } from '@/shared/ui'
+import type { ListStatus } from '../types'
 import classes from './ReviewSection.module.css'
 
 // 상품 상세의 리뷰: 요약(평균 26 + 별 20 + 리뷰 수) → 목록(최신순) → 더 보기. 리뷰 0개면 “아직 리뷰가 없어요”(A-4)
@@ -15,6 +16,10 @@ export type ReviewSectionProps = {
   averageRating: number
   reviewCount: number
   reviews: ProductReview[]
+  /** 리뷰 목록을 불러온 상태 (요약은 상품 상세 값이라 늘 그린다) */
+  status?: ListStatus
+  errorMessage?: string
+  onRetry?: () => void
   /** 내 리뷰 표시(수정·삭제)에 쓰는 로그인 회원 ID */
   currentMemberId?: number
   hasMore?: boolean
@@ -55,6 +60,9 @@ export function ReviewSection({
   averageRating,
   reviewCount,
   reviews,
+  status = 'success',
+  errorMessage,
+  onRetry,
   currentMemberId,
   hasMore = false,
   loadingMore = false,
@@ -95,61 +103,75 @@ export function ReviewSection({
             </span>
           </div>
 
-          <div className={classes.card}>
-            {reviews.map((review) => {
-              const mine = currentMemberId !== undefined && review.memberId === currentMemberId
-              return (
-                <article key={review.reviewId} className={classes.review}>
-                  <div className={classes.reviewHead}>
-                    <div className={classes.author}>
-                      <strong>구매자</strong>
+          <QueryState
+            status={status}
+            skeleton={
+              <Stack gap="sm">
+                <Skeleton h={14} w="30%" />
+                <Skeleton h={14} w="45%" />
+                <Skeleton h={48} />
+              </Stack>
+            }
+            loadingLabel="리뷰를 불러오고 있어요"
+            errorMessage={errorMessage}
+            onRetry={onRetry}
+          >
+            <div className={classes.card}>
+              {reviews.map((review) => {
+                const mine = currentMemberId !== undefined && review.memberId === currentMemberId
+                return (
+                  <article key={review.reviewId} className={classes.review}>
+                    <div className={classes.reviewHead}>
+                      <div className={classes.author}>
+                        <strong>구매자</strong>
+                        {mine && (
+                          <Badge color="neutral" variant="light">
+                            내 리뷰
+                          </Badge>
+                        )}
+                        <span className={`pd-num ${classes.help}`}>
+                          {formatDate(review.createdAt)}
+                        </span>
+                      </div>
                       {mine && (
-                        <Badge color="neutral" variant="light">
-                          내 리뷰
-                        </Badge>
-                      )}
-                      <span className={`pd-num ${classes.help}`}>
-                        {formatDate(review.createdAt)}
-                      </span>
-                    </div>
-                    {mine && (
-                      <div className={classes.mineActions}>
-                        <Button
-                          component={Link}
-                          to={`/reviews/${review.reviewId}/edit`}
-                          variant="subtle"
-                          size="sm"
-                        >
-                          수정
-                        </Button>
-                        {onDeleteReview && (
+                        <div className={classes.mineActions}>
                           <Button
+                            component={Link}
+                            to={`/reviews/${review.reviewId}/edit`}
                             variant="subtle"
                             size="sm"
-                            onClick={() => onDeleteReview(review.reviewId)}
                           >
-                            삭제
+                            수정
                           </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <RatingStars value={toStarRating(review.rating)} size={14} />
-                  <span className={classes.help}>구매 옵션 · {review.optionName}</span>
-                  <p className={classes.content}>{review.content}</p>
-                  <ReviewMedia media={review.media} />
-                </article>
-              )
-            })}
-          </div>
-
-          {hasMore && onLoadMore && (
-            <div className={classes.more}>
-              <Button variant="outline" loading={loadingMore} onClick={onLoadMore}>
-                리뷰 더 보기
-              </Button>
+                          {onDeleteReview && (
+                            <Button
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => onDeleteReview(review.reviewId)}
+                            >
+                              삭제
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <RatingStars value={toStarRating(review.rating)} size={14} />
+                    <span className={classes.help}>구매 옵션 · {review.optionName}</span>
+                    <p className={classes.content}>{review.content}</p>
+                    <ReviewMedia media={review.media} />
+                  </article>
+                )
+              })}
             </div>
-          )}
+
+            {hasMore && onLoadMore && (
+              <div className={classes.more}>
+                <Button variant="outline" loading={loadingMore} onClick={onLoadMore}>
+                  리뷰 더 보기
+                </Button>
+              </div>
+            )}
+          </QueryState>
         </>
       )}
     </>

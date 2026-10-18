@@ -47,10 +47,7 @@ export function PurchaseForm({
         >
           <Stack gap="xs">
             {options.map((option) => (
-              <OptionCard
-                key={option.optionId}
-                option={disabled ? { ...option, soldOut: true } : option}
-              />
+              <OptionCard key={option.optionId} option={option} disabled={disabled} />
             ))}
           </Stack>
         </Radio.Group>

@@ -9,21 +9,24 @@ import classes from './OptionCard.module.css'
 
 export type OptionCardProps = {
   option: ProductOption
+  /** 품절이 아닌데 고를 수 없을 때(판매 예정·일시 중지 상품). 이유는 화면이 따로 알린다 */
+  disabled?: boolean
 }
 
-export function OptionCard({ option }: OptionCardProps) {
+export function OptionCard({ option, disabled = false }: OptionCardProps) {
+  const unavailable = option.soldOut || disabled
   return (
     <Radio.Card
       className={classes.card}
       value={String(option.optionId)}
-      disabled={option.soldOut}
+      disabled={unavailable}
       radius="sm"
     >
       <Radio.Indicator
         className={classes.indicator}
         size="sm"
         icon={CheckIcon}
-        disabled={option.soldOut}
+        disabled={unavailable}
       />
       <span className={classes.name}>{option.name}</span>
       <span className={classes.price}>

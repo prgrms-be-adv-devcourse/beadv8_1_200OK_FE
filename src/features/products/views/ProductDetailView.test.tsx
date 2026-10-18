@@ -53,6 +53,14 @@ describe('ProductDetailView', () => {
     expect(screen.getAllByText('판매가 종료된 상품이에요').length).toBeGreaterThan(0)
   })
 
+  it('판매 예정이면 옵션을 막되 품절로 적지 않고 이유를 보여 준다', () => {
+    renderDetail({ product: apple && { ...apple, status: ProductStatus.READY } })
+
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
+    expect(screen.queryByText('품절')).not.toBeInTheDocument()
+    expect(screen.getAllByText('판매 예정 상품이라 아직 담을 수 없어요').length).toBeGreaterThan(0)
+  })
+
   it('정지된 판매자의 상품은 담을 수 없다', () => {
     renderDetail({ seller: { ...sellers.cheongsong, suspended: true } })
 

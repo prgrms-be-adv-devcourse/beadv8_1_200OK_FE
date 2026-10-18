@@ -2,6 +2,7 @@ import { ActionIcon, Button, VisuallyHidden } from '@mantine/core'
 import { Heart, House, ShoppingCart, User } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
+import { useCategories } from '@/features/products'
 import { MemberRole, type ProductCategory } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
 import { useRouteHandle } from '../routeHandle'
@@ -11,7 +12,7 @@ import { SkipLink } from './SkipLink'
 
 // B2C 레이아웃. 데스크톱(≥ 1024): 헤더 64(로고 · 내 메뉴) + 카테고리 48. 모바일: 상단 56(홈만) + 하단 탭 56(최상위 화면만).
 // 콘텐츠 최대 1200. 헤더 검색창은 검색 API가 생길 때까지 두지 않는다(DECISIONS.md A-9).
-// 카테고리는 지금 표시명 표로 그리고, 2단계에서 GET /products/categories 응답으로 바꾼다(A-1).
+// 카테고리는 GET /products/categories 응답으로 그린다(A-1). 받기 전·실패하면 표시명 표로 그린다.
 
 export type CategoryLink = { code: ProductCategory; label: string }
 
@@ -190,10 +191,12 @@ export function PublicLayoutView({
 export function PublicLayout() {
   const session = useSession()
   const handle = useRouteHandle()
+  const { data: categories } = useCategories()
   // TODO(api): 장바구니 개수는 2단계에서 장바구니 조회로 채운다
   return (
     <PublicLayoutView
       session={session}
+      categories={categories}
       showMobileHeader={handle.mobileHeader}
       showTabBar={handle.tabBar}
     >

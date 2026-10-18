@@ -6,6 +6,7 @@ feature에 속하지 않는 공통 코드. features·app을 import하지 않는�
   - `client.ts` Axios 인스턴스 `apiClient`(Bearer 붙임, 오류 → `ApiError`, 401 → `onUnauthorized`). 요청은 이것으로만
   - `authToken.ts` accessToken 메모리 보관 · 토큰 payload에서 역할 읽기 · 만료 타이머(localStorage에 두지 않음)
   - `memberHeaders.ts` 임시 헤더(X-Member-*) 경로 규칙 — 서버가 토큰 방식으로 바뀌면 삭제
+  - `productDetail.ts` 상품 상세 조회·`productDetailQueryOptions`(키 `[products,'detail',id]`) — products·cart·reviews·seller가 같이 써서 승격
   - `media.ts` 미디어 업로드 `uploadMedia(purpose, file)` — 화면에서는 `useMediaUploads`로 쓴다
   - `ApiError.ts` · `queryClient.ts` · `queryKeys.ts`(접두어만, 키 팩토리는 feature 소유) · `types.ts`(Bruno 타입)
 - `ui/` — Mantine으로 안 되는 공통·도메인 컴포넌트. `@/shared/ui`(index.ts)로 import한다 (AddressModal은 다음 우편번호 포함)

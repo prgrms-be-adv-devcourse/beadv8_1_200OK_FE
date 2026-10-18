@@ -1,21 +1,25 @@
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { showToast } from '@/shared/ui'
-import { farmItems, productCardItems } from '../fixtures'
+import { farmItems } from '../fixtures'
+import { errorMessageOf, productListQueryOptions } from '../queries'
 import { HomeView } from '../views/HomeView'
+import { useLocalLikes } from './useLocalLikes'
 
-// B-01 홈 라우트. 1단계: fixtures로 그린다.
-// TODO(api): 2-2 GET /products(첫 페이지)로 바꾼다. 관심·팔로우·인기 농가는 API가 없어 fixtures 유지(📝/❌).
+// B-01 홈 라우트. 이번 주 상품 = GET /products 첫 페이지(최신순).
+// TODO(api): 팔로우·인기 농가는 API가 없어 화면 안 상태 + fixtures 유지(📝/❌).
+
+const HOME_PRODUCT_COUNT = 8
 
 export function HomePage() {
-  const [items, setItems] = useState(productCardItems)
+  const products = useQuery(productListQueryOptions({ page: 0, size: HOME_PRODUCT_COUNT }))
+  const { isLiked, toggleLike } = useLocalLikes()
   const [farms, setFarms] = useState(farmItems)
 
-  const toggleLike = (productId: number) => {
-    const target = items.find((item) => item.product.productId === productId)
-    if (!target) return
-    setItems(items.map((item) => (item === target ? { ...item, liked: !item.liked } : item)))
-    showToast({ message: target.liked ? '관심 상품에서 뺐어요' : '관심 상품에 담았어요' })
-  }
+  const items = (products.data?.content ?? []).map((product) => ({
+    product,
+    liked: isLiked(product.productId),
+  }))
 
   const toggleFollow = (sellerId: number) => {
     const target = farms.find((farm) => farm.seller.sellerId === sellerId)
@@ -32,11 +36,14 @@ export function HomePage() {
 
   return (
     <HomeView
-      status="success"
+      // 다시 불러오다 실패해도 이미 받은 목록은 그대로 보여 준다
+      status={products.data ? 'success' : products.status}
       items={items}
       farms={farms}
       onToggleLike={toggleLike}
       onToggleFollow={toggleFollow}
+      onRetry={() => products.refetch()}
+      errorMessage={errorMessageOf(products.error)}
     />
   )
 }

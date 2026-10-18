@@ -3,3 +3,10 @@
 export { HomePage } from './pages/HomePage'
 export { ProductDetailPage } from './pages/ProductDetailPage'
 export { ProductListPage } from './pages/ProductListPage'
+// 다른 feature가 쓰는 조회. 캐시 무효화는 키 팩토리 대신 접두어로 한다(shared/api/queryKeys.ts)
+export {
+  categoriesQueryOptions,
+  useCategories,
+  useProduct,
+} from './queries'
+export type { CategoryOption } from './types'

@@ -29,7 +29,7 @@ import {
 import { ProductGallery } from '../components/ProductGallery'
 import { PurchaseForm } from '../components/PurchaseForm'
 import { ReviewSection } from '../components/ReviewSection'
-import type { CartSelection } from '../types'
+import type { CartSelection, ListStatus } from '../types'
 import classes from './ProductDetailView.module.css'
 
 // B-02 상품 상세. 시안: b2c/Main(데스크톱), b2c/ProductMobile
@@ -51,6 +51,10 @@ export type ProductDetailViewProps = {
   /** 내 상품 (담기 대신 수정). TODO(api): 판단할 판매자 ID가 상세 API에 없다 */
   isOwner?: boolean
   reviews: ProductReview[]
+  /** 리뷰 목록 상태 (기본 success). 상품은 불러왔는데 리뷰만 실패할 수 있다 */
+  reviewsStatus?: ListStatus
+  reviewsErrorMessage?: string
+  onRetryReviews?: () => void
   hasMoreReviews?: boolean
   loadingMoreReviews?: boolean
   onLoadMoreReviews?: () => void
@@ -137,6 +141,9 @@ export function ProductDetailView({
   liked = false,
   isOwner = false,
   reviews,
+  reviewsStatus,
+  reviewsErrorMessage,
+  onRetryReviews,
   hasMoreReviews,
   loadingMoreReviews,
   onLoadMoreReviews,
@@ -439,6 +446,9 @@ export function ProductDetailView({
             averageRating={product.averageRating}
             reviewCount={product.reviewCount}
             reviews={reviews}
+            status={reviewsStatus}
+            errorMessage={reviewsErrorMessage}
+            onRetry={onRetryReviews}
             currentMemberId={currentMemberId}
             hasMore={hasMoreReviews}
             loadingMore={loadingMoreReviews}
