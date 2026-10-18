@@ -27,6 +27,7 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core'
+import { DatePickerInput } from '@mantine/dates'
 import { ChevronDown } from 'lucide-react'
 import { createElement } from 'react'
 import buttonClasses from './components/button.module.css'
@@ -139,6 +140,7 @@ export const components: MantineThemeComponents = {
   NumberInput: NumberInput.extend({ defaultProps: { size: 'md', hideControls: true } }),
   Textarea: Textarea.extend({ defaultProps: { size: 'md' } }),
   NativeSelect: NativeSelect.extend({ defaultProps: { size: 'md', rightSection: selectChevron } }),
+  DatePickerInput: DatePickerInput.extend({ defaultProps: { size: 'md' } }),
   // 목록: shadow md, 옵션 44, 선택 tint + primary 600 + 체크(오른쪽).
   // 테마의 Combobox classNames는 Select 안 목록까지 내려가지 않아 Select에 직접 건다.
   Select: Select.extend({

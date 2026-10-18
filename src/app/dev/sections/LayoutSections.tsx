@@ -1,11 +1,10 @@
 import { Text } from '@mantine/core'
-import classes from '../DesignGallery.module.css'
-import { GallerySection, Panel } from '../GalleryParts'
+import { Frames, GallerySection, Panel } from '../GalleryParts'
 
 // 0-4 레이아웃: /__design/preview/:layout 을 iframe으로 띄워 실제 미디어 쿼리(1440 · 390)로 본다.
 // iframe 안에서 링크·메뉴·드로어를 눌러 볼 수 있다.
 
-type Preview = { title: string; src: string; note?: string }
+type Preview = { title: string; src: string }
 
 const previews: Preview[] = [
   {
@@ -35,35 +34,6 @@ const previews: Preview[] = [
   },
 ]
 
-function Frames({ title, src }: Preview) {
-  return (
-    <div className={classes.frames}>
-      <div className={classes.frameBox} data-device="desktop">
-        <span className={classes.stateLabel}>데스크톱 1440 (50%)</span>
-        <div className={classes.frameScroll}>
-          <div className={classes.frameScaler} data-device="desktop">
-            <iframe
-              src={src}
-              title={`${title} 데스크톱`}
-              width={1440}
-              height={900}
-              loading="lazy"
-            />
-          </div>
-        </div>
-      </div>
-      <div className={classes.frameBox} data-device="mobile">
-        <span className={classes.stateLabel}>모바일 390 (75%)</span>
-        <div className={classes.frameScroll}>
-          <div className={classes.frameScaler} data-device="mobile">
-            <iframe src={src} title={`${title} 모바일`} width={390} height={844} loading="lazy" />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function LayoutSection() {
   return (
     <GallerySection
@@ -73,7 +43,7 @@ export function LayoutSection() {
     >
       {previews.map((preview) => (
         <Panel key={preview.src} title={preview.title}>
-          <Frames {...preview} />
+          <Frames title={preview.title} src={preview.src} />
           <Text size="sm" mt="xs">
             <a href={preview.src} target="_blank" rel="noreferrer">
               새 탭으로 열기

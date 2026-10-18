@@ -1,0 +1,38 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  width: 100%;
+  max-width: 35rem;
+  margin: var(--mantine-spacing-xl) auto 0;
+  padding: var(--mantine-spacing-xl) var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+  text-align: center;
+}
+
+.title {
+  margin: var(--mantine-spacing-xs) 0 0;
+  font-size: 1.375rem;
+  line-height: 1.875rem;
+  font-weight: 700;
+}
+
+.body {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--mantine-spacing-xs);
+  margin-top: var(--mantine-spacing-md);
+
+  &:empty {
+    display: none;
+  }
+}

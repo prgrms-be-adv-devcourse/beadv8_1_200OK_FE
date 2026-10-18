@@ -27,6 +27,12 @@ export type ProductCardProps = {
   to?: string
 }
 
+/** 화면이 목록으로 넘기는 카드 한 장의 값 (이벤트·경로는 화면이 붙인다) */
+export type ProductCardItem = Pick<
+  ProductCardProps,
+  'product' | 'sellerName' | 'optionCount' | 'harvestDate' | 'sellerSuspended' | 'liked'
+>
+
 export function ProductCard({
   product,
   sellerName,

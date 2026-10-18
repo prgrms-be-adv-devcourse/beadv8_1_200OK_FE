@@ -1,4 +1,4 @@
-import { Button, Radio, SimpleGrid, Stack } from '@mantine/core'
+import { Button, Group, Radio, SimpleGrid, Stack } from '@mantine/core'
 import { Heart, ShoppingCart } from 'lucide-react'
 import { useState } from 'react'
 import {
@@ -9,12 +9,21 @@ import {
   ProductStatus,
   type ProductSummary,
 } from '@/shared/api/types'
+import { ClaimState } from '@/shared/lib/claimState'
 import { ProductSaleState } from '@/shared/lib/productState'
+import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
+import { ShipmentState } from '@/shared/lib/shipmentState'
+import { WithdrawalState } from '@/shared/lib/withdrawalState'
 import {
   CtaBar,
   DisabledReason,
   EmptyView,
+  FarmAvatar,
+  FarmCard,
+  FollowButton,
   LedgerBlock,
+  type LoginReason,
+  LoginRequiredModal,
   OptionCard,
   OriginTag,
   PageHeader,
@@ -22,6 +31,9 @@ import {
   PhotoUploader,
   PriceText,
   ProductCard,
+  ProductGrid,
+  ProductGridSkeleton,
+  ProductStatusBadge,
   QuantityStepper,
   QueryState,
   RatingStars,
@@ -100,6 +112,33 @@ export function BadgeTagSection() {
       <Panel title="상품 판매 상태 (구매자) + 판매 중지">
         <div className={classes.chipRow}>
           {productStates.map((state) => (
+            <StatusBadge key={state} status={state} />
+          ))}
+        </div>
+      </Panel>
+      <Panel title="배송 표시 상태 (주문 상품 상태에 없는 것)">
+        <div className={classes.chipRow}>
+          {Object.values(ShipmentState).map((state) => (
+            <StatusBadge key={state} status={state} />
+          ))}
+        </div>
+      </Panel>
+      <Panel title="판매자 신청·심사 상태">
+        <div className={classes.chipRow}>
+          {Object.values(SellerApplicationStatus).map((status) => (
+            <StatusBadge key={status} status={status} />
+          ))}
+        </div>
+      </Panel>
+      <Panel title="판매자 상품 판매 상태 (ProductStatusBadge) · 취소 요청 처리 · 출금">
+        <div className={classes.chipRow}>
+          {Object.values(ProductStatus).map((status) => (
+            <ProductStatusBadge key={status} status={status} />
+          ))}
+          {Object.values(ClaimState).map((state) => (
+            <StatusBadge key={state} status={state} />
+          ))}
+          {Object.values(WithdrawalState).map((state) => (
             <StatusBadge key={state} status={state} />
           ))}
         </div>
@@ -554,6 +593,87 @@ export function PhotoUploaderSection() {
           onRemove={(id) => setItems((prev) => prev.filter((item) => item.id !== id))}
           onMove={move}
         />
+      </Panel>
+    </GallerySection>
+  )
+}
+
+// ─── 농가 · 상품 격자 · 로그인 안내 (1단계 1-1에서 추가) ──────
+
+export function FarmSection() {
+  const [following, setFollowing] = useState(false)
+  const [loginReason, setLoginReason] = useState<LoginReason | null>(null)
+
+  return (
+    <GallerySection
+      id="farm"
+      title="농가 · 상품 격자 · 로그인 안내"
+      meta="FarmAvatar 32·56·96(사진 없으면 첫 글자) · FollowButton 팔로우/팔로잉 · FarmCard · ProductGrid(모바일 2열, 240 자동 채움) · LoginRequiredModal"
+    >
+      <Panel title="FarmAvatar · FollowButton">
+        <StateGrid>
+          <StateItem label="32 · 상세 상단">
+            <FarmAvatar name="청송 햇살농원" size={32} />
+          </StateItem>
+          <StateItem label="56 · 농가 카드">
+            <FarmAvatar name="땅끝고구마농장" size={56} />
+          </StateItem>
+          <StateItem label="96 · 상점 머리">
+            <FarmAvatar name="서귀포 귤빛농장" size={96} />
+          </StateItem>
+          <StateItem label="팔로우 (누르면 바뀜)">
+            <FollowButton following={following} onClick={() => setFollowing((v) => !v)} />
+          </StateItem>
+          <StateItem label="팔로잉">
+            <FollowButton following onClick={() => {}} />
+          </StateItem>
+          <StateItem label="처리 중">
+            <FollowButton following={false} loading onClick={() => {}} />
+          </StateItem>
+        </StateGrid>
+      </Panel>
+      <Panel title="FarmCard">
+        <SimpleGrid cols={{ base: 1, md: 2 }}>
+          <FarmCard
+            name="청송 햇살농원"
+            to="/__design#farm"
+            region={ProductRegion.GYEONGBUK}
+            followerCount={1284}
+            action={<FollowButton following={false} onClick={() => {}} />}
+          />
+          <FarmCard
+            name="청송 햇살농원"
+            to="/__design#farm"
+            region={ProductRegion.GYEONGBUK}
+            followerCount={1284}
+            description="3대째 사과만 키우는 청송 부남면 과수원이에요."
+            action={<Button variant="outline">상점 보기</Button>}
+          />
+        </SimpleGrid>
+      </Panel>
+      <Panel title="ProductGrid · 로딩 스켈레톤">
+        <ProductGrid>
+          {cards.slice(0, 2).map(({ product }) => (
+            <ProductCard key={product.productId} product={product} to="/__design#farm" />
+          ))}
+        </ProductGrid>
+        <Stack mt="lg">
+          <ProductGridSkeleton count={4} />
+        </Stack>
+      </Panel>
+      <Panel title="LoginRequiredModal">
+        <Group gap="xs">
+          <Button variant="outline" onClick={() => setLoginReason('cart')}>
+            담기
+          </Button>
+          <Button variant="outline" onClick={() => setLoginReason('like')}>
+            관심
+          </Button>
+          <Button variant="outline" onClick={() => setLoginReason('follow')}>
+            팔로우
+          </Button>
+        </Group>
+        <LoginRequiredModal reason={loginReason} onClose={() => setLoginReason(null)} />
       </Panel>
     </GallerySection>
   )

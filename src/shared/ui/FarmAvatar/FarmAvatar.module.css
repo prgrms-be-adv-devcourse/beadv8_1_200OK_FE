@@ -1,0 +1,35 @@
+.root {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background-color: var(--pd-color-straw);
+  color: var(--pd-color-straw-ink);
+  font-weight: 700;
+
+  &[data-size="32"] {
+    width: 2rem;
+    height: 2rem;
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  &[data-size="56"] {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.375rem;
+  }
+
+  &[data-size="96"] {
+    width: 6rem;
+    height: 6rem;
+    font-size: 2.25rem;
+  }
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

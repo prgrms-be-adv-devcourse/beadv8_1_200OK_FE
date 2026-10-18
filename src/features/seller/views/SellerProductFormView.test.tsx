@@ -1,0 +1,108 @@
+import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
+import {
+  ProductCategory,
+  ProductRegion,
+  ProductStatus,
+  ProductVisibility,
+} from '@/shared/api/types'
+import { render } from '@/test/render'
+import { appleFormValues } from '../fixtures'
+import { htmlToText, textToHtml } from '../productSchema'
+import { SellerProductFormView, type SellerProductFormViewProps } from './SellerProductFormView'
+
+const photos = [{ id: 'a', url: 'https://cdn.example/a.jpg' }]
+
+function renderForm(props: Partial<SellerProductFormViewProps> = {}) {
+  const onSubmit = vi.fn()
+  render(
+    <MemoryRouter>
+      <SellerProductFormView
+        mode="create"
+        photos={[]}
+        onAddPhotos={() => {}}
+        onRemovePhoto={() => {}}
+        onMovePhoto={() => {}}
+        onSubmit={onSubmit}
+        {...props}
+      />
+    </MemoryRouter>,
+  )
+  return { onSubmit, user: userEvent.setup() }
+}
+
+describe('SellerProductFormView', () => {
+  it('빈 폼을 저장하면 오류 요약을 보여 주고 저장하지 않는다', async () => {
+    const { user, onSubmit } = renderForm()
+    await user.click(screen.getByRole('button', { name: '등록하기' }))
+
+    expect(await screen.findByText('입력값을 확인해 주세요. 저장되지 않았어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '상품명을 입력해 주세요' })).toHaveAttribute(
+      'href',
+      '#product-name',
+    )
+    expect(screen.getAllByText('상품 사진을 1장 이상 올려 주세요').length).toBeGreaterThan(0)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('API 요청 모양(descriptionHtml · imageUrls · 옵션)으로 넘긴다', async () => {
+    const { user, onSubmit } = renderForm({ mode: 'edit', defaultValues: appleFormValues, photos })
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: '청송 꿀사과 부사',
+        category: ProductCategory.FRUIT,
+        region: ProductRegion.GYEONGBUK,
+        status: ProductStatus.ON_SALE,
+        visibility: ProductVisibility.VISIBLE,
+        imageUrls: ['https://cdn.example/a.jpg'],
+        descriptionHtml: expect.stringMatching(/^<p>3대째/),
+        options: [
+          { id: 1011, name: '1kg (5~6과)', salePrice: 12900, listPrice: 14500, totalStock: 20 },
+          { id: 1012, name: '2kg (11~13과)', salePrice: 23900, listPrice: 27000, totalStock: 11 },
+          { id: 1013, name: '3kg (16~18과)', salePrice: 33900, listPrice: 38000, totalStock: 4 },
+        ],
+      }),
+    )
+  })
+
+  it('옵션명이 겹치거나 정가가 판매가보다 작으면 막는다', async () => {
+    const { user, onSubmit } = renderForm({
+      photos,
+      defaultValues: {
+        ...appleFormValues,
+        options: [
+          { name: '2kg', salePrice: 23900, listPrice: 20000, totalStock: 5 },
+          { name: '2kg', salePrice: 33900, totalStock: 3 },
+        ],
+      },
+    })
+    await user.click(screen.getByRole('button', { name: '등록하기' }))
+
+    expect(
+      await screen.findByRole('link', {
+        name: '옵션 2: 옵션명이 겹쳐요. 다른 이름으로 바꿔 주세요',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: '옵션 1: 정가는 판매가보다 크거나 같아야 해요' }),
+    ).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('마지막 옵션은 삭제할 수 없다', () => {
+    renderForm()
+    expect(screen.getByRole('button', { name: '옵션 1 삭제' })).toBeDisabled()
+  })
+})
+
+describe('설명 변환', () => {
+  it('문단·줄바꿈을 HTML로, 특수문자는 이스케이프한다', () => {
+    expect(textToHtml('첫 줄\n둘째 줄\n\n<b>새</b> 문단')).toBe(
+      '<p>첫 줄<br>둘째 줄</p><p>&lt;b&gt;새&lt;/b&gt; 문단</p>',
+    )
+    expect(htmlToText('<p>첫 줄<br>둘째 줄</p><p>&lt;b&gt;새</p>')).toBe('첫 줄\n둘째 줄\n\n<b>새')
+  })
+})

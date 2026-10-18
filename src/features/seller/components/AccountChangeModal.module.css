@@ -1,0 +1,6 @@
+.current {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}

@@ -1,0 +1,129 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.mobileAdd {
+  display: flex;
+  justify-content: flex-end;
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  & > * {
+    flex: none;
+  }
+}
+
+.tableWrap {
+  display: none;
+  padding: 0 var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 64em) {
+    display: block;
+  }
+}
+
+.right {
+  text-align: end;
+}
+
+.muted {
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.thumb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--pd-color-surface-subtle);
+  color: var(--pd-color-text-muted);
+
+  & img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.nameCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.name {
+  color: var(--pd-color-text);
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.low {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--pd-color-warning);
+  font-size: var(--pd-font-caption);
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  & li + li {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  color: inherit;
+  text-decoration: none;
+}
+
+.itemBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.pagination {
+  align-self: center;
+}

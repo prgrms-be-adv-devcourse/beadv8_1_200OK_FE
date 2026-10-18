@@ -1,0 +1,122 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xl);
+}
+
+/* ─── 상점 머리 ─── */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--mantine-spacing-md);
+  padding: var(--mantine-spacing-lg) var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 48em) {
+    gap: var(--mantine-spacing-lg);
+    padding: var(--mantine-spacing-xl);
+  }
+}
+
+.headerBody {
+  display: flex;
+  flex: 1 1 22.5rem;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.name {
+  margin: 0;
+  font-size: 1.625rem;
+  line-height: 2.125rem;
+
+  @media (min-width: 64em) {
+    font-size: 2rem;
+    line-height: 2.625rem;
+  }
+}
+
+.intro {
+  margin: 0.25rem 0 0;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.75rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem var(--mantine-spacing-md);
+  margin: var(--mantine-spacing-xs) 0 0;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.375rem;
+
+  & dt {
+    color: var(--pd-color-text-secondary);
+  }
+
+  & dd {
+    margin: 0;
+  }
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.625rem;
+
+  @media (min-width: 48em) {
+    align-items: flex-end;
+  }
+}
+
+.followers {
+  color: var(--pd-color-text-secondary);
+
+  & strong {
+    color: var(--pd-color-text);
+  }
+}
+
+.help {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+/* ─── 상품 ─── */
+
+.products {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 700;
+
+  @media (min-width: 64em) {
+    font-size: 1.375rem;
+    line-height: 1.875rem;
+  }
+}
+
+.count {
+  color: var(--pd-color-text-muted);
+  font-weight: 400;
+}

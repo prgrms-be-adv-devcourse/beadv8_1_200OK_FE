@@ -85,3 +85,33 @@ export function Measure({
     </div>
   )
 }
+
+/** 미리보기 주소를 데스크톱 1440(50%) · 모바일 390(75%) iframe으로 나란히 띄운다 */
+export function Frames({ title, src }: { title: string; src: string }) {
+  return (
+    <div className={classes.frames}>
+      <div className={classes.frameBox} data-device="desktop">
+        <span className={classes.stateLabel}>데스크톱 1440 (50%)</span>
+        <div className={classes.frameScroll}>
+          <div className={classes.frameScaler} data-device="desktop">
+            <iframe
+              src={src}
+              title={`${title} 데스크톱`}
+              width={1440}
+              height={900}
+              loading="lazy"
+            />
+          </div>
+        </div>
+      </div>
+      <div className={classes.frameBox} data-device="mobile">
+        <span className={classes.stateLabel}>모바일 390 (75%)</span>
+        <div className={classes.frameScroll}>
+          <div className={classes.frameScaler} data-device="mobile">
+            <iframe src={src} title={`${title} 모바일`} width={390} height={844} loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

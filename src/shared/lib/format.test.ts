@@ -1,4 +1,11 @@
-import { formatAmount, formatDate, formatPrice, formatQuantity, MINUS } from './format'
+import {
+  formatAmount,
+  formatDate,
+  formatPrice,
+  formatQuantity,
+  formatSignedAmount,
+  MINUS,
+} from './format'
 
 describe('formatAmount', () => {
   it('세 자리마다 쉼표를 넣는다', () => {
@@ -10,6 +17,14 @@ describe('formatAmount', () => {
   it('음수는 유니코드 마이너스를 쓴다', () => {
     expect(formatAmount(-717)).toBe(`${MINUS}717`)
     expect(formatAmount(-717)).not.toContain('-')
+  })
+})
+
+describe('formatSignedAmount', () => {
+  it('늘면 +, 줄면 유니코드 마이너스, 0은 부호 없이', () => {
+    expect(formatSignedAmount(3000)).toBe('+3,000')
+    expect(formatSignedAmount(-10000)).toBe(`${MINUS}10,000`)
+    expect(formatSignedAmount(0)).toBe('0')
   })
 })
 
@@ -45,6 +60,12 @@ describe('formatDate', () => {
   it('dateTime은 10월 13일 14:30', () => {
     expect(formatDate('2026-10-13T14:30:00', 'dateTime')).toBe('10월 13일 14:30')
     expect(formatDate('2026-01-05T09:05:00', 'dateTime')).toBe('1월 5일 09:05')
+  })
+
+  it('monthDay는 10월 16일, monthDayWeek는 10월 16일(금), month는 10월', () => {
+    expect(formatDate('2026-10-16T00:00:00', 'monthDay')).toBe('10월 16일')
+    expect(formatDate('2026-10-16T00:00:00', 'monthDayWeek')).toBe('10월 16일(금)')
+    expect(formatDate('2026-10-16T00:00:00', 'month')).toBe('10월')
   })
 
   it('Date 객체도 받는다', () => {

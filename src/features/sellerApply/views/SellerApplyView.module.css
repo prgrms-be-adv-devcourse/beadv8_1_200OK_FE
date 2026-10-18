@@ -1,0 +1,78 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  max-width: 45rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 48em) {
+    padding: var(--mantine-spacing-lg);
+  }
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.help {
+  margin: 0.25rem 0 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.grid {
+  display: grid;
+  gap: var(--mantine-spacing-md);
+
+  @media (min-width: 48em) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.actions {
+  display: flex;
+  gap: var(--mantine-spacing-xs);
+}
+
+.primary {
+  flex: 1;
+}
+
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-lg) 0;
+  text-align: center;
+}
+
+.doneTitle {
+  margin: var(--mantine-spacing-xs) 0 0;
+  font-size: 1.375rem;
+  line-height: 1.875rem;
+  font-weight: 700;
+}

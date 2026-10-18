@@ -1,13 +1,22 @@
 import { ActionIcon, Badge, FileButton } from '@mantine/core'
 import { Dropzone, type FileRejection } from '@mantine/dropzone'
-import { ChevronLeft, ChevronRight, CircleX, Image as ImageIcon, ImagePlus, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleX,
+  Image as ImageIcon,
+  ImagePlus,
+  Play,
+  X,
+} from 'lucide-react'
 import { useId, useState } from 'react'
 import classes from './PhotoUploader.module.css'
-import { validatePhotos } from './validatePhotos'
+import { VIDEO_TYPES, validatePhotos } from './validatePhotos'
 
 // 사진 올리기: 최대 N장, 장당 10MB, 올리는 중 진행률, 순서 바꾸기(키보드용 앞·뒤 버튼), 오류.
 // 업로드 자체는 밖에서 한다: onAdd로 받은 파일을 올리고, items의 progress(0~100)로 진행률을 넘긴다.
 // onMove가 있으면 상품 사진형(대표 표시 + 앞·삭제·뒤 버튼), 없으면 리뷰형(작은 칸 + 모서리 삭제).
+// video를 주면 mp4 영상도 받는다(리뷰: 최대 6개 중 영상 1개 · 30MB, DECISIONS.md A-3).
 // 시안: b2c/ReviewWrite(리뷰형), seller/SellerProductForm(상품 사진형)
 
 export type PhotoItem = {
@@ -17,6 +26,8 @@ export type PhotoItem = {
   alt?: string
   /** 올리는 중이면 0~100. 다 올렸으면 생략 */
   progress?: number
+  /** 기본 image */
+  kind?: 'image' | 'video'
 }
 
 export type PhotoUploaderProps = {
@@ -31,6 +42,8 @@ export type PhotoUploaderProps = {
   /** 밖에서 정한 오류 (예: ‘상품 사진을 1장 이상 올려 주세요’, 업로드 실패) */
   error?: string | null
   accept?: string[]
+  /** 영상도 받을 때 (개수·용량) */
+  video?: { maxCount: number; maxSizeMb: number }
 }
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -45,6 +58,7 @@ export function PhotoUploader({
   onMove,
   error,
   accept = IMAGE_TYPES,
+  video,
 }: PhotoUploaderProps) {
   const labelId = useId()
   const errorId = useId()
@@ -52,6 +66,8 @@ export function PhotoUploader({
   const reorderable = onMove !== undefined
   const remaining = max - items.length
   const shownError = pickError ?? error ?? null
+  const fileTypes = video ? [...accept, ...VIDEO_TYPES] : accept
+  const noun = video ? '사진·영상' : '사진'
 
   const handleFiles = (files: File[]) => {
     const { accepted, error: reason } = validatePhotos(files, {
@@ -59,6 +75,10 @@ export function PhotoUploader({
       max,
       maxSizeMb,
       accept,
+      video: video && {
+        ...video,
+        current: items.filter((item) => item.kind === 'video').length,
+      },
     })
     setPickError(reason)
     if (accepted.length > 0) onAdd(accepted)
@@ -74,7 +94,9 @@ export function PhotoUploader({
         {label}
         <span className={classes.rule}>
           {' '}
-          · 최대 {max}장, 장당 {maxSizeMb}MB 이하
+          {video
+            ? `· 최대 ${max}개(영상 ${video.maxCount}개), 사진 ${maxSizeMb}MB · 영상 ${video.maxSizeMb}MB 이하`
+            : `· 최대 ${max}장, 장당 ${maxSizeMb}MB 이하`}
         </span>
       </span>
 
@@ -89,7 +111,21 @@ export function PhotoUploader({
           return (
             <div key={item.id} className={classes.tile}>
               <div className={classes.frame}>
-                {item.url ? (
+                {item.kind === 'video' ? (
+                  item.url ? (
+                    <video
+                      className={classes.image}
+                      src={item.url}
+                      aria-label={name}
+                      muted
+                      preload="metadata"
+                    />
+                  ) : (
+                    <div className={classes.placeholder} role="img" aria-label={name}>
+                      <Play size={24} aria-hidden="true" />
+                    </div>
+                  )
+                ) : item.url ? (
                   <img className={classes.image} src={item.url} alt={name} />
                 ) : (
                   <div className={classes.placeholder} role="img" aria-label={name}>
@@ -161,21 +197,21 @@ export function PhotoUploader({
             className={classes.drop}
             onDrop={(files) => handleDrop(files)}
             onReject={(rejections) => handleDrop([], rejections)}
-            accept={accept}
+            accept={fileTypes}
             multiple
             activateOnClick={false}
             activateOnKeyboard={false}
           >
             <FileButton
               onChange={handleFiles}
-              accept={accept.join(',')}
+              accept={fileTypes.join(',')}
               multiple
               inputProps={{ 'aria-label': `${label} 파일 고르기` }}
             >
               {(props) => (
                 <button type="button" className={classes.add} {...props}>
                   <ImagePlus aria-hidden="true" />
-                  <span className={classes.addLabel}>사진 추가</span>
+                  <span className={classes.addLabel}>{noun} 추가</span>
                   {reorderable ? (
                     <span className={classes.addHelp}>끌어 놓거나 눌러서 올려요</span>
                   ) : (

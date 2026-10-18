@@ -1,0 +1,134 @@
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+
+  @media (min-width: 64em) {
+    font-size: 1.375rem;
+    line-height: 1.875rem;
+  }
+}
+
+.help {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+}
+
+.average {
+  font-size: 1.625rem;
+  line-height: 2.125rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 48em) {
+    padding: 0 var(--mantine-spacing-lg);
+  }
+}
+
+.emptyCard {
+  padding-block: var(--mantine-spacing-xl);
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 1.25rem 0;
+
+  & + & {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+}
+
+.reviewHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+.author {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+
+  & strong {
+    font-weight: 600;
+  }
+}
+
+.mineActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.content {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mediaItem {
+  width: 4.5rem;
+  height: 4.5rem;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--pd-color-surface-subtle);
+
+  & img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.mediaPlaceholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--pd-color-text-muted);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}

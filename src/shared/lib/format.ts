@@ -15,6 +15,11 @@ export function formatAmount(amount: number): string {
   return amount < 0 && digits !== '0' ? `${MINUS}${digits}` : digits
 }
 
+/** 늘고 준 금액(조정 등): `+3,000`, `−10,000`, 0은 `0` */
+export function formatSignedAmount(amount: number): string {
+  return amount > 0 ? `+${formatAmount(amount)}` : formatAmount(amount)
+}
+
 /**
  * 금액 문자열: `23,900원`, 음수는 `−717원`.
  * `deduct`면 부호와 상관없이 차감으로 표기한다: `formatPrice(717, { deduct: true })` → `−717원`
@@ -24,12 +29,15 @@ export function formatPrice(amount: number, { deduct = false }: { deduct?: boole
   return `${formatAmount(value)}원`
 }
 
-export type DateStyle = 'date' | 'short' | 'dateTime'
+export type DateStyle = 'date' | 'short' | 'dateTime' | 'monthDay' | 'monthDayWeek' | 'month'
 
 const dateFormats: Record<DateStyle, string> = {
   date: 'YYYY.MM.DD(ddd)', // 상세 2026.10.08(목)
   short: 'MM.DD', // 목록 10.08
   dateTime: 'M월 D일 HH:mm', // 일시 10월 13일 14:30
+  monthDay: 'M월 D일', // 안내 문장 10월 16일
+  monthDayWeek: 'M월 D일(ddd)', // 예정일 10월 16일(금)
+  month: 'M월', // 월 합계 10월
 }
 
 /**

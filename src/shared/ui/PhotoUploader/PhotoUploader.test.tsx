@@ -33,6 +33,41 @@ describe('validatePhotos', () => {
     expect(result.accepted).toHaveLength(0)
     expect(result.error).not.toBeNull()
   })
+
+  describe('영상 (리뷰: 6개 중 영상 1개 · 30MB)', () => {
+    const withVideo = {
+      ...rules,
+      remaining: 6,
+      max: 6,
+      video: { maxCount: 1, maxSizeMb: 30, current: 0 },
+    }
+
+    it('mp4 영상은 30MB까지 받는다', () => {
+      const result = validatePhotos([photo('a.mp4', 25, 'video/mp4')], withVideo)
+      expect(result.accepted).toHaveLength(1)
+      expect(result.error).toBeNull()
+    })
+
+    it('30MB를 넘는 영상은 뺀다', () => {
+      const result = validatePhotos([photo('a.mp4', 31, 'video/mp4')], withVideo)
+      expect(result.accepted).toHaveLength(0)
+      expect(result.error).toBe('영상은 30MB 이하로 올려 주세요')
+    })
+
+    it('영상은 1개까지만 받는다', () => {
+      const result = validatePhotos([photo('a.mp4', 5, 'video/mp4'), photo('b.jpg', 1)], {
+        ...withVideo,
+        video: { ...withVideo.video, current: 1 },
+      })
+      expect(result.accepted.map((f) => f.name)).toEqual(['b.jpg'])
+      expect(result.error).toBe('영상은 1개까지 올릴 수 있어요')
+    })
+
+    it('영상을 받지 않으면 mp4는 형식 오류', () => {
+      const result = validatePhotos([photo('a.mp4', 5, 'video/mp4')], rules)
+      expect(result.error).toBe('jpg·png·webp 사진만 올릴 수 있어요')
+    })
+  })
 })
 
 describe('PhotoUploader', () => {

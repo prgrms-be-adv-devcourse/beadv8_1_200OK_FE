@@ -1,0 +1,112 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  & > * {
+    flex: none;
+  }
+}
+
+.count {
+  color: var(--pd-color-text-muted);
+  font-weight: 400;
+}
+
+/* ─── 표 (데스크톱) ─── */
+
+.tableWrap {
+  display: none;
+  padding: 0 var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 64em) {
+    display: block;
+  }
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--pd-color-text-muted);
+}
+
+.right {
+  text-align: end;
+}
+
+.actionCol {
+  width: 6rem;
+}
+
+/* ─── 카드 (모바일 · 태블릿) ─── */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+.cardMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+  margin: 0;
+  font-size: var(--mantine-font-size-sm);
+
+  & > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+
+  & dt {
+    color: var(--pd-color-text-muted);
+    font-size: var(--pd-font-caption);
+  }
+
+  & dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.pagination {
+  align-self: center;
+  margin-top: var(--mantine-spacing-sm);
+}

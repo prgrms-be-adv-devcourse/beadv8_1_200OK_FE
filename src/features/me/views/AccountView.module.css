@@ -1,0 +1,65 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  max-width: 50rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 48em) {
+    padding: var(--mantine-spacing-lg);
+  }
+
+  & p {
+    margin: 0;
+  }
+}
+
+.grid {
+  display: grid;
+  gap: var(--mantine-spacing-md);
+
+  @media (min-width: 48em) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.narrow {
+  max-width: 26rem;
+}
+
+.help {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.addressCard {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notice {
+  padding: var(--mantine-spacing-md);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface-subtle);
+
+  & ul {
+    margin: var(--mantine-spacing-xs) 0 0;
+    padding-left: 1.25rem;
+    color: var(--pd-color-text-secondary);
+    font-size: var(--mantine-font-size-sm);
+    line-height: 1.375rem;
+  }
+}

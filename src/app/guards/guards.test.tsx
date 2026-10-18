@@ -1,10 +1,10 @@
 import { screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { MemberRole } from '@/shared/api/types'
+import { safeReturnTo } from '@/shared/lib/returnTo'
 import { render } from '@/test/render'
 import type { Session } from '../session'
 import { GuestOnly, RequireAdmin, RequireAuth, RequireSeller } from './guards'
-import { safeReturnTo } from './returnTo'
 
 let session: Session = { status: 'unknown' }
 vi.mock('../session', () => ({ useSession: () => session }))

@@ -6,7 +6,7 @@ export type RouteHandle = {
   title?: string
   /** 화면 ID (SCREENS.md) */
   screenId?: string
-  /** PublicLayout 모바일 상단 56 로고 바 (홈만). 나머지 화면은 PageHeader의 뒤로 바를 쓴다 */
+  /** PublicLayout 모바일 상단 56 로고 바 (홈 · 상품 상세 · 판매자 상점처럼 제목이 본문에 있는 화면). 나머지는 PageHeader의 뒤로 바 */
   mobileHeader?: boolean
   /** PublicLayout 모바일 하단 탭 (최상위 화면만) */
   tabBar?: boolean

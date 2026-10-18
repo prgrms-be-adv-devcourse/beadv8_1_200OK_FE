@@ -203,6 +203,22 @@ export type ProductListParams = {
   size?: number
 }
 
+// ─── 판매자 상점 (계획 API) ──────────────────────────────
+
+// TODO(api): 📝 GET /sellers/{sellerId} (Notion 계획 API, 아직 서버에 없음). 필드는 시안(b2c/Store) 기준 임시.
+// 상품 목록·상세에도 판매자 정보가 없어 화면이 따로 받는다(DECISIONS.md A-2).
+export type SellerProfile = {
+  sellerId: number
+  storeName: string
+  representativeName: string
+  region: ProductRegion | null
+  introduction: string | null // 200자 이하
+  customerServicePhone: string | null
+  profileImageUrl: string | null
+  followerCount: number
+  suspended: boolean // 판매 중지(정지)된 판매자. API 미정(C-9)
+}
+
 // ─── 상품 (판매자, 임시 헤더) ─────────────────────────────
 
 export type ProductCreateRequest = {
@@ -312,6 +328,12 @@ export type CreateOrderRequest = {
 }
 
 export type CreateOrderResponse = { orderId: number }
+
+/** 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다 */
+export type ShippingAddress = Pick<
+  CreateOrderRequest,
+  'recipientName' | 'recipientPhone' | 'zipCode' | 'address' | 'addressDetail'
+>
 
 // ─── 리뷰 ────────────────────────────────────────────────
 

@@ -40,7 +40,8 @@ pnpm은 나온 지 24시간이 안 된 버전을 바로 설치하지 않아요(�
 ```
 src/
   app/        진입·providers·router·layouts·guards        (features, shared import 가능)
-  features/   auth products farms cart checkout orders seller  (shared만 import, feature 간 금지)
+  features/   auth products farms cart checkout orders reviews wallet me sellerApply seller admin
+              (shared만 import, feature 간 금지. sellerApply는 구매자 쪽 신청 화면, seller는 판매자 센터 청크)
   shared/     api ui lib styles                            (아무것도 import 안 함)
   mocks/      MSW 핸들러 (Vitest 테스트 전용)
   test/       Vitest setup·유틸

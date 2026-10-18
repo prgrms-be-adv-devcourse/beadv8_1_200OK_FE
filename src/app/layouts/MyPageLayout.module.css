@@ -1,0 +1,95 @@
+.root {
+  @media (min-width: 64em) {
+    display: grid;
+    grid-template-columns: var(--pd-sidebar-width) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--mantine-spacing-xl);
+  }
+}
+
+/* ─── 데스크톱 왼쪽 메뉴 ─── */
+
+.side {
+  display: none;
+
+  @media (min-width: 64em) {
+    position: sticky;
+    top: var(--mantine-spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.groupTitle {
+  padding: var(--mantine-spacing-md) var(--mantine-spacing-sm) 0.375rem;
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1rem;
+  font-weight: 600;
+}
+
+.logout {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  min-height: var(--pd-touch-min);
+  margin-top: var(--mantine-spacing-sm);
+  padding: 0 var(--mantine-spacing-sm);
+  border-radius: var(--mantine-radius-sm);
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-md);
+
+  &:hover {
+    background-color: var(--pd-color-surface-subtle);
+  }
+}
+
+.content {
+  min-width: 0;
+}
+
+/* ─── 모바일 마이 홈 메뉴 목록 ─── */
+
+.mobileMenu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  margin-top: var(--mantine-spacing-md);
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.menuCard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+}
+
+.menuRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.25rem;
+  padding: 0 var(--mantine-spacing-md);
+  color: var(--pd-color-text);
+  text-decoration: none;
+
+  & + & {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+
+  & svg {
+    color: var(--pd-color-text-muted);
+  }
+}

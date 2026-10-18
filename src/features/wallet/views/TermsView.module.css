@@ -1,0 +1,125 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.lead {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+}
+
+.body {
+  display: grid;
+  gap: var(--mantine-spacing-lg);
+
+  @media (min-width: 64em) {
+    grid-template-columns: 20rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+
+  @media (min-width: 64em) {
+    position: sticky;
+    top: var(--mantine-spacing-lg);
+  }
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.25rem var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+  color: var(--pd-color-text);
+  text-decoration: none;
+
+  &:hover {
+    background-color: var(--pd-color-bg);
+  }
+
+  &[aria-current="page"] {
+    border: 2px solid var(--pd-color-primary);
+    background-color: var(--pd-color-primary-tint);
+  }
+}
+
+.itemTitle {
+  font-weight: 600;
+}
+
+.help {
+  grid-column: 1 / -1;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  padding: var(--mantine-spacing-lg) var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 48em) {
+    padding: var(--mantine-spacing-xl);
+  }
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.375rem;
+  line-height: 1.875rem;
+  font-weight: 700;
+}
+
+.facts {
+  margin: 0;
+  padding: var(--mantine-spacing-xs) 1.25rem;
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface-subtle);
+
+  & > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--mantine-spacing-md);
+    padding: 0.625rem 0;
+  }
+
+  & > div:not(:first-child) {
+    border-top: 1px dashed var(--pd-color-border);
+  }
+
+  & dt {
+    color: var(--pd-color-text-secondary);
+  }
+
+  & dd {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+
+.content {
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.625rem;
+  white-space: pre-line;
+}

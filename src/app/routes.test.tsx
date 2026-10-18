@@ -3,7 +3,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { render } from '@/test/render'
 import { appRoutes } from './routes'
 
-// SCREENS.md의 라우트가 모두 화면(지금은 빈 페이지)으로 이어지는지. 세션이 'unknown'이라 가드는 통과한다.
+// SCREENS.md의 라우트가 모두 화면으로 이어지는지(만든 화면은 그 제목, 나머지는 빈 페이지 제목). 세션이 'unknown'이라 가드는 통과한다.
 
 function renderAt(path: string) {
   const router = createMemoryRouter([{ path: '/', children: appRoutes }], {
@@ -14,38 +14,42 @@ function renderAt(path: string) {
 }
 
 const screens: [path: string, title: string][] = [
-  ['/', '홈'],
-  ['/products?category=FRUIT', '상품 목록'],
-  ['/products/7', '상품 상세'],
-  ['/farms/3', '판매자 상점'],
-  ['/terms/PREPAID_PAYMENT_INSTRUMENT', '약관'],
+  ['/', '이번 주 산지에서 막 수확했어요'],
+  ['/products?category=FRUIT', '과일'],
+  ['/products/101', '청송 꿀사과 부사'],
+  ['/farms/7', '청송 햇살농원'],
+  ['/terms/PREPAID_PAYMENT_INSTRUMENT', '약관 보기'],
   ['/login?returnTo=%2Fcart', '로그인'],
   ['/signup', '회원가입'],
   ['/find-account', '아이디·비밀번호 찾기'],
+  ['/find-account/reset?token=abc', '새 비밀번호 정하기'],
   ['/cart', '장바구니'],
   ['/checkout', '주문서'],
-  ['/checkout/complete?orderId=1', '주문 완료'],
+  ['/checkout/complete?orderId=1', '주문이 완료됐어요'],
+  ['/wallet/charge/success?amount=20000', '20,000원을 충전했어요'],
+  ['/wallet/charge/fail', '충전하지 못했어요'],
   ['/wallet/charge', '예치금 충전'],
   ['/orders', '주문 내역'],
-  ['/orders/1', '주문 상세'],
-  ['/orders/1/shipments/2', '배송 조회'],
+  ['/orders/184', '주문 상세'],
+  ['/orders/151/shipments/3', '배송 조회'],
   ['/orders/1/inquiry', '고객센터 문의'],
   ['/reviews/new?orderItemId=1', '리뷰 쓰기'],
   ['/reviews/5/edit', '리뷰 수정'],
   ['/me', '마이페이지'],
+  ['/me/likes?tab=products', '관심 상품'],
   ['/me/wallet', '지갑 이용 내역'],
-  ['/me/likes?tab=farms', '관심'],
+  ['/me/likes?tab=farms', '팔로우한 농가'],
   ['/me/account?tab=address', '계정 관리'],
-  ['/seller/apply', '판매자 신청'],
-  ['/seller/apply/status', '신청 현황'],
+  ['/seller/apply', '판매자 등록 신청'],
+  ['/seller/apply/status', '판매자 신청 현황'],
   ['/seller', '센터 홈'],
   ['/seller/products?status=ON_SALE', '상품 관리'],
   ['/seller/products/new', '상품 등록'],
   ['/seller/products/7/edit', '상품 수정'],
-  ['/seller/orders', '주문·출고'],
-  ['/seller/claims', '취소 요청'],
+  ['/seller/orders', '주문·출고 관리'],
+  ['/seller/claims', '취소 요청 처리'],
   ['/seller/payouts', '정산 내역'],
-  ['/seller/payouts/9', '정산 상세'],
+  ['/seller/payouts/1021', '정산 내역'], // 상세는 목록 위 모달
   ['/seller/wallet', '지갑·출금'],
   ['/seller/profile', '상점 프로필'],
   ['/admin/sellers?status=APPLIED', '판매자 심사'],

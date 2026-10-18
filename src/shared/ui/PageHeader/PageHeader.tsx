@@ -26,6 +26,28 @@ export type PageHeaderProps = {
   hideOnMobile?: boolean
 }
 
+/** 경로 표시만 따로 쓸 때 (제목이 PageHeader가 아닌 화면, 예: 상품 상세) */
+export function PageBreadcrumbs({ items }: { items: Crumb[] }) {
+  return (
+    <nav aria-label="현재 위치" className={classes.breadcrumbs}>
+      <ol>
+        {items.map((crumb, i) => {
+          const last = i === items.length - 1
+          return (
+            <li key={crumb.to ?? crumb.label}>
+              {last || !crumb.to ? (
+                <span aria-current={last ? 'page' : undefined}>{crumb.label}</span>
+              ) : (
+                <Link to={crumb.to}>{crumb.label}</Link>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
+}
+
 export function PageHeader({
   title,
   breadcrumbs,
@@ -45,24 +67,7 @@ export function PageHeader({
 
   return (
     <header className={classes.root} data-layout={resolved}>
-      {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav aria-label="현재 위치" className={classes.breadcrumbs}>
-          <ol>
-            {breadcrumbs.map((crumb, i) => {
-              const last = i === breadcrumbs.length - 1
-              return (
-                <li key={crumb.to ?? crumb.label}>
-                  {last || !crumb.to ? (
-                    <span aria-current={last ? 'page' : undefined}>{crumb.label}</span>
-                  ) : (
-                    <Link to={crumb.to}>{crumb.label}</Link>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
-        </nav>
-      )}
+      {breadcrumbs && breadcrumbs.length > 0 && <PageBreadcrumbs items={breadcrumbs} />}
       <div className={classes.bar}>
         {backTo !== undefined ? (
           <ActionIcon component={Link} to={backTo} className={classes.back} aria-label="뒤로">

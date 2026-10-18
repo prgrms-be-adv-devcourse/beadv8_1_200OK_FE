@@ -1,0 +1,147 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+}
+
+.topGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--mantine-spacing-lg);
+
+  @media (min-width: 64em) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.title {
+  margin: 0;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.625rem;
+  font-weight: 600;
+}
+
+.help {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+/* ─── 전체 정산 ─── */
+
+.list {
+  overflow: hidden;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+}
+
+.listHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  padding: 1.25rem 1.25rem var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--pd-color-divider);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mantine-spacing-sm);
+  align-items: start;
+
+  @media (min-width: 48em) {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+.payee {
+  grid-column: 1 / -1;
+
+  @media (min-width: 48em) {
+    width: 13.75rem;
+  }
+}
+
+.date {
+  min-width: 0;
+
+  @media (min-width: 48em) {
+    width: 10.625rem;
+  }
+}
+
+.tableWrap {
+  display: none;
+  padding: 0 var(--mantine-spacing-md);
+
+  @media (min-width: 64em) {
+    display: block;
+  }
+}
+
+.right {
+  text-align: end;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.actionCol {
+  width: 6rem;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-md) 1.25rem;
+
+  & + & {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+.cardTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.pagination {
+  justify-content: center;
+  margin: var(--mantine-spacing-sm) 0;
+}
+
+.sum {
+  margin: 0;
+  padding: var(--mantine-spacing-sm) 1.25rem;
+  border-top: 1px solid var(--pd-color-divider);
+  background-color: var(--pd-color-bg);
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+  text-align: end;
+}

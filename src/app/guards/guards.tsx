@@ -1,8 +1,8 @@
 import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router'
 import { MemberRole } from '@/shared/api/types'
+import { loginPath, safeReturnTo } from '@/shared/lib/returnTo'
 import { QueryState } from '@/shared/ui'
 import { useSession } from '../session'
-import { loginPath, safeReturnTo } from './returnTo'
 
 // 라우트 가드. 화면 표시만 막고 인가는 서버가 한다(SCREENS.md).
 // 세션이 'unknown'(API 연결 전)이면 모두 통과시킨다 → 2단계에서 useSession만 바꾸면 그대로 동작한다.

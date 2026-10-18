@@ -1,6 +1,7 @@
 import { Badge, Group, Text } from '@mantine/core'
 import type { ComponentType } from 'react'
 import classes from './DesignGallery.module.css'
+import { screenBundles } from './screenRegistry'
 import {
   ColorSection,
   FormatSection,
@@ -17,9 +18,11 @@ import {
   OverlaySection,
   SelectionSection,
 } from './sections/MantineSections'
+import { ScreenBundleSection } from './sections/ScreenSections'
 import {
   BadgeTagSection,
   DisabledCtaSection,
+  FarmSection,
   LedgerSection,
   OptionQuantitySection,
   PageHeaderSection,
@@ -32,6 +35,7 @@ import {
 
 // /__design: 개발 서버에서만 열리는 컴포넌트 갤러리 (routes.tsx에서 DEV일 때만 lazy로 등록)
 // 0-2(Mantine 테마)·0-3(shared/ui)·0-4(레이아웃) 묶음은 sections/에 섹션을 만들어 아래 목록에 추가한다.
+// 1단계 화면 상태는 screenRegistry.ts에 묶음을 더하면 목록에 붙는다.
 
 type GalleryEntry = { id: string; title: string; Section: ComponentType }
 
@@ -59,8 +63,15 @@ const entries: GalleryEntry[] = [
   { id: 'page-header', title: 'PageHeader', Section: PageHeaderSection },
   { id: 'disabled-reason', title: '비활성 이유 · CTA 바', Section: DisabledCtaSection },
   { id: 'photo-uploader', title: 'PhotoUploader', Section: PhotoUploaderSection },
+  { id: 'farm', title: '농가 · 상품 격자 · 로그인 안내', Section: FarmSection },
   // 0-4 레이아웃
   { id: 'layouts', title: '레이아웃', Section: LayoutSection },
+  // 1단계 화면 상태
+  ...screenBundles.map((bundle) => ({
+    id: bundle.id,
+    title: `화면 ${bundle.title}`,
+    Section: () => <ScreenBundleSection bundle={bundle} />,
+  })),
 ]
 
 export function DesignGallery() {

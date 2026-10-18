@@ -23,3 +23,10 @@ class ResizeObserverStub {
 window.ResizeObserver = ResizeObserverStub
 
 window.HTMLElement.prototype.scrollIntoView = () => {}
+
+// Textarea autosize(react-textarea-autosize)가 글꼴 로딩 이벤트를 듣는다. jsdom에는 document.fonts가 없다.
+if (!('fonts' in document)) {
+  Object.defineProperty(document, 'fonts', {
+    value: { addEventListener: () => {}, removeEventListener: () => {}, ready: Promise.resolve() },
+  })
+}
