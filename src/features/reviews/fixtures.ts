@@ -1,10 +1,10 @@
 import type { ProductReview } from '@/shared/api/types'
 import { ReviewMediaType } from '@/shared/api/types'
-import type { ReviewTarget } from './types'
+import type { ReviewOrderItem } from './types'
 
-// 1단계 샘플 데이터. orders/fixtures.ts 주문 27(구매확정)의 사과즙, products/fixtures.ts의 내 리뷰(5003)와 같은 값이다.
+// 샘플 데이터(1단계 화면 · 상태 갤러리 · 2단계 주문 상품 임시값). orders/fixtures.ts 주문 27(구매확정)의 사과즙, products/fixtures.ts의 내 리뷰(5003)와 같은 값이다.
 
-export const reviewTarget: ReviewTarget = {
+export const reviewTarget: ReviewOrderItem = {
   orderId: 27,
   orderItemId: 271,
   productId: 106,
@@ -33,7 +33,7 @@ export const myReview: ProductReview = {
 }
 
 // 내 리뷰를 쓴 이전 주문 (orders/fixtures.ts 목록보다 오래된 주문)
-export const myReviewTarget: ReviewTarget = {
+export const myReviewTarget: ReviewOrderItem = {
   orderId: 12,
   orderItemId: 121,
   productId: 101,

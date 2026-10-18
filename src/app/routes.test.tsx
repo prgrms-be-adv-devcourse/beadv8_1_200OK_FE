@@ -36,7 +36,7 @@ const screens: [path: string, title: string][] = [
   ['/orders/151/shipments/3', '배송 조회'],
   ['/orders/1/inquiry', '고객센터 문의'],
   ['/reviews/new?orderItemId=1', '리뷰 쓰기'],
-  ['/reviews/5/edit', '리뷰 수정'],
+  ['/reviews/5003/edit', '리뷰 수정'],
   ['/me', '마이페이지'],
   ['/me/likes?tab=products', '관심 상품'],
   ['/me/wallet', '지갑 이용 내역'],

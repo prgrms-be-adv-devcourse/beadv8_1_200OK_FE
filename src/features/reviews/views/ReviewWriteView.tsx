@@ -7,6 +7,7 @@ import { Link } from 'react-router'
 import { OrderItemStatus } from '@/shared/api/types'
 import { MAX_IMAGE_MB, MAX_VIDEO_MB } from '@/shared/lib/constants'
 import { formatAmount } from '@/shared/lib/format'
+import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import { DisabledReason, PageHeader, type PhotoItem, PhotoUploader, StatusBadge } from '@/shared/ui'
 import { RatingInput } from '../components/RatingInput'
 import { REVIEW_MAX, REVIEW_MEDIA_MAX, type ReviewFormValues, reviewSchema } from '../schemas'
@@ -16,9 +17,13 @@ import classes from './ReviewWriteView.module.css'
 // B-10 리뷰 쓰기 · 수정 · 삭제. 시안: b2c/ReviewWrite, ReviewWriteMobile
 // API 기준: 별점 1~10(0.5점 단위), 본문 2,000자 이하, 사진·영상 6개(영상 1개, 30MB) — 시안은 1,000자·사진 3장(A-3).
 // 작성자 닉네임은 API에 없어 ‘닉네임과 함께 공개’ 문구를 쓰지 않는다.
+// 주문을 모르면(수정 화면: 리뷰 응답에 주문 정보 없음) 뒤로·취소는 상품 상세 리뷰로 가고 판매자·수량은 뺀다.
 
 /** 그냥 끝나거나 Promise를 돌려준다 (2단계 mutateAsync) */
 type MaybeAsync = unknown
+
+/** 서버 422가 칸에 붙인 오류 */
+export type ReviewFieldErrors = Partial<Record<keyof ReviewFormValues, string>>
 
 export type ReviewWriteViewProps = {
   mode: 'create' | 'edit'
@@ -30,10 +35,12 @@ export type ReviewWriteViewProps = {
   mediaError?: string | null
   onSubmit: (values: ReviewFormValues) => MaybeAsync
   submitting?: boolean
+  serverErrors?: ReviewFieldErrors
   errorMessage?: string | null
   /** 수정 화면에서만 */
   onDelete?: () => MaybeAsync
   deleting?: boolean
+  deleteError?: string | null
   /** 등록·수정 끝 */
   completed?: boolean
   /** 삭제 확인을 열어 둔 채로 시작 (미리보기) */
@@ -50,9 +57,11 @@ export function ReviewWriteView({
   mediaError,
   onSubmit,
   submitting = false,
+  serverErrors,
   errorMessage,
   onDelete,
   deleting = false,
+  deleteError,
   completed = false,
   defaultDeleteOpen = false,
 }: ReviewWriteViewProps) {
@@ -61,27 +70,42 @@ export function ReviewWriteView({
     control,
     register,
     handleSubmit,
+    setError,
     watch,
     formState: { errors },
   } = useForm<ReviewFormValues>({
     resolver: zodResolver(reviewSchema),
     defaultValues: { content: '', ...defaultValues },
   })
+  useServerFieldErrors(setError, serverErrors)
   const content = watch('content') ?? ''
   const uploading = media.some((item) => item.progress !== undefined && item.progress < 100)
   const title = mode === 'edit' ? '리뷰 수정' : '리뷰 쓰기'
-  const orderPath = `/orders/${target.orderId}`
+  const orderPath = target.orderId ? `/orders/${target.orderId}` : null
+  const productPath = `/products/${target.productId}#product-reviews`
+  const backPath = orderPath ?? productPath
+  const targetMeta = [
+    target.sellerName,
+    target.optionName,
+    target.quantity !== undefined ? `${formatAmount(target.quantity)}개` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className={classes.root}>
       <PageHeader
         title={title}
-        backTo={orderPath}
-        breadcrumbs={[
-          { label: '주문 내역', to: '/orders' },
-          { label: '주문 상세', to: orderPath },
-          { label: title },
-        ]}
+        backTo={backPath}
+        breadcrumbs={
+          orderPath
+            ? [
+                { label: '주문 내역', to: '/orders' },
+                { label: '주문 상세', to: orderPath },
+                { label: title },
+              ]
+            : [{ label: '상품 상세', to: productPath }, { label: title }]
+        }
       />
 
       <section className={classes.target} aria-label="리뷰할 상품">
@@ -90,9 +114,7 @@ export function ReviewWriteView({
         </div>
         <div className={classes.targetBody}>
           <strong>{target.productName}</strong>
-          <span className={`pd-num ${classes.help}`}>
-            {target.sellerName} · {target.optionName} · {formatAmount(target.quantity)}개
-          </span>
+          <span className={`pd-num ${classes.help}`}>{targetMeta}</span>
         </div>
         <StatusBadge status={OrderItemStatus.PURCHASE_CONFIRMED} />
       </section>
@@ -107,10 +129,12 @@ export function ReviewWriteView({
           </h2>
           <Text c="var(--pd-color-text-secondary)">상품 상세 리뷰에서 볼 수 있어요.</Text>
           <Group gap="xs" justify="center">
-            <Button component={Link} to={orderPath} variant="outline">
-              주문 상세로
-            </Button>
-            <Button component={Link} to={`/products/${target.productId}#product-reviews`}>
+            {orderPath && (
+              <Button component={Link} to={orderPath} variant="outline">
+                주문 상세로
+              </Button>
+            )}
+            <Button component={Link} to={productPath}>
               상품 보기
             </Button>
           </Group>
@@ -167,7 +191,7 @@ export function ReviewWriteView({
                 </Button>
               )}
               <span className={classes.spacer} />
-              <Button component={Link} to={orderPath} variant="outline">
+              <Button component={Link} to={backPath} variant="outline">
                 취소
               </Button>
               <DisabledReason reason={uploading ? '사진·영상을 다 올린 뒤 등록할 수 있어요' : null}>
@@ -182,6 +206,11 @@ export function ReviewWriteView({
 
       <Modal opened={deleteOpen} onClose={() => setDeleteOpen(false)} title="리뷰를 삭제할까요?">
         <Text>삭제한 리뷰는 되돌릴 수 없어요.</Text>
+        {deleteError && (
+          <Alert color="error" icon={<CircleX />} role="alert" mt="md">
+            {deleteError}
+          </Alert>
+        )}
         <Group justify="flex-end" gap="xs" mt="lg">
           <Button variant="outline" onClick={() => setDeleteOpen(false)}>
             닫기
