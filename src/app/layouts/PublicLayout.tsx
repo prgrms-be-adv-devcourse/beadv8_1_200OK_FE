@@ -6,6 +6,7 @@ import { useCartCount } from '@/features/cart'
 import { useCategories } from '@/features/products'
 import { MemberRole, type ProductCategory } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
+import { Logo } from '@/shared/ui'
 import { useRouteHandle } from '../routeHandle'
 import { type Session, useSession } from '../session'
 import classes from './PublicLayout.module.css'
@@ -95,8 +96,8 @@ export function PublicLayoutView({
       {/* ─── 데스크톱 헤더 ─── */}
       <header className={classes.desktopHeader}>
         <div className={classes.headerBar}>
-          <Link to="/" className={`pd-serif ${classes.logo}`}>
-            팔도곳간
+          <Link to="/" className={classes.logo}>
+            <Logo preset="header" />
           </Link>
           <nav aria-label="내 메뉴" className={classes.myMenu}>
             {isSeller && (
@@ -152,8 +153,8 @@ export function PublicLayoutView({
       {/* ─── 모바일 상단 로고 바 (홈) ─── */}
       {showMobileHeader && (
         <header className={classes.mobileHeader}>
-          <Link to="/" className={`pd-serif ${classes.mobileLogo}`}>
-            팔도곳간
+          <Link to="/" className={classes.mobileLogo}>
+            <Logo preset="headerMobile" />
           </Link>
           <ActionIcon component={Link} to="/cart" aria-label="장바구니">
             <span className={classes.iconWithCount}>

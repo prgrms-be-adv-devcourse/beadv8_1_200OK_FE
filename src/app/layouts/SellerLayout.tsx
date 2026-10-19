@@ -63,6 +63,7 @@ export function SellerLayoutView({
       navItems={navItems}
       title={title}
       mobileAside={storeName}
+      drawerHelp={[storeName, userName].filter(Boolean).join(' · ') || undefined}
       currentPath={currentPath}
       topRight={
         <>

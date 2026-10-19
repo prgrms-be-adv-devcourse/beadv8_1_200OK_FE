@@ -42,6 +42,7 @@ export function AdminLayoutView({
       navLabel="관리자 메뉴"
       navItems={navItems}
       title={title}
+      drawerHelp={adminName}
       currentPath={currentPath}
       topRight={
         adminName && (

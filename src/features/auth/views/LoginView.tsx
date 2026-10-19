@@ -3,7 +3,7 @@ import { Alert, Anchor, Button, PasswordInput, Stack, Text, TextInput } from '@m
 import { CircleX } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
-import { PageHeader } from '@/shared/ui'
+import { Logo, PageHeader } from '@/shared/ui'
 import { type LoginFormValues, loginSchema } from '../schemas'
 import classes from './AuthView.module.css'
 
@@ -40,6 +40,10 @@ export function LoginView({
   return (
     <>
       <PageHeader title="로그인" backTo="/" />
+      {/* 모바일 로그인만 본문 위에 로고(시안 AuthMobile). 데스크톱은 AuthLayout이 카드 위에 그린다 */}
+      <div className={classes.mobileLogo}>
+        <Logo preset="auth" />
+      </div>
       <Text className={classes.lead}>누가, 어디서 키웠는지 확인하고 산지 가격으로 사세요</Text>
 
       <form className={classes.form} onSubmit={handleSubmit(onSubmit)} noValidate>

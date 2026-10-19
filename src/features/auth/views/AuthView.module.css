@@ -11,6 +11,14 @@
   }
 }
 
+.mobileLogo {
+  margin-top: var(--mantine-spacing-xl);
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
 .form {
   margin-top: var(--mantine-spacing-lg);
 }

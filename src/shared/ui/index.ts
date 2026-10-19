@@ -12,6 +12,7 @@ export {
   LoginRequiredModal,
   type LoginRequiredModalProps,
 } from './LoginRequiredModal/LoginRequiredModal'
+export { Logo, type LogoProps } from './Logo/Logo'
 export { OptionCard, type OptionCardProps } from './OptionCard/OptionCard'
 export { OriginTag, type OriginTagProps } from './OriginTag/OriginTag'
 export {

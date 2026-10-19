@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, Outlet } from 'react-router'
+import { Logo } from '@/shared/ui'
 import classes from './AuthLayout.module.css'
 import { SkipLink } from './SkipLink'
 
@@ -12,8 +13,8 @@ export function AuthLayoutView({ children }: { children: ReactNode }) {
     <div className={classes.root}>
       <SkipLink />
       <div className={classes.column}>
-        <Link to="/" className={`pd-serif ${classes.logo}`}>
-          팔도곳간
+        <Link to="/" className={classes.logo}>
+          <Logo preset="auth" />
         </Link>
         <main id="main" className={classes.card}>
           {children}

@@ -4,6 +4,7 @@ import { type LucideIcon, Menu } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import type { StatusTone } from '@/shared/styles/variantColorResolver'
+import { Logo } from '@/shared/ui'
 import classes from './ConsoleShell.module.css'
 import { SkipLink } from './SkipLink'
 
@@ -35,6 +36,8 @@ export type ConsoleShellProps = {
   title: string
   /** 모바일 상단 바 오른쪽 작은 글 (상호 등) */
   mobileAside?: ReactNode
+  /** 모바일 메뉴 드로어의 로고 아래 줄 (상점명 · 이름) */
+  drawerHelp?: ReactNode
   /** 활성 메뉴 판단에 쓰는 경로 (기본: 지금 주소). 갤러리 미리보기용 */
   currentPath?: string
   children: ReactNode
@@ -92,6 +95,7 @@ export function ConsoleShell({
   navItems,
   title,
   mobileAside,
+  drawerHelp,
   currentPath,
   children,
 }: ConsoleShellProps) {
@@ -99,12 +103,24 @@ export function ConsoleShell({
   const pathname = currentPath ?? location.pathname
   const [drawerOpened, drawer] = useDisclosure(false)
 
+  const home = variant === 'seller' ? '/seller' : '/admin'
+
+  // 관리자 상단 바는 어두운 배경이라 반전 로고(BRAND.md). 드로어는 흰 바탕이라 둘 다 light
   const brand = (
     <span className={classes.brand}>
-      <Link to={variant === 'seller' ? '/seller' : '/admin'} className={`pd-serif ${classes.logo}`}>
-        팔도곳간
+      <Link to={home} className={classes.logo}>
+        <Logo preset="console" tone={variant === 'admin' ? 'dark' : 'light'} />
       </Link>
       <Badge className={classes.badge}>{badge}</Badge>
+    </span>
+  )
+
+  const drawerTitle = (
+    <span className={classes.drawerTitle}>
+      <Link to={home} className={classes.logo} onClick={drawer.close}>
+        <Logo preset="drawer" />
+      </Link>
+      {drawerHelp && <span className={classes.drawerHelp}>{drawerHelp}</span>}
     </span>
   )
 
@@ -144,7 +160,7 @@ export function ConsoleShell({
       <Drawer
         opened={drawerOpened}
         onClose={drawer.close}
-        title={brand}
+        title={drawerTitle}
         size={280}
         classNames={{ body: classes.drawerBody }}
       >

@@ -27,10 +27,20 @@
 }
 
 .logo {
-  color: inherit;
-  font-size: 1.25rem;
-  line-height: 1.75rem;
+  flex: none;
   text-decoration: none;
+}
+
+.drawerTitle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.drawerHelp {
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
 }
 
 .topRight {
