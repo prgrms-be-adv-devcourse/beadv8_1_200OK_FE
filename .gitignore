@@ -31,3 +31,5 @@ docs/private/**
 # local-only references
 design/
 bruno_for_front/
+.vercel
+.env.local
