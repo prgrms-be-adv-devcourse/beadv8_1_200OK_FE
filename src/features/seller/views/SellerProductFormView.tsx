@@ -44,7 +44,7 @@ import classes from './SellerProductFormView.module.css'
 // 생산자·상세 지역·수확일·기본 옵션·설명 사진은 API에 없어 두지 않는다(A-2).
 // 제출에 실패하면 위에 오류 요약(누르면 그 칸으로)을 보여 준다. 수정은 version이 다르면 409.
 // 사진은 다 올린 것(서버 url)만 넘기고, 올리는 중이면 저장을 막는다.
-// 상품 설명은 에디터(@mantine/tiptap)로 HTML을 쓴다. 에디터는 등록·수정 화면을 열 때만 불러온다(무거움).
+// 상품 설명은 에디터(SunEditor)로 HTML을 쓴다. 에디터는 등록·수정 화면을 열 때만 불러온다(무거움).
 // 설명 사진은 onDescriptionImageUpload로 올리고, 올리는 중이면 저장을 막는다.
 
 const ProductDescriptionEditor = lazy(() => import('../components/ProductDescriptionEditor'))

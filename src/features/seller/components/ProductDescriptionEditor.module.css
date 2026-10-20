@@ -1,54 +1,56 @@
+/* SunEditor 겉모양을 앱 토큰에 맞춘다. 에디터 내부 클래스(.sun-editor, .se-*)는 :global로 덮는다 */
 .root {
   min-width: 0;
   max-width: 100%;
-  border-color: var(--pd-color-border-input);
 
-  &[data-invalid] {
+  & :global(.sun-editor) {
+    border-color: var(--pd-color-border-input);
+    border-radius: var(--mantine-radius-md);
+    font-family: inherit;
+  }
+
+  &[data-invalid] :global(.sun-editor) {
     border-color: var(--pd-color-error);
   }
-}
 
-.toolbar {
-  flex-wrap: wrap;
-  gap: var(--mantine-spacing-xs);
+  & :global(.se-toolbar) {
+    border-radius: var(--mantine-radius-md) var(--mantine-radius-md) 0 0;
+  }
+
+  /* 툴바 단추도 터치 영역 44px */
+  & :global(.se-toolbar .se-btn) {
+    min-width: var(--pd-touch-min);
+    min-height: var(--pd-touch-min);
+  }
 
   /* 좁은 화면: 여러 줄로 쌓이면 편집 칸을 가리므로 한 줄로 두고 툴바만 가로로 밀어 본다 */
   @media (max-width: 47.99em) {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
+    & :global(.se-btn-tray) {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
+    }
 
-    & > * {
+    & :global(.se-btn-module) {
       flex-shrink: 0;
     }
   }
 
-  /* 툴바 단추도 터치 영역 44px */
-  & button {
-    min-width: var(--pd-touch-min);
-    min-height: var(--pd-touch-min);
-  }
-}
-
-.content {
-  min-height: 15rem;
-
-  & :global(.ProseMirror) {
+  & :global(.sun-editor-editable) {
     min-height: 15rem;
     padding: var(--mantine-spacing-md);
+    font-family: inherit;
   }
 
-  & :global(.ProseMirror:focus-visible) {
+  & :global(.sun-editor-editable:focus-visible) {
     outline: 2px solid var(--pd-color-focus);
     outline-offset: -2px;
   }
 }
 
-.swatch {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border: 1px solid var(--pd-color-border);
-  border-radius: var(--mantine-radius-xs);
+/* 링크 창: 서버가 target을 지우므로 '새 창에서 열기'는 숨긴다 (창은 body에 붙을 수 있어 전역) */
+:global(.sun-editor label:has(._se_anchor_check)) {
+  display: none;
 }

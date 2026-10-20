@@ -114,3 +114,19 @@
     border-radius: var(--mantine-radius-sm);
   }
 }
+
+/* 보는 화면(구매자 상세) 전용: 사진은 본문 너비에 꽉 채운다. 에디터에서 조절한 너비(style)도 덮는다 */
+.view {
+  & figure {
+    /* biome-ignore lint/complexity/noImportantStyles: 본문 HTML의 인라인 style 너비를 덮어야 한다 */
+    width: 100% !important;
+  }
+
+  & img {
+    display: block;
+    /* biome-ignore lint/complexity/noImportantStyles: 본문 HTML의 인라인 style 너비를 덮어야 한다 */
+    width: 100% !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 본문 HTML의 인라인 style 너비를 덮어야 한다 */
+    height: auto !important;
+  }
+}
