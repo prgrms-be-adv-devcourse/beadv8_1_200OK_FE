@@ -201,6 +201,8 @@ export function PhotoUploader({
             multiple
             activateOnClick={false}
             activateOnKeyboard={false}
+            // Dropzone은 안쪽 클릭을 막는다(pointer-events: none). 안의 '추가' 버튼이 눌리게 푼다
+            enablePointerEvents
           >
             <FileButton
               onChange={handleFiles}

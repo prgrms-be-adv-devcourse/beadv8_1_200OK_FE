@@ -49,6 +49,8 @@ export type ProductDescriptionEditorProps = {
   /** 오류 요약에서 focus할 수 있게 편집 영역에 붙는 id */
   id: string
   label: string
+  /** 섹션 제목이 이미 있을 때: 라벨은 화면에서만 숨기고 스크린리더에는 남긴다 */
+  hideLabel?: boolean
   description?: string
   value: string
   onChange: (html: string) => void
@@ -91,6 +93,7 @@ function dropForeignImages(html: string) {
 export default function ProductDescriptionEditor({
   id,
   label,
+  hideLabel,
   description,
   value,
   onChange,
@@ -259,7 +262,7 @@ export default function ProductDescriptionEditor({
     <Input.Wrapper
       label={label}
       labelElement="div"
-      labelProps={{ id: labelId }}
+      labelProps={{ id: labelId, ...(hideLabel ? { className: classes.srOnly } : {}) }}
       description={description}
       descriptionProps={{ id: descriptionId }}
       error={shownError}

@@ -54,3 +54,15 @@
 :global(.sun-editor label:has(._se_anchor_check)) {
   display: none;
 }
+
+/* 화면에서만 숨기고 스크린리더에는 읽히는 라벨 */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

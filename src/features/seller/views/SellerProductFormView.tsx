@@ -353,45 +353,15 @@ export function SellerProductFormView({
             </Text>
           </section>
 
-          <section className={classes.card} aria-labelledby="sec-desc">
-            <h2 id="sec-desc" className={classes.sectionTitle}>
-              <span className={classes.step}>3</span>상품 설명
-            </h2>
-            <Controller
-              control={control}
-              name="description"
-              render={({ field }) => (
-                <Suspense
-                  fallback={
-                    <Skeleton h={320} radius="md" aria-label="설명 편집기를 불러오고 있어요" />
-                  }
-                >
-                  <ProductDescriptionEditor
-                    id="product-description"
-                    label="설명"
-                    description="어떻게 키웠는지, 상자에 몇 개 들었는지, 보관법을 알려 주세요. 사진은 jpg·png 10MB까지 넣을 수 있어요."
-                    placeholder="예) 해발 400m 과수원에서 키운 부사예요. 5kg 상자에 15~18과가 들어 있어요."
-                    value={field.value}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    error={errors.description?.message}
-                    onImageUpload={onDescriptionImageUpload}
-                    onUploadingChange={setDescriptionUploading}
-                  />
-                </Suspense>
-              )}
-            />
-          </section>
-
           <section
             className={classes.card}
             aria-labelledby="sec-options"
             id="product-options"
             tabIndex={-1}
           >
-            <div>
+            <div className={classes.sectionHead}>
               <h2 id="sec-options" className={classes.sectionTitle}>
-                <span className={classes.step}>4</span>옵션
+                <span className={classes.step}>3</span>옵션
               </h2>
               <Text className={classes.help}>
                 옵션은 1개 이상 · 가격과 재고는 옵션마다 따로 관리해요 · 정가를 넣으면 할인율이
@@ -516,7 +486,7 @@ export function SellerProductFormView({
 
           <section className={classes.card} aria-labelledby="sec-sale">
             <h2 id="sec-sale" className={classes.sectionTitle}>
-              <span className={classes.step}>5</span>판매 설정
+              <span className={classes.step}>4</span>판매 설정
             </h2>
             <Controller
               control={control}
@@ -556,6 +526,37 @@ export function SellerProductFormView({
                     )
                   }
                 />
+              )}
+            />
+          </section>
+
+          <section className={classes.card} aria-labelledby="sec-desc">
+            <h2 id="sec-desc" className={classes.sectionTitle}>
+              <span className={classes.step}>5</span>상품 설명
+            </h2>
+            <Controller
+              control={control}
+              name="description"
+              render={({ field }) => (
+                <Suspense
+                  fallback={
+                    <Skeleton h={320} radius="md" aria-label="설명 편집기를 불러오고 있어요" />
+                  }
+                >
+                  <ProductDescriptionEditor
+                    id="product-description"
+                    label="설명"
+                    hideLabel
+                    description="어떻게 키웠는지, 상자에 몇 개 들었는지, 보관법을 알려 주세요. 사진은 jpg·png 10MB까지 넣을 수 있어요."
+                    placeholder="예) 해발 400m 과수원에서 키운 부사예요. 5kg 상자에 15~18과가 들어 있어요."
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.description?.message}
+                    onImageUpload={onDescriptionImageUpload}
+                    onUploadingChange={setDescriptionUploading}
+                  />
+                </Suspense>
               )}
             />
           </section>
