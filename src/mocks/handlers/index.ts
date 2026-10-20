@@ -3,6 +3,7 @@ import { adminHandlers } from './admin'
 import { authHandlers } from './auth'
 import { cartHandlers } from './cart'
 import { checkoutHandlers } from './checkout'
+import { membersHandlers } from './members'
 import { ordersHandlers } from './orders'
 import { productHandlers } from './products'
 import { reviewHandlers } from './reviews'
@@ -15,6 +16,7 @@ import { walletHandlers } from './wallet'
 // 순서: checkout(GET /orders/checkout)이 orders(GET /orders/:orderId)보다 앞이어야 한다.
 export const handlers: RequestHandler[] = [
   ...authHandlers,
+  ...membersHandlers,
   ...productHandlers,
   ...reviewHandlers,
   ...cartHandlers,

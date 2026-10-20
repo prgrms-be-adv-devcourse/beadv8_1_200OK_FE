@@ -1,16 +1,20 @@
 import { OrderItemStatus } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
-  delayedTracking,
-  deliveredTracking,
+  addressChangedShipment,
+  cancelledShipment,
+  completedShipment,
+  delayedShipment,
+  deliveredShipment,
   inquiries,
   inquiryTargets,
   orderDetails,
   orderSummaries,
   orderWithItemStatus,
-  preparingTracking,
+  preparingShipment,
   remoteAreaOrder,
-  shippingTracking,
+  shipmentSummaries,
+  shippingShipment,
 } from './fixtures'
 import { InquiryType } from './types'
 import { OrderDetailView, type OrderDetailViewProps } from './views/OrderDetailView'
@@ -27,13 +31,26 @@ const list = (props: Partial<OrderListViewProps> = {}) => (
 )
 
 const detail = (props: Partial<OrderDetailViewProps> = {}) => (
-  <OrderDetailView status="success" order={orderDetails[0]} onRetry={noop} {...props} />
+  <OrderDetailView
+    status="success"
+    order={orderDetails[0]}
+    onRetry={noop}
+    onConfirm={noop}
+    shipments={shipmentSummaries.slice(0, 1)}
+    {...props}
+  />
 )
 
 const status = (value: OrderItemStatus) => () => detail({ order: orderWithItemStatus(value) })
 
 const shipment = (props: Partial<ShipmentViewProps> = {}) => (
-  <ShipmentView status="success" shipment={shippingTracking} onRetry={noop} {...props} />
+  <ShipmentView
+    status="success"
+    shipment={shippingShipment}
+    onRetry={noop}
+    onConfirm={noop}
+    {...props}
+  />
 )
 
 const support = (props: Partial<SupportViewProps> = {}) => (
@@ -107,28 +124,39 @@ export const orderPreviews: ScreenPreview[] = [
   },
   {
     id: 'shipment',
-    title: '배송 조회 (❌ API 없음)',
+    title: '배송 조회',
     layout: 'public',
     path: '/orders/151/shipments/3',
     states: [
-      {
-        id: 'not-connected',
-        label: '연결 전 (지금 화면)',
-        render: () => <ShipmentView status="notConnected" orderId={151} />,
-      },
       { id: 'shipping', label: '배송 중', render: () => shipment() },
       {
         id: 'delivered',
-        label: '배송 완료',
-        render: () => shipment({ shipment: deliveredTracking }),
+        label: '배송 완료 (구매확정)',
+        render: () => shipment({ shipment: deliveredShipment }),
+      },
+      {
+        id: 'completed',
+        label: '거래 완료',
+        render: () => shipment({ shipment: completedShipment }),
       },
       {
         id: 'preparing',
         label: '송장 등록 전',
-        render: () => shipment({ shipment: preparingTracking }),
+        render: () => shipment({ shipment: preparingShipment }),
       },
-      { id: 'delayed', label: '출고 지연', render: () => shipment({ shipment: delayedTracking }) },
-      { id: 'failed', label: '조회 실패', render: () => shipment({ trackingFailed: true }) },
+      { id: 'delayed', label: '도착 지연', render: () => shipment({ shipment: delayedShipment }) },
+      {
+        id: 'cancelled',
+        label: '배송 취소',
+        render: () => shipment({ shipment: cancelledShipment }),
+      },
+      {
+        id: 'address-changed',
+        label: '배송지 변경 승인 (추가 운임)',
+        render: () => shipment({ shipment: addressChangedShipment }),
+      },
+      { id: 'error', label: '불러오기 실패', render: () => shipment({ status: 'error' }) },
+      { id: 'not-found', label: '없는 배송', render: () => shipment({ status: 'notFound' }) },
       { id: 'loading', label: '로딩', render: () => shipment({ status: 'pending' }) },
     ],
   },

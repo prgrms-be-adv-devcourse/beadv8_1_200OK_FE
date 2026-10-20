@@ -1,15 +1,8 @@
-import { Badge, Button, Skeleton, Stack } from '@mantine/core'
+import { Badge, Button, Group, Skeleton, Stack } from '@mantine/core'
 import { BadgeCheck, ChevronRight, Clock } from 'lucide-react'
 import { Link } from 'react-router'
 import { formatAmount, formatPrice } from '@/shared/lib/format'
-import {
-  FarmAvatar,
-  NotConnected,
-  NotConnectedValue,
-  PageHeader,
-  PriceText,
-  QueryState,
-} from '@/shared/ui'
+import { FarmAvatar, NotConnectedValue, PageHeader, PriceText, QueryState } from '@/shared/ui'
 import type { MyProfile, MySellerStatus, OrderCounts } from '../types'
 import classes from './MyPageView.module.css'
 
@@ -17,13 +10,17 @@ import classes from './MyPageView.module.css'
 // 프로필 · 예치금(충전·이용 내역) · 주문 현황 · 관심/팔로우/배송지 바로가기 · 판매자 안내(역할 3종).
 // 메뉴(데스크톱 왼쪽 · 모바일 아래 목록)는 MyPageLayout이 그린다.
 // 예치금·보유 한도는 ✅ GET /wallets/me/balance, 판매자 카드는 토큰 역할 + 신청 현황.
-// TODO(api): ❌ GET /members/me(프로필)·관심·팔로우·배송지 API 없음, 주문 현황 수는 주문 목록에 상태별 집계가 없다.
-//   모르는 값은 넘기지 않는다(undefined) → 프로필은 ‘연결 전’ 안내, 숫자·배송지는 ‘–’(NotConnectedValue). 0이나 ‘등록 전’으로 그리지 않는다.
+// 프로필은 ✅ GET /members/me.
+// TODO(api): 관심·팔로우·배송지 API 없음, 주문 현황 수는 주문 목록에 상태별 집계가 없다.
+//   모르는 값은 넘기지 않는다(undefined) → 숫자·배송지는 ‘–’(NotConnectedValue). 0이나 ‘등록 전’으로 그리지 않는다.
 
 export type MyPageViewProps = {
   status: 'pending' | 'error' | 'success'
-  /** 없으면 프로필 자리에 ‘연결 전’ 안내 (TODO(api): ❌ GET /members/me) */
+  /** 아직 못 받았으면 프로필 자리에 자리 표시(로딩) 또는 오류 */
   profile?: MyProfile
+  /** 내 정보를 못 받았을 때의 문구. 프로필 자리에만 보이고 나머지 화면은 그대로다 */
+  profileError?: string
+  onRetryProfile?: () => void
   seller: MySellerStatus
   balance?: number
   /** 잔액 보유 한도 (GET /wallets/me/balance의 maxBalance) */
@@ -75,6 +72,8 @@ function MySkeleton() {
 export function MyPageView({
   status,
   profile,
+  profileError,
+  onRetryProfile,
   seller,
   balance = 0,
   maxBalance = 500_000,
@@ -128,11 +127,18 @@ export function MyPageView({
           ) : (
             <div className={classes.profileBody}>
               {sellerBadge && <div className={classes.nameRow}>{sellerBadge}</div>}
-              <NotConnected
-                layout="inline"
-                title="내 정보는 아직 연결되지 않았어요"
-                api="❌ GET /members/me"
-              />
+              {profileError ? (
+                <Group gap="sm">
+                  <span role="alert">{profileError}</span>
+                  {onRetryProfile && (
+                    <Button variant="outline" size="sm" onClick={onRetryProfile}>
+                      다시 시도
+                    </Button>
+                  )}
+                </Group>
+              ) : (
+                <Skeleton h={40} radius="md" aria-label="내 정보를 불러오고 있어요" />
+              )}
             </div>
           )}
           <Button component={Link} to="/me/account?tab=info" variant="subtle" size="sm">

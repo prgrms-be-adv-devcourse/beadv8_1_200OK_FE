@@ -6,20 +6,17 @@ import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import {
   MemberRole,
-  ProductCategory,
-  ProductRegion,
   ProductStatus,
   ProductVisibility,
+  type SellerProductDetail,
 } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { mySellerProducts } from '../fixtures'
-import { type CachedProduct, PATCH_VERSION_STEP } from '../productCache'
+import { mySellerProducts, sellerProductDetail101 } from '../fixtures'
 import { SellerProductFormPage, SellerProductsPage } from './SellerWorkPages'
 
 const S3 = 'https://bucket.s3.ap-northeast-2.amazonaws.com/product'
 const MEMBER_ID = 7
-const CACHE_KEY = `paldo.seller.products.${MEMBER_ID}`
 
 /** 상품 관리 목록(데스크톱 표) */
 const table = () => screen.findByRole('table', { name: '상품 목록' })
@@ -30,27 +27,12 @@ const problem = (status: number, detail: string, extra: object = {}) =>
     { status, headers: { 'Content-Type': 'application/problem+json' } },
   )
 
-const saved: CachedProduct = {
-  productId: 31,
-  version: 2,
-  name: '청송 꿀사과',
-  descriptionHtml: '<p>아삭한 사과예요</p>',
-  category: ProductCategory.FRUIT,
-  region: ProductRegion.GYEONGBUK,
-  status: ProductStatus.ON_SALE,
-  visibility: ProductVisibility.HIDDEN,
+/** 수정 화면이 받는 상세. 서버가 version을 올렸다고 보려고 version만 바꿔 쓴다 */
+const detail = (over: Partial<SellerProductDetail> = {}): SellerProductDetail => ({
+  ...sellerProductDetail101,
   imageUrls: [`${S3}/saved.jpg`],
-  options: [{ name: '2kg', salePrice: 23900, listPrice: 27000, totalStock: 11 }],
-  updatedAt: '2026-10-18T10:00:00',
-}
-
-/** 101은 fixtures에서 이 기기에서 등록한 상품 */
-const cached101: CachedProduct = { ...saved, productId: 101, name: '청송 꿀사과 부사' }
-
-const storedVersion = (productId: number) =>
-  (JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as CachedProduct[]).find(
-    (p) => p.productId === productId,
-  )?.version
+  ...over,
+})
 
 function renderAt(path: string) {
   render(
@@ -71,7 +53,6 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  localStorage.clear()
   setAccessToken(fakeToken({ memberId: MEMBER_ID, role: MemberRole.SELLER }))
 })
 
@@ -119,8 +100,7 @@ describe('상품 관리 목록', () => {
     ).toHaveLength(2)
   })
 
-  it('판매 중지 → PATCH status PAUSED → 목록을 다시 받고, 캐시 version을 올린다', async () => {
-    localStorage.setItem(CACHE_KEY, JSON.stringify([cached101]))
+  it('판매 중지 → PATCH status PAUSED → 목록을 다시 받는다', async () => {
     const patches: unknown[] = []
     let listCount = 0
     server.use(
@@ -148,7 +128,6 @@ describe('상품 관리 목록', () => {
     await waitFor(() => expect(patches).toEqual([{ status: ProductStatus.PAUSED }]))
     expect(await screen.findByText('판매 상태를 바꿨어요')).toBeInTheDocument()
     await waitFor(() => expect(listCount).toBeGreaterThan(before))
-    expect(storedVersion(101)).toBe(cached101.version + PATCH_VERSION_STEP)
   })
 
   it('노출 스위치를 끄면 PATCH visibility HIDDEN, 실패하면 서버 detail을 보여 준다', async () => {
@@ -173,23 +152,20 @@ describe('상품 관리 목록', () => {
     expect(await screen.findByText('다른 요청이 먼저 상품을 바꿨습니다.')).toBeInTheDocument()
   })
 
-  it('이 기기에 없는 상품은 수정을 막고 이유를 보여 준다', async () => {
-    localStorage.setItem(CACHE_KEY, JSON.stringify([cached101]))
+  it('모든 상품에 수정 링크가 있다', async () => {
     renderAt('/seller/products')
     const t = await table()
-    const editable = within(t).getByRole('link', { name: '청송 꿀사과 부사 수정' })
-    expect(editable).toHaveAttribute('href', '/seller/products/101/edit')
-    const blocked = within(t).getByRole('button', { name: '청송 사과즙 100% (30포) 수정' })
-    expect(blocked).toBeDisabled()
-    expect(blocked).toHaveAccessibleDescription(
-      '이 기기에서 등록하거나 고친 상품만 수정할 수 있어요',
-    )
-    expect(within(t).queryByRole('link', { name: '청송 홍로 사과' })).not.toBeInTheDocument()
+    for (const product of mySellerProducts) {
+      expect(within(t).getByRole('link', { name: `${product.name} 수정` })).toHaveAttribute(
+        'href',
+        `/seller/products/${product.productId}/edit`,
+      )
+    }
   })
 })
 
 describe('상품 등록', () => {
-  it('사진을 올리는 동안은 막고, 다 올리면 서버 url만 보내 등록한 상품을 캐시에 남긴다', async () => {
+  it('사진을 올리는 동안은 막고, 다 올리면 서버 url만 보내 등록한다', async () => {
     let finishUpload: () => void = () => {}
     let body: unknown
     let headers: Headers | undefined
@@ -235,7 +211,6 @@ describe('상품 등록', () => {
     })
     expect(headers?.get('Authorization')).toMatch(/^Bearer /)
     expect(headers?.get('X-Member-Id')).toBeNull()
-    expect(storedVersion(77)).toBe(0)
   })
 
   it('422 errors[].path(options[0].salePrice)를 그 칸에 붙이고 focus한다', async () => {
@@ -277,91 +252,106 @@ describe('상품 등록', () => {
 })
 
 describe('상품 수정', () => {
-  beforeEach(() => {
-    localStorage.setItem(CACHE_KEY, JSON.stringify([saved]))
-  })
-
-  it('저장해 둔 version으로 보내고, 409면 충돌 안내 → 최신 내용 불러오기로 폼을 다시 그린다', async () => {
-    let body: unknown
+  const useDetail = (...details: SellerProductDetail[]) => {
+    let call = 0
     server.use(
-      // 숨긴 상품은 구매자 상세가 404
-      http.get('*/api/v1/products/31', () => problem(404, '상품을 찾을 수 없습니다.')),
-      http.put('*/api/v1/products/31', async ({ request }) => {
-        body = await request.json()
-        return problem(
-          409,
-          '다른 사용자가 이미 정보를 수정했습니다. 새로고침 후 다시 시도해주세요.',
-        )
+      http.get('*/api/v1/sellers/me/products/101', () => {
+        const next = details[Math.min(call, details.length - 1)]
+        call += 1
+        return HttpResponse.json(next)
       }),
     )
-    const user = renderAt('/seller/products/31/edit')
+  }
 
-    expect(await screen.findByDisplayValue('청송 꿀사과')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '저장' }))
-
-    expect(await screen.findByText('다른 곳에서 먼저 수정한 상품이에요')).toBeInTheDocument()
-    expect(body).toMatchObject({
-      version: 2,
-      status: ProductStatus.ON_SALE,
-      visibility: ProductVisibility.HIDDEN,
-      imageUrls: [`${S3}/saved.jpg`],
-    })
-
-    await user.clear(screen.getByLabelText('상품명'))
-    await user.type(screen.getByLabelText('상품명'), '고치던 이름')
-    await user.click(screen.getByRole('button', { name: '최신 내용 불러오기' }))
-
-    expect(await screen.findByDisplayValue('청송 꿀사과')).toBeInTheDocument()
-    expect(screen.queryByText('다른 곳에서 먼저 수정한 상품이에요')).not.toBeInTheDocument()
-  })
-
-  it('공개 상품은 서버 상세로 옵션 id를 맞추고, 저장하면 version을 올려 둔다', async () => {
+  it('판매자 상세(Bearer)로 채우고, 상세의 version·옵션 id·상태·노출을 그대로 보낸다', async () => {
     const bodies: unknown[] = []
+    let auth: string | null = null
+    useDetail(detail({ version: 5, visibility: ProductVisibility.HIDDEN }))
     server.use(
-      http.get('*/api/v1/products/31', () =>
-        HttpResponse.json({
-          productId: 31,
-          name: '청송 꿀사과',
-          descriptionHtml: '<p>아삭한 사과예요</p>',
-          categoryGroup: 'AGRICULTURE',
-          category: ProductCategory.FRUIT,
-          region: ProductRegion.GYEONGBUK,
-          status: ProductStatus.ON_SALE,
-          imageUrls: [`${S3}/saved.jpg`],
-          options: [
-            {
-              optionId: 501,
-              name: '2kg',
-              listPrice: 27000,
-              salePrice: 23900,
-              discountRate: 11,
-              soldOut: false,
-            },
-          ],
-        }),
-      ),
-      http.put('*/api/v1/products/31', async ({ request }) => {
+      http.get('*/api/v1/sellers/me/products/101', ({ request }) => {
+        auth = request.headers.get('Authorization')
+        return HttpResponse.json(detail({ version: 5, visibility: ProductVisibility.HIDDEN }))
+      }),
+      http.put('*/api/v1/products/101', async ({ request }) => {
         bodies.push(await request.json())
         return new HttpResponse(null, { status: 204 })
       }),
     )
-    const user = renderAt('/seller/products/31/edit')
+    const user = renderAt('/seller/products/101/edit')
 
-    await user.click(await screen.findByRole('button', { name: '저장' }))
+    expect(await screen.findByDisplayValue('청송 꿀사과 부사')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '저장' }))
 
     await table()
+    expect(auth).toMatch(/^Bearer /)
     expect(bodies[0]).toMatchObject({
-      version: 2,
-      visibility: ProductVisibility.VISIBLE,
-      options: [{ id: 501, name: '2kg', salePrice: 23900, totalStock: 11 }],
+      version: 5,
+      status: ProductStatus.ON_SALE,
+      visibility: ProductVisibility.HIDDEN,
+      imageUrls: [`${S3}/saved.jpg`],
+      options: [
+        { id: 1011, name: '1kg (5~6과)', salePrice: 12900, totalStock: 20 },
+        { id: 1012, totalStock: 11 },
+        { id: 1013, totalStock: 4 },
+      ],
     })
-    expect(storedVersion(31)).toBe(3)
+    expect(JSON.stringify(bodies[0])).not.toContain('allocatedQuantity')
   })
 
-  it('이 기기에 없는 상품은 고칠 수 없다고 안내한다 (version 0으로 보내지 않는다)', async () => {
-    localStorage.clear()
+  it('409면 충돌 안내 → 최신 내용 불러오기로 상세를 다시 받고, 새 version으로 저장한다', async () => {
+    const bodies: { version: number }[] = []
+    useDetail(detail({ version: 3 }), detail({ version: 4, name: '다른 곳에서 고친 이름' }))
+    server.use(
+      http.put('*/api/v1/products/101', async ({ request }) => {
+        const body = (await request.json()) as { version: number }
+        bodies.push(body)
+        return body.version === 3
+          ? problem(409, '다른 사용자가 이미 정보를 수정했습니다. 새로고침 후 다시 시도해주세요.')
+          : new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const user = renderAt('/seller/products/101/edit')
+
+    await user.click(await screen.findByRole('button', { name: '저장' }))
+    expect(await screen.findByText('다른 곳에서 먼저 수정한 상품이에요')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '최신 내용 불러오기' }))
+    expect(await screen.findByDisplayValue('다른 곳에서 고친 이름')).toBeInTheDocument()
+    expect(screen.queryByText('다른 곳에서 먼저 수정한 상품이에요')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await table()
+    expect(bodies.map((b) => b.version)).toEqual([3, 4])
+  })
+
+  it('총재고를 주문에 배정된 수량보다 적게 줄이면 보내지 않고 그 칸에 안내한다', async () => {
+    let puts = 0
+    server.use(
+      http.put('*/api/v1/products/101', () => {
+        puts += 1
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const user = renderAt('/seller/products/101/edit')
+
+    const stock = (await screen.findAllByLabelText('재고'))[0] as HTMLElement
+    expect(await screen.findByText('주문에 배정된 6개보다 적게 줄일 수 없어요')).toBeInTheDocument()
+    await user.clear(stock)
+    await user.type(stock, '5')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    expect(stock).toHaveAttribute('aria-invalid', 'true')
+    expect(stock).toHaveFocus()
+    expect(puts).toBe(0)
+  })
+
+  it.each([
+    [404, '상품을 찾을 수 없어요'],
+    [403, '내 상품이 아니라서 수정할 수 없어요'],
+  ])('상세가 %i이면 안내하고 상품 관리로 돌아가게 한다', async (status, title) => {
+    server.use(http.get('*/api/v1/sellers/me/products/99', () => problem(status, '서버 문구')))
     renderAt('/seller/products/99/edit')
-    expect(await screen.findByText('이 상품은 여기서 수정할 수 없어요')).toBeInTheDocument()
+    expect(await screen.findByText(title)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '상품 관리' })).toHaveAttribute(
       'href',
       '/seller/products',

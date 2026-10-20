@@ -6,6 +6,7 @@ import {
   payoutDetails,
   payoutItems,
   payouts,
+  sellerProductDetail101,
   sellerWalletBalance,
 } from '@/features/seller/fixtures'
 import type { SellerProfileRequest } from '@/shared/api/types'
@@ -24,6 +25,11 @@ export const sellerHandlers = [
     )
     return HttpResponse.json(pageOf(list, params))
   }),
+  http.get('*/api/v1/sellers/me/products/:productId', ({ params }) =>
+    Number(params.productId) === sellerProductDetail101.productId
+      ? HttpResponse.json(sellerProductDetail101)
+      : problem(404, '상품을 찾을 수 없습니다.'),
+  ),
   http.patch('*/api/v1/products/:productId/status', () => new HttpResponse(null, { status: 204 })),
   http.patch(
     '*/api/v1/products/:productId/visibility',

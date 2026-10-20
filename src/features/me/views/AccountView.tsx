@@ -7,6 +7,7 @@ import {
   Modal,
   NativeSelect,
   PasswordInput,
+  Skeleton,
   Stack,
   Tabs,
   Text,
@@ -26,6 +27,7 @@ import {
   NotConnected,
   PageHeader,
   PasswordRules,
+  QueryState,
 } from '@/shared/ui'
 import { withdrawReasonLabels } from '../labels'
 import {
@@ -39,8 +41,9 @@ import classes from './AccountView.module.css'
 
 // B-15 계정 관리 /me/account?tab=info|password|address|withdraw. 시안: b2c/Account, AccountMobile
 // 탈퇴 차단: 예치금 잔액 · 진행 중 요청 · 판매자 (C-13), 신청 뒤 7일 유예.
-// TODO(api): ❌ GET·PATCH /members/me, POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal 없음
-//   지금 라우트는 AccountNotConnectedView(탭마다 ‘연결 전’)만 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
+// ✅ 내 정보 탭: GET·PUT /members/me (AccountInfoPanel).
+// TODO(api): ❌ POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal 없음
+//   지금 라우트는 AccountNotConnectedView(내 정보 탭만 실제, 나머지 탭은 ‘연결 전’)를 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
 
 export type AccountTab = 'info' | 'password' | 'address' | 'withdraw'
 
@@ -102,26 +105,49 @@ function blockText(block: WithdrawBlock, balance: number): [string, string] {
   }
 }
 
+type InfoFormProps = {
+  profile: MyProfile
+  onSave: AccountViewProps['onSaveInfo']
+  submitting: boolean
+  /** 서버가 돌려준 칸 오류 (422 errors[].path) */
+  serverErrors?: Partial<Record<keyof InfoFormValues, string>>
+  /** 칸에 붙일 수 없는 저장 실패 문구 */
+  errorMessage?: string
+  /** 저장을 마쳤으면 안내를 보인다 */
+  saved?: boolean
+}
+
 function InfoForm({
   profile,
   onSave,
   submitting,
-}: {
-  profile: MyProfile
-  onSave: AccountViewProps['onSaveInfo']
-  submitting: boolean
-}) {
+  serverErrors,
+  errorMessage,
+  saved,
+}: InfoFormProps) {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<InfoFormValues>({
     resolver: zodResolver(infoSchema),
     defaultValues: { name: profile.name, nickname: profile.nickname },
   })
+  useServerFieldErrors(setError, serverErrors)
 
   return (
     <form className={classes.card} onSubmit={handleSubmit((values) => onSave(values))} noValidate>
+      {errorMessage && (
+        <Alert color="error" icon={<CircleAlert />} role="alert">
+          {errorMessage}
+        </Alert>
+      )}
+      {saved && !errorMessage && (
+        <Alert color="success" icon={<CircleCheck />} role="status">
+          내 정보를 저장했어요
+        </Alert>
+      )}
       <div className={classes.grid}>
         <TextInput label="아이디" value={profile.loginId} readOnly description="변경할 수 없어요" />
         <TextInput label="이메일" value={profile.email} readOnly description="변경할 수 없어요" />
@@ -451,8 +477,7 @@ export function AccountView({
   )
 }
 
-const notConnectedTabs: Record<AccountTab, { title: string; api: string }> = {
-  info: { title: '내 정보는 아직 연결되지 않았어요', api: '❌ GET·PATCH /members/me' },
+const notConnectedTabs: Record<Exclude<AccountTab, 'info'>, { title: string; api: string }> = {
   password: {
     title: '비밀번호 변경은 아직 연결되지 않았어요',
     api: '❌ POST /members/me/password',
@@ -464,11 +489,60 @@ const notConnectedTabs: Record<AccountTab, { title: string; api: string }> = {
   },
 }
 
-/** API가 없어 지금 라우트가 그리는 계정 관리: 탭은 그대로, 내용은 탭마다 ‘연결 전’ */
+export type AccountInfoPanelProps = {
+  status: 'pending' | 'error' | 'success'
+  profile?: MyProfile
+  onSave: InfoFormProps['onSave']
+  submitting?: boolean
+  serverErrors?: InfoFormProps['serverErrors']
+  errorMessage?: string
+  saved?: boolean
+  /** 내 정보를 못 받았을 때의 문구 */
+  loadErrorMessage?: string
+  onRetry?: () => void
+}
+
+/** 내 정보 탭: ✅ GET·PUT /members/me. 아이디·이메일은 읽기 전용 */
+export function AccountInfoPanel({
+  status,
+  profile,
+  onSave,
+  submitting = false,
+  serverErrors,
+  errorMessage,
+  saved,
+  loadErrorMessage,
+  onRetry,
+}: AccountInfoPanelProps) {
+  return (
+    <QueryState
+      status={status === 'success' && !profile ? 'pending' : status}
+      skeleton={<Skeleton h={260} radius="md" />}
+      loadingLabel="내 정보를 불러오고 있어요"
+      errorMessage={loadErrorMessage}
+      onRetry={onRetry}
+    >
+      {profile && (
+        <InfoForm
+          key={`${profile.name}/${profile.nickname}`}
+          profile={profile}
+          onSave={onSave}
+          submitting={submitting}
+          serverErrors={serverErrors}
+          errorMessage={errorMessage}
+          saved={saved}
+        />
+      )}
+    </QueryState>
+  )
+}
+
+/** 지금 라우트가 그리는 계정 관리: 내 정보 탭은 실제, 나머지 탭은 ‘연결 전’ */
 export function AccountNotConnectedView({
   tab,
   onTabChange,
-}: Pick<AccountViewProps, 'tab' | 'onTabChange'>) {
+  info,
+}: Pick<AccountViewProps, 'tab' | 'onTabChange'> & { info: AccountInfoPanelProps }) {
   return (
     <div className={classes.root}>
       <PageHeader title="계정 관리" backTo="/me" />
@@ -482,10 +556,14 @@ export function AccountNotConnectedView({
         </Tabs.List>
         {tabs.map((t) => (
           <Tabs.Panel key={t.value} value={t.value} pt="lg">
-            <NotConnected
-              title={notConnectedTabs[t.value].title}
-              api={notConnectedTabs[t.value].api}
-            />
+            {t.value === 'info' ? (
+              <AccountInfoPanel {...info} />
+            ) : (
+              <NotConnected
+                title={notConnectedTabs[t.value].title}
+                api={notConnectedTabs[t.value].api}
+              />
+            )}
           </Tabs.Panel>
         ))}
       </Tabs>

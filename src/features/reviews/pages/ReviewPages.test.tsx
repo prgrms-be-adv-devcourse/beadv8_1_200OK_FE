@@ -135,8 +135,6 @@ describe('ReviewNewPage', () => {
     expect(await screen.findByText('리뷰를 등록했어요')).toBeInTheDocument()
     expect(productId).toBe('1')
     expect(body).toEqual({
-      productOptionId: 11,
-      orderId: 100,
       orderItemId: 345,
       rating: 10,
       content: '달고 시원해서 아침마다 마셔요.',

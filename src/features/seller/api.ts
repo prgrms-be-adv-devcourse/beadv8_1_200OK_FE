@@ -1,5 +1,4 @@
 import { apiClient } from '@/shared/api/client'
-import { fetchProductDetail } from '@/shared/api/productDetail'
 import type {
   PageResponse,
   PayoutSellerCandidate,
@@ -14,6 +13,7 @@ import type {
   SellerBalanceResponse,
   SellerPayoutCandidateParams,
   SellerPayoutListParams,
+  SellerProductDetail,
   SellerProductListParams,
   SellerProductSummary,
   SellerProfileRequest,
@@ -51,7 +51,7 @@ export async function updateProduct(productId: number, body: ProductUpdateReques
 }
 
 // ✅ PATCH /api/v1/products/{id}/status → 204. 상품 관리 목록의 바로 바꾸기에 쓴다.
-// version을 받지 않아 마지막 요청이 반영되고, 성공하면 서버 version이 오른다(productCache.PATCH_VERSION_STEP).
+// version을 받지 않아 마지막 요청이 반영되고, 성공하면 서버 version이 오르므로 수정 화면은 상세를 다시 받는다.
 export async function changeProductStatus(productId: number, body: ProductStatusRequest) {
   await apiClient.patch(`/api/v1/products/${productId}/status`, body)
 }
@@ -66,10 +66,14 @@ export async function deleteProduct(productId: number): Promise<void> {
   await apiClient.delete(`/api/v1/products/${productId}`)
 }
 
-// ✅ GET /api/v1/products/{id} (구매자용 상세). 판매자 상세 API가 없어 옵션 id를 받으려고 쓴다.
-// 공개(VISIBLE) 상품만 200이고 숨긴 상품은 404. version · 재고 수량 · visibility는 주지 않는다.
-// TODO(api): 판매자 상세 API가 생기면 그것으로 바꾼다. 지금은 공용 상세 조회(shared/api/productDetail.ts)를 쓴다.
-export const getProductDetail = fetchProductDetail
+// ✅ GET /api/v1/sellers/me/products/{id} → 수정 화면용 상세. version · 옵션 id · 재고 · 상태 · 노출을 준다. 숨긴 상품도 조회된다.
+// 401 로그인 필요, 403 SELLER가 아니거나 본인 상품이 아님, 404 없거나 삭제됨
+export async function fetchMyProductDetail(productId: number): Promise<SellerProductDetail> {
+  const { data } = await apiClient.get<SellerProductDetail>(
+    `/api/v1/sellers/me/products/${productId}`,
+  )
+  return data
+}
 
 // ─── 상점 프로필 ─────────────────────────────────────────
 

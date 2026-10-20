@@ -6,8 +6,14 @@ import {
   type OrderDetailItem,
   type OrderDetailSellerGroup,
   OrderItemStatus,
+  type ShipmentSummary,
 } from '@/shared/api/types'
 import { formatDate } from '@/shared/lib/format'
+import {
+  ShipmentState,
+  shipmentBadgeStatus,
+  shipmentStatusLabels,
+} from '@/shared/lib/shipmentState'
 import {
   DisabledReason,
   FarmAvatar,
@@ -18,6 +24,7 @@ import {
   QueryState,
   StatusBadge,
 } from '@/shared/ui'
+import { ConfirmItemButton } from '../components/ConfirmItemButton'
 import { OrderItemRow } from '../components/OrderItemRow'
 import classes from './OrderDetailView.module.css'
 
@@ -25,9 +32,8 @@ import classes from './OrderDetailView.module.css'
 // ✅ GET /orders/{orderId}: 판매자별 묶음(sellerGroups) · 상품별 상태 · 배송지 · 결제 금액. 리뷰 쓰기는 구매확정한 상품 단위.
 // 시안에 있던 동작 중 API가 없는 것은 비활성 버튼 + 이유 문구로 남기거나 뺐다:
 // TODO(api): ❌ 취소 요청 API 없음 → ‘취소 요청’ 비활성 + 이유
-// TODO(api): ❌ 구매확정 API 없음 → ‘구매확정’ 비활성 + 이유. 자동 구매확정 예정일(autoConfirmAt)도 없어 안내를 뺐다
-// TODO(api): POST /shipments/{shipmentId}/address-change-requests는 있으나 주문 상세에 shipmentId가 없음 → 배송지 변경 요청 숨김
-// TODO(api): ❌ 배송 조회(carrier·trackingNumber 없음) → 송장·배송 조회 링크 숨김
+// ✅ 구매확정 POST /orders/{orderId}/items/{orderItemId}/confirm: 배송 완료(DELIVERED)된 상품 단위. 3일 뒤 서버가 자동으로 확정한다.
+// ✅ 배송 GET /shipments(주문 상세에 shipmentId가 없어 orderId로 찾는다) → ‘배송 조회’ 링크. 배송지 변경 요청 화면은 아직 없다.
 // TODO(api): ❌ 문의 API 없음 → 고객센터 문의 링크 숨김(SupportPage는 fixtures 전용)
 // TODO(api): 판매자 이름 없음(sellerId만) → ‘판매자 {sellerId}’
 
@@ -36,6 +42,12 @@ export type OrderDetailViewProps = {
   order?: OrderDetail
   onRetry?: () => void
   errorMessage?: string
+  /** 이 주문의 배송. 없으면(못 받았거나 로딩 중) 배송 조회 링크를 그리지 않는다 */
+  shipments?: ShipmentSummary[]
+  /** 주문 상품 1건 구매확정. 없으면 버튼을 그리지 않는다 */
+  onConfirm?: (orderItemId: number) => void
+  /** 구매확정 요청 중인 주문 상품 */
+  confirmingItemId?: number | null
 }
 
 const STEPS = ['결제 완료', '상품 준비 중', '배송 중', '배송 완료', '구매확정']
@@ -82,19 +94,33 @@ function GroupAction({ status }: { status: OrderItemStatus | null }) {
     case OrderItemStatus.SHIPPING:
       return <span>배송 중에는 취소할 수 없어요</span>
     case OrderItemStatus.DELIVERED:
-      return (
-        <DisabledReason reason="구매확정은 아직 준비 중이에요">
-          <Button size="sm" disabled>
-            구매확정
-          </Button>
-        </DisabledReason>
-      )
+      return <span>받은 상품마다 구매확정해 주세요</span>
     default:
       return null
   }
 }
 
-function ReviewLink({ orderId, item }: { orderId: number; item: OrderDetailItem }) {
+function ItemAction({
+  orderId,
+  item,
+  onConfirm,
+  confirming,
+}: {
+  orderId: number
+  item: OrderDetailItem
+  onConfirm?: (orderItemId: number) => void
+  confirming: boolean
+}) {
+  if (item.status === OrderItemStatus.DELIVERED) {
+    if (!onConfirm) return null
+    return (
+      <ConfirmItemButton
+        productName={item.productName}
+        loading={confirming}
+        onConfirm={() => onConfirm(item.orderItemId)}
+      />
+    )
+  }
   if (item.status !== OrderItemStatus.PURCHASE_CONFIRMED) return null
   return (
     <Button
@@ -108,7 +134,15 @@ function ReviewLink({ orderId, item }: { orderId: number; item: OrderDetailItem 
   )
 }
 
-export function OrderDetailView({ status, order, onRetry, errorMessage }: OrderDetailViewProps) {
+export function OrderDetailView({
+  status,
+  order,
+  onRetry,
+  errorMessage,
+  shipments = [],
+  onConfirm,
+  confirmingItemId = null,
+}: OrderDetailViewProps) {
   const resolvedStatus = status === 'success' && !order ? 'notFound' : status
 
   if (resolvedStatus !== 'success' || !order) {
@@ -161,6 +195,40 @@ export function OrderDetailView({ status, order, onRetry, errorMessage }: OrderD
             </p>
           </section>
 
+          {shipments.length > 0 && (
+            <section className={classes.card} aria-labelledby="order-shipments">
+              <h2 id="order-shipments" className={classes.cardTitle}>
+                배송
+              </h2>
+              <ul className={classes.shipments}>
+                {shipments.map((shipment) => (
+                  <li key={shipment.shipmentId}>
+                    <span className="pd-num">
+                      {shipment.representativeProductName}
+                      {shipment.otherItemCount > 0 ? ` 외 ${shipment.otherItemCount}건` : ''}
+                    </span>
+                    <StatusBadge
+                      status={
+                        shipment.delayed
+                          ? ShipmentState.DELAYED
+                          : shipmentBadgeStatus(shipment.status)
+                      }
+                    />
+                    <Button
+                      component={Link}
+                      to={`/orders/${order.orderId}/shipments/${shipment.shipmentId}`}
+                      variant="subtle"
+                      size="sm"
+                      aria-label={`${shipmentStatusLabels[shipment.status]} 배송 조회`}
+                    >
+                      배송 조회
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {order.sellerGroups.map((group) => {
             const groupStatus = sharedStatus(group)
             const step = groupStatus === null ? undefined : stepOf[groupStatus]
@@ -194,7 +262,14 @@ export function OrderDetailView({ status, order, onRetry, errorMessage }: OrderD
                     key={item.orderItemId}
                     item={item}
                     meta={groupStatus === null ? <StatusBadge status={item.status} /> : undefined}
-                    actions={<ReviewLink orderId={order.orderId} item={item} />}
+                    actions={
+                      <ItemAction
+                        orderId={order.orderId}
+                        item={item}
+                        onConfirm={onConfirm}
+                        confirming={confirmingItemId === item.orderItemId}
+                      />
+                    }
                   />
                 ))}
 

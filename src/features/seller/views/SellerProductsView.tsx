@@ -15,7 +15,7 @@ import { ProductStatus, ProductVisibility } from '@/shared/api/types'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import { productStatusLabels } from '@/shared/lib/labels'
-import { DisabledReason, PageHeader, PriceText, ProductStatusBadge, QueryState } from '@/shared/ui'
+import { PageHeader, PriceText, ProductStatusBadge, QueryState } from '@/shared/ui'
 import type { SellerProductRow } from '../types'
 import classes from './SellerProductsView.module.css'
 
@@ -23,7 +23,6 @@ import classes from './SellerProductsView.module.css'
 // 판매 상태 탭 5개(전체 · 판매 준비 · 판매 중 · 일시 중지 · 판매 종료) + 노출 여부. 데스크톱 표, 모바일 목록.
 // 관리 칸: 판매 상태 버튼(READY→판매 시작, ON_SALE→판매 중지, PAUSED→판매 재개) · 노출 스위치 · 수정.
 // ✅ GET /sellers/me/products, PATCH /products/{id}/status · /visibility.
-// TODO(api): 판매자 상품 상세 API가 없어 수정은 productCache에 있는 상품만(editable). 나머지는 이유를 보여 주고 막는다.
 
 export type ProductTab = ProductStatus | 'ALL'
 
@@ -54,8 +53,6 @@ const tabOrder: ProductTab[] = [
 ]
 
 const tabLabel = (tab: ProductTab) => (tab === 'ALL' ? '전체' : productStatusLabels[tab])
-
-export const NOT_EDITABLE_REASON = '이 기기에서 등록하거나 고친 상품만 수정할 수 있어요'
 
 /** 판매 상태 바로 바꾸기: 지금 상태 → 버튼 문구와 다음 상태. 판매 종료는 바꿀 수 없다 */
 export function nextStatusAction(
@@ -141,23 +138,15 @@ function Actions({
           )
         }
       />
-      {product.editable ? (
-        <Button
-          component={Link}
-          to={`/seller/products/${product.productId}/edit`}
-          variant="subtle"
-          size="sm"
-          aria-label={`${product.name} 수정`}
-        >
-          수정
-        </Button>
-      ) : (
-        <DisabledReason reason={NOT_EDITABLE_REASON}>
-          <Button variant="subtle" size="sm" disabled aria-label={`${product.name} 수정`}>
-            수정
-          </Button>
-        </DisabledReason>
-      )}
+      <Button
+        component={Link}
+        to={`/seller/products/${product.productId}/edit`}
+        variant="subtle"
+        size="sm"
+        aria-label={`${product.name} 수정`}
+      >
+        수정
+      </Button>
     </div>
   )
 }
@@ -252,16 +241,12 @@ export function SellerProductsView({
                   </Table.Td>
                   <Table.Td>
                     <div className={classes.nameCell}>
-                      {product.editable ? (
-                        <Link
-                          to={`/seller/products/${product.productId}/edit`}
-                          className={classes.name}
-                        >
-                          {product.name}
-                        </Link>
-                      ) : (
-                        <span className={classes.name}>{product.name}</span>
-                      )}
+                      <Link
+                        to={`/seller/products/${product.productId}/edit`}
+                        className={classes.name}
+                      >
+                        {product.name}
+                      </Link>
                       {product.hasLowStock && <LowStock />}
                     </div>
                   </Table.Td>
@@ -311,13 +296,9 @@ export function SellerProductsView({
             return (
               <li key={product.productId} className={classes.listItem}>
                 {/* 안에 버튼·스위치가 있어 링크는 본문에만 건다 */}
-                {product.editable ? (
-                  <Link to={`/seller/products/${product.productId}/edit`} className={classes.item}>
-                    {body}
-                  </Link>
-                ) : (
-                  <div className={classes.item}>{body}</div>
-                )}
+                <Link to={`/seller/products/${product.productId}/edit`} className={classes.item}>
+                  {body}
+                </Link>
                 <Actions
                   product={product}
                   busy={busyProductId === product.productId}

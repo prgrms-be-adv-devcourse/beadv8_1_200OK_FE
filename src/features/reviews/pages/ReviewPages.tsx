@@ -137,8 +137,6 @@ function ReviewCreate({ orderItem }: { orderItem: ReviewOrderItem }) {
         create.mutate({
           productId: orderItem.productId,
           body: {
-            productOptionId: orderItem.productOptionId,
-            orderId: orderItem.orderId,
             orderItemId: orderItem.orderItemId,
             rating: values.rating,
             content: values.content,

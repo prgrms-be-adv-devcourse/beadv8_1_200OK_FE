@@ -43,11 +43,7 @@ import {
   SellerProductFormView,
   type SellerProductFormViewProps,
 } from './views/SellerProductFormView'
-import {
-  NOT_EDITABLE_REASON,
-  SellerProductsView,
-  type SellerProductsViewProps,
-} from './views/SellerProductsView'
+import { SellerProductsView, type SellerProductsViewProps } from './views/SellerProductsView'
 import { SellerProfileView, type SellerProfileViewProps } from './views/SellerProfileView'
 import { SellerWalletView, type SellerWalletViewProps } from './views/SellerWalletView'
 
@@ -337,13 +333,6 @@ export const sellerWorkPreviews: ScreenPreview[] = [
         label: '상태 바꾸는 중 (관리 칸 잠금)',
         session: 'seller',
         render: () => products({ busyProductId: 101 }),
-      },
-      {
-        id: 'not-editable',
-        label: `수정 불가 (${NOT_EDITABLE_REASON})`,
-        session: 'seller',
-        render: () =>
-          products({ products: sellerProducts.map((p) => ({ ...p, editable: false })) }),
       },
       {
         id: 'low-stock',

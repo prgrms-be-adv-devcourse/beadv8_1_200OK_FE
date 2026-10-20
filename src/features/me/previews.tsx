@@ -7,13 +7,20 @@ import {
   myOrderCounts,
   myProfile,
 } from './fixtures'
-import { AccountNotConnectedView, AccountView, type AccountViewProps } from './views/AccountView'
+import {
+  type AccountInfoPanelProps,
+  AccountNotConnectedView,
+  AccountView,
+  type AccountViewProps,
+} from './views/AccountView'
 import { LikesView, type LikesViewProps } from './views/LikesView'
 import { MyPageView, type MyPageViewProps } from './views/MyPageView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 마이 묶음은 MyPageLayout 안에서 그린다.
 
 const noop = () => {}
+
+const infoPanel: AccountInfoPanelProps = { status: 'success', profile: myProfile, onSave: noop }
 
 const my = (props: Partial<MyPageViewProps> = {}) => (
   <MyPageView
@@ -69,14 +76,28 @@ export const mePreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면: 프로필·개수·배송지)',
+        label: '연결 전 (지금 화면: 개수·배송지)',
         render: () =>
           my({
-            profile: undefined,
             orderCounts: undefined,
             likedCount: undefined,
             followingCount: undefined,
             addressSummary: undefined,
+          }),
+      },
+      {
+        id: 'profile-loading',
+        label: '프로필 불러오는 중',
+        render: () => my({ profile: undefined }),
+      },
+      {
+        id: 'profile-error',
+        label: '프로필 오류',
+        render: () =>
+          my({
+            profile: undefined,
+            profileError: '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요',
+            onRetryProfile: noop,
           }),
       },
       { id: 'buyer', label: '구매자', render: () => my() },
@@ -146,16 +167,90 @@ export const mePreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면)',
-        render: () => <AccountNotConnectedView tab="info" onTabChange={noop} />,
+        label: '연결 전 · 비밀번호 탭',
+        path: '/me/account?tab=password',
+        render: () => (
+          <AccountNotConnectedView tab="password" onTabChange={noop} info={infoPanel} />
+        ),
       },
       {
         id: 'not-connected-address',
         label: '연결 전 · 배송지 탭',
         path: '/me/account?tab=address',
-        render: () => <AccountNotConnectedView tab="address" onTabChange={noop} />,
+        render: () => <AccountNotConnectedView tab="address" onTabChange={noop} info={infoPanel} />,
       },
-      { id: 'info', label: '내 정보', render: () => account() },
+      {
+        id: 'info-live',
+        label: '내 정보 (지금 화면)',
+        render: () => <AccountNotConnectedView tab="info" onTabChange={noop} info={infoPanel} />,
+      },
+      {
+        id: 'info-saved',
+        label: '내 정보 · 저장함',
+        render: () => (
+          <AccountNotConnectedView
+            tab="info"
+            onTabChange={noop}
+            info={{ ...infoPanel, saved: true }}
+          />
+        ),
+      },
+      {
+        id: 'info-field-error',
+        label: '내 정보 · 칸 오류(422)',
+        render: () => (
+          <AccountNotConnectedView
+            tab="info"
+            onTabChange={noop}
+            info={{
+              ...infoPanel,
+              serverErrors: { nickname: '닉네임은 2자 이상 30자 이하여야 합니다.' },
+            }}
+          />
+        ),
+      },
+      {
+        id: 'info-error',
+        label: '내 정보 · 저장 실패',
+        render: () => (
+          <AccountNotConnectedView
+            tab="info"
+            onTabChange={noop}
+            info={{
+              ...infoPanel,
+              errorMessage: '내 정보를 찾을 수 없어요. 탈퇴했거나 없는 계정이에요',
+            }}
+          />
+        ),
+      },
+      {
+        id: 'info-load-error',
+        label: '내 정보 · 불러오기 실패',
+        render: () => (
+          <AccountNotConnectedView
+            tab="info"
+            onTabChange={noop}
+            info={{
+              status: 'error',
+              onSave: noop,
+              loadErrorMessage: '요청을 처리하지 못했어요',
+              onRetry: noop,
+            }}
+          />
+        ),
+      },
+      {
+        id: 'info-loading',
+        label: '내 정보 · 로딩',
+        render: () => (
+          <AccountNotConnectedView
+            tab="info"
+            onTabChange={noop}
+            info={{ status: 'pending', onSave: noop }}
+          />
+        ),
+      },
+      { id: 'info', label: '내 정보 (시안 전체)', render: () => account() },
       {
         id: 'password',
         label: '비밀번호',

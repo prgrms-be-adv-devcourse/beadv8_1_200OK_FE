@@ -12,7 +12,7 @@ export type ReviewTarget = {
   quantity?: number
 }
 
-// 리뷰를 쓸 주문 상품. 작성 API는 productOptionId·orderId·orderItemId를 받고, 값은 ✅ 주문 상세(GET /orders/{orderId})에서 온다(target.ts).
+// 리뷰를 쓸 주문 상품. 작성 API는 orderItemId만 받고(주문·옵션은 서버가 찾는다), 화면에 쓰는 값은 ✅ 주문 상세(GET /orders/{orderId})에서 온다(target.ts).
 export type ReviewOrderItem = ReviewTarget & {
   orderId: number
   orderItemId: number

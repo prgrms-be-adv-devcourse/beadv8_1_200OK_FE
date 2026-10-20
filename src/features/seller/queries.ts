@@ -4,22 +4,23 @@ import { useSyncExternalStore } from 'react'
 import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
-import {
-  type PageResponse,
-  type PayoutSellerCandidate,
-  type PayoutSellerDetail,
-  type PayoutSummary,
-  type ProductCreateRequest,
+import type {
+  PageResponse,
+  PayoutSellerCandidate,
+  PayoutSellerDetail,
+  PayoutSummary,
+  ProductCreateRequest,
   ProductStatus,
-  type ProductUpdateRequest,
+  ProductUpdateRequest,
   ProductVisibility,
-  type SellerBalanceResponse,
-  type SellerPayoutCandidateParams,
-  type SellerPayoutListParams,
-  type SellerProductListParams,
-  type SellerProductSummary,
-  type SellerProfileRequest,
-  type SellerProfileResponse,
+  SellerBalanceResponse,
+  SellerPayoutCandidateParams,
+  SellerPayoutListParams,
+  SellerProductDetail,
+  SellerProductListParams,
+  SellerProductSummary,
+  SellerProfileRequest,
+  SellerProfileResponse,
 } from '@/shared/api/types'
 import { PAYOUT_RUN_HOUR } from '@/shared/lib/constants'
 import { recentYear, thisMonth, toServerDateTime } from '@/shared/lib/dateRange'
@@ -29,6 +30,7 @@ import {
   createMyProfile,
   createProduct,
   deleteProduct,
+  fetchMyProductDetail,
   fetchMyProducts,
   fetchMyProfile,
   fetchSellerBalance,
@@ -36,18 +38,9 @@ import {
   getPayoutCandidates,
   getPayoutItems,
   getPayouts,
-  getProductDetail,
   updateMyProfile,
   updateProduct,
 } from './api'
-import {
-  type CachedProduct,
-  PATCH_VERSION_STEP,
-  patchCachedProduct,
-  readCachedProducts,
-  removeCachedProduct,
-  saveCachedProduct,
-} from './productCache'
 import type { PayoutOutlook } from './types'
 
 // 판매자 센터 쿼리 키 · 훅. 상품을 바꾸면 구매자 화면 캐시도 [products] 접두어로 비운다(ADR-0003).
@@ -71,7 +64,7 @@ export const payoutKeys = {
   items: (payoutId: number) => [queryKeyPrefix.payouts, 'items', payoutId] as const,
 }
 
-/** 로그인한 회원 번호 (토큰 payload의 sub). productCache 키와 /farms/:id 링크에 쓴다 */
+/** 로그인한 회원 번호 (토큰 payload의 sub). /farms/:id 링크에 쓴다 */
 export function useMemberId(): number | null {
   return useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)?.memberId ?? null
 }
@@ -89,71 +82,52 @@ export function useMyProducts(params: SellerProductListParams) {
   })
 }
 
-/** 공개 상품만 200, 숨긴 상품은 404라 404는 오류로 다루지 않는다(재시도 없음) */
+/**
+ * 수정 화면의 처음 값(version · 옵션 id · 재고). 열 때마다 서버에서 새로 받고(gcTime 0) 재시도하지 않는다.
+ * 403(내 상품 아님)·404(없거나 삭제됨)는 화면이 안내로 그린다.
+ */
 export function useSellerProductDetail(productId: number) {
-  return useQuery({
+  return useQuery<SellerProductDetail, ApiError>({
     queryKey: sellerKeys.productDetail(productId),
-    queryFn: () => getProductDetail(productId),
+    queryFn: () => fetchMyProductDetail(productId),
     enabled: Number.isInteger(productId),
     retry: false,
+    gcTime: 0,
+    // 폼을 연 뒤에 version만 몰래 바뀌면 안 되므로 창 포커스로 다시 받지 않는다. 다시 받는 건 저장·409 때뿐이다
+    staleTime: Number.POSITIVE_INFINITY,
   })
 }
 
+/** 상품이 바뀌면 목록 · 상세(서버 version이 오른다) · 구매자 화면 캐시를 모두 다시 받는다 */
 function useAfterProductChange() {
   const queryClient = useQueryClient()
   return () => {
     void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.seller, 'myProducts'] })
+    void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.seller, 'productDetail'] })
     void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.products] })
   }
 }
 
-const now = () => toServerDateTime(dayjs())
-
-export function useCreateProduct(memberId: number | null) {
+export function useCreateProduct() {
   const afterChange = useAfterProductChange()
   return useMutation<{ productId: number }, ApiError, ProductCreateRequest>({
     mutationFn: createProduct,
-    onSuccess: ({ productId }, body) => {
-      if (memberId !== null) {
-        saveCachedProduct(memberId, {
-          ...body,
-          productId,
-          version: 0,
-          status: body.status ?? ProductStatus.READY,
-          visibility: body.visibility ?? ProductVisibility.HIDDEN,
-          updatedAt: now(),
-        })
-      }
-      afterChange()
-    },
+    onSuccess: afterChange,
   })
 }
 
-export function useUpdateProduct(memberId: number | null, productId: number) {
-  const queryClient = useQueryClient()
+export function useUpdateProduct(productId: number) {
   const afterChange = useAfterProductChange()
-  return useMutation<
-    void,
-    ApiError,
-    ProductUpdateRequest & Pick<CachedProduct, 'status' | 'visibility'>
-  >({
+  return useMutation<void, ApiError, ProductUpdateRequest>({
     mutationFn: (body) => updateProduct(productId, body),
-    onSuccess: (_, { version, ...body }) => {
-      // 옵션 id는 새 옵션이 생기거나 지워지면 달라지므로 다음에 상세 조회로 다시 받는다
-      if (memberId !== null) {
-        saveCachedProduct(memberId, { ...body, productId, version: version + 1, updatedAt: now() })
-      }
-      void queryClient.invalidateQueries({ queryKey: sellerKeys.productDetail(productId) })
-      afterChange()
-    },
+    onSuccess: afterChange,
   })
 }
 
-export function useDeleteProduct(memberId: number | null, productId: number) {
+export function useDeleteProduct(productId: number) {
   const queryClient = useQueryClient()
   const afterChange = useAfterProductChange()
   const forget = () => {
-    if (memberId !== null) removeCachedProduct(memberId, productId)
     queryClient.removeQueries({ queryKey: sellerKeys.productDetail(productId) })
     afterChange()
   }
@@ -167,46 +141,26 @@ export function useDeleteProduct(memberId: number | null, productId: number) {
   })
 }
 
-/** 목록 바로 바꾸기(PATCH) 뒤처리: 캐시에 있으면 값과 version을 맞추고, 404면 캐시에서 뺀다 */
-function useAfterQuickChange(memberId: number | null) {
+/** 목록 바로 바꾸기(PATCH) 뒤: 서버 version이 오르므로 목록·상세를 다시 받는다. 404면 목록에서도 뺀다 */
+export function useChangeProductStatus() {
   const afterChange = useAfterProductChange()
-  return {
-    success: (productId: number, patch: Partial<Pick<CachedProduct, 'status' | 'visibility'>>) => {
-      if (memberId !== null) {
-        const cached = readCachedProducts(memberId).find((p) => p.productId === productId)
-        if (cached) {
-          patchCachedProduct(memberId, productId, {
-            ...patch,
-            version: cached.version + PATCH_VERSION_STEP,
-          })
-        }
-      }
-      afterChange()
-    },
-    error: (productId: number, error: ApiError) => {
-      if (error.status === 404) {
-        if (memberId !== null) removeCachedProduct(memberId, productId)
-        afterChange()
-      }
-    },
-  }
-}
-
-export function useChangeProductStatus(memberId: number | null) {
-  const after = useAfterQuickChange(memberId)
   return useMutation<void, ApiError, { productId: number; status: ProductStatus }>({
     mutationFn: ({ productId, status }) => changeProductStatus(productId, { status }),
-    onSuccess: (_, { productId, status }) => after.success(productId, { status }),
-    onError: (error, { productId }) => after.error(productId, error),
+    onSuccess: afterChange,
+    onError: (error) => {
+      if (error.status === 404) afterChange()
+    },
   })
 }
 
-export function useChangeProductVisibility(memberId: number | null) {
-  const after = useAfterQuickChange(memberId)
+export function useChangeProductVisibility() {
+  const afterChange = useAfterProductChange()
   return useMutation<void, ApiError, { productId: number; visibility: ProductVisibility }>({
     mutationFn: ({ productId, visibility }) => changeProductVisibility(productId, { visibility }),
-    onSuccess: (_, { productId, visibility }) => after.success(productId, { visibility }),
-    onError: (error, { productId }) => after.error(productId, error),
+    onSuccess: afterChange,
+    onError: (error) => {
+      if (error.status === 404) afterChange()
+    },
   })
 }
 

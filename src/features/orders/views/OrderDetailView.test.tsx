@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { OrderItemStatus } from '@/shared/api/types'
 import { render } from '@/test/render'
@@ -33,11 +34,19 @@ describe('OrderDetailView', () => {
     expect(screen.getAllByText('취소 요청은 아직 준비 중이에요').length).toBeGreaterThan(0)
   })
 
-  it('배송 완료면 구매확정 버튼을 이유와 함께 비활성으로 둔다', () => {
-    renderDetail({ order: orderWithItemStatus(OrderItemStatus.DELIVERED) })
-    expect(screen.getByRole('button', { name: '구매확정' })).toBeDisabled()
-    expect(screen.getByText('구매확정은 아직 준비 중이에요')).toBeInTheDocument()
-    expect(screen.queryByText(/자동으로 구매확정돼요/)).not.toBeInTheDocument()
+  it('배송 완료 상품마다 구매확정 버튼을 두고, 확인 창에서 확정한다', async () => {
+    const onConfirm = vi.fn()
+    renderDetail({ order: orderWithItemStatus(OrderItemStatus.DELIVERED), onConfirm })
+    await userEvent.click(screen.getByRole('button', { name: '청송 꿀사과 부사 구매확정' }))
+    const dialog = screen.getByRole('dialog', { name: '구매확정할까요?' })
+    expect(within(dialog).getByText(/배송 완료 3일 뒤에 자동으로 구매확정돼요/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: '구매확정' }))
+    expect(onConfirm).toHaveBeenCalledWith(1841)
+  })
+
+  it('구매확정 동작을 받지 못하면 버튼을 그리지 않는다', () => {
+    renderDetail({ order: orderWithItemStatus(OrderItemStatus.DELIVERED), onConfirm: undefined })
+    expect(screen.queryByRole('button', { name: /구매확정$/ })).not.toBeInTheDocument()
   })
 
   it('구매확정한 상품은 주문·주문 상품 번호를 실어 리뷰 쓰기로 이어진다', () => {

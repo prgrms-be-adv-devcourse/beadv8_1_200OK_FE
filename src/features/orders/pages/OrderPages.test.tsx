@@ -1,10 +1,10 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
 import { render } from '@/test/render'
-import { orderSummaries } from '../fixtures'
+import { orderDetails, orderSummaries, shipmentDetails } from '../fixtures'
 import { OrderDetailPage } from './OrderDetailPage'
 import { OrderListPage } from './OrderListPage'
 import { ShipmentPage } from './ShipmentPage'
@@ -138,14 +138,120 @@ describe('OrderDetailPage', () => {
   })
 })
 
-describe('배송 조회·고객센터 문의 (연결 전)', () => {
-  it('배송 조회는 가짜 배송 정보 대신 연결 전 안내와 주문 상세 링크를 보여 준다', async () => {
-    renderAt('/orders/151/shipments/3')
-    expect(await screen.findByRole('heading', { level: 1, name: '배송 조회' })).toBeInTheDocument()
-    expect(screen.getByText('배송 조회는 아직 연결되지 않았어요')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '주문 상세로' })).toHaveAttribute('href', '/orders/151')
+describe('OrderDetailPage 배송·구매확정', () => {
+  it('이 주문의 배송을 찾아 배송 조회 링크를 보여 준다', async () => {
+    renderAt('/orders/151')
+    const link = await screen.findByRole('link', { name: '배송 중 배송 조회' })
+    expect(link).toHaveAttribute('href', '/orders/151/shipments/3')
   })
 
+  it('배송 목록을 못 받아도 주문 상세는 그대로 그린다', async () => {
+    server.use(http.get('*/api/v1/shipments', () => problem(500, '서버 오류')))
+    renderAt('/orders/151')
+    expect(await screen.findByText(/주문번호 151/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /배송 조회/ })).not.toBeInTheDocument()
+  })
+
+  it('배송 완료 상품은 확인 창에서 구매확정하고 주문 상세를 다시 받는다', async () => {
+    let confirmed: string[] = []
+    let detailCalls = 0
+    server.use(
+      http.get('*/api/v1/orders/93', () => {
+        detailCalls += 1
+        return HttpResponse.json(orderDetails.find((o) => o.orderId === 93))
+      }),
+      http.post('*/api/v1/orders/:orderId/items/:orderItemId/confirm', ({ params }) => {
+        confirmed = [String(params.orderId), String(params.orderItemId)]
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/orders/93')
+    await user.click(await screen.findByRole('button', { name: /구매확정$/ }))
+    const dialog = await screen.findByRole('dialog', { name: '구매확정할까요?' })
+    await user.click(within(dialog).getByRole('button', { name: '구매확정' }))
+
+    expect((await screen.findAllByText('구매확정했어요')).length).toBeGreaterThan(0)
+    expect(confirmed).toEqual(['93', '931'])
+    await waitFor(() => expect(detailCalls).toBeGreaterThan(1))
+  })
+
+  it('구매확정이 거절되면(409) 서버 문구를 알린다', async () => {
+    server.use(
+      http.post('*/api/v1/orders/:orderId/items/:orderItemId/confirm', () =>
+        problem(409, '배송 완료된 상품만 구매확정할 수 있습니다.'),
+      ),
+    )
+    const { user } = renderAt('/orders/93')
+    await user.click(await screen.findByRole('button', { name: /구매확정$/ }))
+    const dialog = await screen.findByRole('dialog', { name: '구매확정할까요?' })
+    await user.click(within(dialog).getByRole('button', { name: '구매확정' }))
+    expect(
+      await screen.findByText('배송 완료된 상품만 구매확정할 수 있습니다.'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('ShipmentPage', () => {
+  it('배송 상태·송장·배송지를 그린다', async () => {
+    renderAt('/orders/151/shipments/3')
+    expect(await screen.findByText('상품이 배송 중이에요')).toBeInTheDocument()
+    expect(screen.getByText('CJ대한통운')).toBeInTheDocument()
+    expect(screen.getByText('684219375520')).toBeInTheDocument()
+    expect(screen.getByText(/서울 중구 세종대로 110/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '주문 상세로' })).toHaveAttribute('href', '/orders/151')
+    expect(screen.queryByRole('button', { name: /구매확정$/ })).not.toBeInTheDocument()
+  })
+
+  it('배송 완료 상품은 여기서도 구매확정할 수 있다', async () => {
+    let confirmed: string[] = []
+    server.use(
+      http.post('*/api/v1/orders/:orderId/items/:orderItemId/confirm', ({ params }) => {
+        confirmed = [String(params.orderId), String(params.orderItemId)]
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/orders/93/shipments/4')
+    await user.click(await screen.findByRole('button', { name: /구매확정$/ }))
+    const dialog = await screen.findByRole('dialog', { name: '구매확정할까요?' })
+    await user.click(within(dialog).getByRole('button', { name: '구매확정' }))
+    expect((await screen.findAllByText('구매확정했어요')).length).toBeGreaterThan(0)
+    expect(confirmed).toEqual(['93', '1511'])
+  })
+
+  it('없는 배송(404)과 숫자가 아닌 번호는 찾을 수 없다고 알린다', async () => {
+    renderAt('/orders/151/shipments/999')
+    expect(await screen.findByText('배송 정보를 찾을 수 없어요')).toBeInTheDocument()
+  })
+
+  it('숫자가 아닌 번호는 요청하지 않는다', async () => {
+    let called = false
+    server.use(
+      http.get('*/api/v1/shipments/:shipmentId', () => {
+        called = true
+        return problem(400, 'bad')
+      }),
+    )
+    renderAt('/orders/151/shipments/abc')
+    expect(await screen.findByText('배송 정보를 찾을 수 없어요')).toBeInTheDocument()
+    expect(called).toBe(false)
+  })
+
+  it('불러오기에 실패하면 다시 시도할 수 있다', async () => {
+    let fail = true
+    server.use(
+      http.get('*/api/v1/shipments/3', () =>
+        fail ? problem(500, '잠시 문제가 생겼어요') : HttpResponse.json(shipmentDetails[0]),
+      ),
+    )
+    const { user } = renderAt('/orders/151/shipments/3')
+    expect(await screen.findByText('잠시 문제가 생겼어요')).toBeInTheDocument()
+    fail = false
+    await user.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByText('상품이 배송 중이에요')).toBeInTheDocument()
+  })
+})
+
+describe('고객센터 문의 (연결 전)', () => {
   it('고객센터 문의는 폼 대신 연결 전 안내를 보여 준다', async () => {
     renderAt('/orders/93/inquiry')
     expect(

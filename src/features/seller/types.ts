@@ -37,7 +37,7 @@ export type SellerProductStats = { onSale: number; ready: number; lowStockProduc
 export type Follower = { memberId: number; nickname: string }
 
 // ─── 상품 관리 ───────────────────────────────────────────
-// ✅ 목록 GET /sellers/me/products, 등록·수정·상태·노출·삭제. 한 줄 = SellerProductSummary + 이 기기에서 고칠 수 있는지
+// ✅ 목록 GET /sellers/me/products, 등록·수정·상태·노출·삭제. 한 줄 = SellerProductSummary
 
 export type SellerProductRow = {
   productId: number
@@ -53,8 +53,6 @@ export type SellerProductRow = {
   updatedAt: string
   /** 판매 가능 수량이 LOW_STOCK_THRESHOLD 이하 */
   hasLowStock: boolean
-  /** TODO(api): 판매자 상품 상세 API가 없어 productCache에 있는(이 기기에서 등록·수정한) 상품만 수정할 수 있다 */
-  editable: boolean
 }
 
 // ─── 주문·출고 ───────────────────────────────────────────

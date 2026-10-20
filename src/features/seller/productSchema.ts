@@ -42,6 +42,8 @@ const option = z.object({
     .number({ message: '재고를 입력해 주세요' })
     .int()
     .min(0, '재고는 0 이상이어야 해요'),
+  /** 수정 화면에서만: 주문에 배정된 수량. 총재고를 이보다 작게 줄일 수 없다(서버로는 보내지 않는다) */
+  allocatedQuantity: z.number().int().min(0).optional(),
 })
 
 export const productSchema = z
@@ -79,6 +81,13 @@ export const productSchema = z
         })
       }
       seen.set(key, i)
+      if (opt.allocatedQuantity !== undefined && opt.totalStock < opt.allocatedQuantity) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['options', i, 'totalStock'],
+          message: `주문에 배정된 ${opt.allocatedQuantity}개보다 적게 줄일 수 없어요`,
+        })
+      }
       if (opt.listPrice !== undefined && opt.listPrice < opt.salePrice) {
         ctx.addIssue({
           code: 'custom',

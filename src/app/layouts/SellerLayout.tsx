@@ -1,4 +1,5 @@
 import { Button, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import {
   Banknote,
   ExternalLink,
@@ -13,6 +14,7 @@ import {
 import type { ReactNode } from 'react'
 import { Link, Outlet } from 'react-router'
 import { useMyProfile } from '@/features/seller'
+import { myInfoQueryOptions } from '@/shared/api/memberInfo'
 import { useRouteHandle } from '../routeHandle'
 import { type ConsoleNavItem, ConsoleShell } from './ConsoleShell'
 
@@ -104,10 +106,16 @@ export function SellerLayoutView({
 export function SellerLayout() {
   const handle = useRouteHandle()
   // ✅ 상호는 GET /sellers/me/profile(아직 등록 전이면 null → 비움).
-  // TODO(api): 회원 이름(내 정보 API)·출고 대기·취소 요청 개수(판매자 주문 목록 API)는 없어 비워 둔다
+  // ✅ 회원 이름은 GET /members/me(못 받으면 비움).
+  // TODO(api): 출고 대기·취소 요청 개수(판매자 주문 목록 API)는 없어 비워 둔다
   const profile = useMyProfile()
+  const info = useQuery(myInfoQueryOptions())
   return (
-    <SellerLayoutView title={handle.title ?? '판매자 센터'} storeName={profile.data?.storeName}>
+    <SellerLayoutView
+      title={handle.title ?? '판매자 센터'}
+      storeName={profile.data?.storeName}
+      userName={info.data?.name}
+    >
       <Outlet />
     </SellerLayoutView>
   )

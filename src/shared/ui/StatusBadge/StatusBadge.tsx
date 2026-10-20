@@ -65,7 +65,8 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [ProductSaleState.SELLER_SUSPENDED]: { tone: 'warning', icon: TriangleAlert },
   // 배송 묶음 표시 상태
   [ShipmentState.DELAYED]: { tone: 'warning', icon: Clock },
-  [ShipmentState.TRACKING_FAILED]: { tone: 'error', icon: CircleX },
+  [ShipmentState.COMPLETED]: { tone: 'primary', icon: BadgeCheck },
+  [ShipmentState.CANCELLED]: { tone: 'neutral', icon: CircleX },
   // 판매자 취소 요청 처리
   [ClaimState.CLAIM_PENDING]: { tone: 'warning', icon: Clock },
   [ClaimState.CLAIM_APPROVED]: { tone: 'success', icon: CircleCheck },

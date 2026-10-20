@@ -3,14 +3,13 @@ import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { uploadMedia } from '@/shared/api/media'
 import {
   MediaPurpose,
-  type ProductDetail,
   ProductStatus,
   ProductVisibility,
+  type SellerProductDetail,
   type SellerProductSummary,
 } from '@/shared/api/types'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { QueryState, showToast, useMediaUploads } from '@/shared/ui'
-import { type CachedProduct, readCachedProducts } from '../productCache'
 import { toProductFormFailure } from '../productErrors'
 import type { ProductFormValues } from '../productSchema'
 import {
@@ -19,7 +18,6 @@ import {
   useChangeProductVisibility,
   useCreateProduct,
   useDeleteProduct,
-  useMemberId,
   useMyProducts,
   useSellerProductDetail,
   useUpdateProduct,
@@ -33,13 +31,13 @@ import { type ProductTab, SellerProductsView } from '../views/SellerProductsView
 // S-04 ~ S-07 판매자 상품·주문·취소 라우트 (판매자 센터 청크).
 // 상품: ✅ 목록 GET /sellers/me/products, 등록 POST /products, 수정 PUT /products/{id}(version, 판매 상태·노출 포함),
 //   상태·노출 PATCH /products/{id}/status · /visibility(목록에서 바로), 삭제 DELETE, 사진 POST /media/PRODUCT.
-// TODO(api): 판매자 상품 상세(version · 옵션 재고 · 옵션 id) API 없음(❌) → 이 브라우저에서 등록·수정한 상품을
-//   productCache(localStorage)에 두고 수정 처음 값으로 쓴다. 캐시에 없는 상품은 수정을 막는다. 공개 상품은 구매자 상세로 옵션 id를 맞춘다.
+// 수정 화면은 ✅ GET /sellers/me/products/{id}(version · 옵션 id · 재고 · 상태 · 노출)로 채우고, 저장할 때 그 version을 그대로 보낸다.
+//   저장·상태·노출 변경이 성공하면 서버 version이 오르므로 상세·목록을 다시 받는다. 409면 ‘최신 내용 불러오기’로 상세를 다시 받는다.
 // TODO(api): 📝 판매자 주문 목록·클레임(취소 요청) API 없음 → 주문·출고와 취소 요청 처리는 화면 전체를 연결 전(NotConnected)으로 둔다.
 
 const productTabs: ProductTab[] = ['ALL', ...Object.values(ProductStatus)]
 
-function toRow(summary: SellerProductSummary, cachedIds: Set<number>): SellerProductRow {
+function toRow(summary: SellerProductSummary): SellerProductRow {
   return {
     productId: summary.productId,
     name: summary.name,
@@ -51,7 +49,6 @@ function toRow(summary: SellerProductSummary, cachedIds: Set<number>): SellerPro
     visibility: summary.visibility,
     updatedAt: summary.updatedAt,
     hasLowStock: summary.availableStock <= LOW_STOCK_THRESHOLD,
-    editable: cachedIds.has(summary.productId),
   }
 }
 
@@ -59,22 +56,15 @@ export function SellerProductsPage() {
   const [params, setParams] = useSearchParams()
   const tab = productTabs.find((value) => value === params.get('status')) ?? 'ALL'
   const page = Math.max(1, Number(params.get('page')) || 1)
-  const memberId = useMemberId()
   const query = useMyProducts({
     status: tab === 'ALL' ? undefined : tab,
     page: page - 1,
     size: PRODUCT_PAGE_SIZE,
   })
-  const changeStatus = useChangeProductStatus(memberId)
-  const changeVisibility = useChangeProductVisibility(memberId)
+  const changeStatus = useChangeProductStatus()
+  const changeVisibility = useChangeProductVisibility()
 
-  // 캐시(이 기기에서 등록·수정한 상품)는 서버 목록이 새로 올 때마다 다시 읽어 수정 가능 여부를 맞춘다
-  const rows = useMemo(() => {
-    const cachedIds = new Set(
-      memberId === null ? [] : readCachedProducts(memberId).map((p) => p.productId),
-    )
-    return (query.data?.content ?? []).map((summary) => toRow(summary, cachedIds))
-  }, [memberId, query.data])
+  const rows = useMemo(() => (query.data?.content ?? []).map(toRow), [query.data])
   const busyProductId = changeStatus.isPending
     ? (changeStatus.variables?.productId ?? null)
     : changeVisibility.isPending
@@ -146,9 +136,8 @@ const uploadDescriptionImage = async (file: File) =>
 
 function ProductCreate() {
   const navigate = useNavigate()
-  const memberId = useMemberId()
   const photos = useMediaUploads(MediaPurpose.PRODUCT)
-  const create = useCreateProduct(memberId)
+  const create = useCreateProduct()
   const failure = useMemo(() => toProductFormFailure(create.error), [create.error])
 
   return (
@@ -176,20 +165,8 @@ function ProductCreate() {
   )
 }
 
-/** 수정 화면 처음 값. 공개 상품이면 서버 상세가 최신이라 그것을 쓰고, 재고는 상세에 없어 저장해 둔 값을 옵션명으로 맞춘다 */
-function toFormValues(cached: CachedProduct, detail: ProductDetail | undefined): ProductFormValues {
-  if (!detail) {
-    return {
-      category: cached.category,
-      name: cached.name,
-      region: cached.region,
-      description: cached.descriptionHtml,
-      options: cached.options,
-      status: cached.status,
-      visibility: cached.visibility,
-    }
-  }
-  const stock = new Map(cached.options.map((o) => [o.name, o.totalStock]))
+/** 수정 화면 처음 값. 옵션의 allocatedQuantity는 총재고를 그 밑으로 줄이지 못하게 막는 데만 쓴다 */
+function toFormValues(detail: SellerProductDetail): ProductFormValues {
   return {
     category: detail.category,
     name: detail.name,
@@ -200,84 +177,74 @@ function toFormValues(cached: CachedProduct, detail: ProductDetail | undefined):
       name: o.name,
       salePrice: o.salePrice,
       listPrice: o.listPrice,
-      // 다른 곳에서 추가한 옵션은 재고를 몰라 비워 두고 다시 입력받는다
-      totalStock: stock.get(o.name) as number,
+      totalStock: o.totalStock,
+      allocatedQuantity: o.allocatedQuantity,
     })),
     status: detail.status,
-    visibility: ProductVisibility.VISIBLE,
+    visibility: detail.visibility,
   }
 }
 
 function ProductEdit({ productId }: { productId: number }) {
-  const memberId = useMemberId()
   const detail = useSellerProductDetail(productId)
   // 최신 내용 불러오기: 상세를 다시 받고 폼을 새로 그린다
   const [loadCount, setLoadCount] = useState(0)
-  // TODO(api): 판매자 상품 상세 API가 없어 version·재고는 productCache(이 기기에서 등록·수정한 상품)에서만 받는다.
-  //   없는 상품에 version 0으로 보내면 409가 나고 되돌릴 길이 없어 수정 자체를 막는다.
-  const cached = useMemo(
-    () =>
-      memberId === null
-        ? undefined
-        : readCachedProducts(memberId).find((p) => p.productId === productId),
-    [memberId, productId],
-  )
 
-  if (!cached) {
-    return (
-      <QueryState
-        status="notFound"
-        notFound={{
-          title: '이 상품은 여기서 수정할 수 없어요',
-          description:
-            '지금은 이 기기에서 등록하거나 고친 상품만 수정할 수 있어요. 판매 상태와 노출은 상품 관리 목록에서 바로 바꿀 수 있어요.',
-          action: { label: '상품 관리', to: '/seller/products' },
-        }}
-      />
-    )
-  }
+  const missing = (title: string) => (
+    <QueryState
+      status="notFound"
+      notFound={{
+        title,
+        description: '삭제됐거나 주소가 잘못됐을 수 있어요. 상품 관리 목록에서 다시 골라 주세요.',
+        action: { label: '상품 관리', to: '/seller/products' },
+      }}
+    />
+  )
+  if (!Number.isInteger(productId)) return missing('상품을 찾을 수 없어요')
   if (detail.isPending) {
     return <QueryState status="pending" loadingLabel="상품 정보를 불러오고 있어요" />
+  }
+  if (detail.isError) {
+    if (detail.error.status === 404) return missing('상품을 찾을 수 없어요')
+    if (detail.error.status === 403) return missing('내 상품이 아니라서 수정할 수 없어요')
+    return (
+      <QueryState
+        status="error"
+        errorMessage={detail.error.detail}
+        onRetry={() => void detail.refetch()}
+      />
+    )
   }
   return (
     <ProductEditForm
       key={loadCount}
-      memberId={memberId}
-      product={cached}
-      defaultValues={toFormValues(cached, detail.data)}
-      imageUrls={detail.data?.imageUrls ?? cached.imageUrls}
+      product={detail.data}
       onReload={() => void detail.refetch().then(() => setLoadCount((count) => count + 1))}
     />
   )
 }
 
 function ProductEditForm({
-  memberId,
   product,
-  defaultValues,
-  imageUrls,
   onReload,
 }: {
-  memberId: number | null
-  product: CachedProduct
-  defaultValues: ProductFormValues
-  imageUrls: string[]
+  product: SellerProductDetail
   onReload: () => void
 }) {
   const navigate = useNavigate()
   const photos = useMediaUploads(
     MediaPurpose.PRODUCT,
-    imageUrls.map((url, i) => ({ url, alt: `상품 사진 ${i + 1}` })),
+    product.imageUrls.map((url, i) => ({ url, alt: `상품 사진 ${i + 1}` })),
   )
-  const update = useUpdateProduct(memberId, product.productId)
-  const remove = useDeleteProduct(memberId, product.productId)
+  const update = useUpdateProduct(product.productId)
+  const remove = useDeleteProduct(product.productId)
   const failure = useMemo(() => toProductFormFailure(update.error), [update.error])
   const toList = () => navigate('/seller/products', { replace: true })
 
   return (
     <SellerProductFormView
       mode="edit"
-      defaultValues={defaultValues}
+      defaultValues={toFormValues(product)}
       photos={photos.items}
       onAddPhotos={photos.add}
       onRemovePhoto={photos.remove}
@@ -289,7 +256,6 @@ function ProductEditForm({
       errorMessage={failure.message}
       fieldErrors={failure.fieldErrors}
       conflict={failure.conflict}
-      // TODO(api): version을 줄 API가 없어 최신 내용을 불러와도 저장해 둔 version을 그대로 쓴다
       onReload={onReload}
       onSubmit={(values) =>
         update.mutate(

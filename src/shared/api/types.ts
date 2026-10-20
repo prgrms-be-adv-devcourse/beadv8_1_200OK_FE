@@ -284,6 +284,33 @@ export type SellerProductSummary = ProductSummary & {
   updatedAt: string
 }
 
+/** 내 상품 상세 GET /sellers/me/products/{productId}. 수정 화면용. 숨긴(HIDDEN) 상품도 조회된다 */
+export type SellerProductDetail = {
+  productId: number
+  version: number // 수정 요청(PUT)에 그대로 보낸다. 조회만으로는 바뀌지 않는다
+  name: string
+  descriptionHtml: string
+  categoryGroup: ProductCategoryGroup
+  category: ProductCategory
+  region: ProductRegion
+  status: ProductStatus
+  visibility: ProductVisibility
+  imageUrls: string[] // 첫 장이 대표 이미지
+  options: SellerProductOption[] // 화면 순서, 삭제한 옵션 제외
+  createdAt: string
+  updatedAt: string
+}
+
+export type SellerProductOption = {
+  optionId: number // 수정 요청의 옵션 id로 그대로 보낸다
+  name: string
+  listPrice: number
+  salePrice: number
+  totalStock: number
+  allocatedQuantity: number // 주문에 배정된 수량. 총재고를 이보다 작게 줄일 수 없다
+  availableStock: number // 총재고 − 배정 수량
+}
+
 export type SellerProductListParams = {
   status?: ProductStatus
   visibility?: ProductVisibility
@@ -453,7 +480,7 @@ export type OrderListParams = { page?: number; size?: number }
 
 /** 주문 상품 (주문 시점 값) */
 export type OrderDetailItem = {
-  orderItemId: number // 리뷰 작성에 쓴다
+  orderItemId: number // 구매확정·리뷰 작성에 쓴다
   productId: number
   productOptionId: number
   productName: string
@@ -471,7 +498,7 @@ export type OrderDetailSellerGroup = {
   items: OrderDetailItem[]
 }
 
-/** 내 주문 상세 GET /orders/{orderId}. 다른 회원 주문은 404. shipmentId는 아직 안 내려준다 */
+/** 내 주문 상세 GET /orders/{orderId}. 다른 회원 주문은 404. shipmentId는 안 내려줘서 배송 목록 GET /shipments에서 orderId로 찾는다 */
 export type OrderDetail = {
   orderId: number
   status: OrderStatus
@@ -512,6 +539,93 @@ export type ShippingFeeQuote = {
   totalShippingFee: number
 }
 
+/** 배송 상태 (구매자 배송 목록·상세). 표시명은 shared/lib/shipmentState.ts */
+export enum ShipmentStatus {
+  PREPARING = 'PREPARING',
+  SHIPPING = 'SHIPPING',
+  DELIVERED = 'DELIVERED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+/** 배송지 변경 요청 상태 */
+export type AddressChangeStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+/** 내 배송 목록 한 줄 GET /shipments (최신순, 25건 고정) */
+export type ShipmentSummary = {
+  shipmentId: number
+  orderId: number
+  status: ShipmentStatus
+  carrier: ShipmentCarrier | null // 출고 전이면 null
+  trackingNumber: string | null
+  estimatedDeliveryStart: string // yyyy-MM-dd
+  estimatedDeliveryEnd: string
+  delayed: boolean // 도착 예정일을 넘겨 지연됐는지
+  createdAt: string
+  representativeProductName: string
+  otherItemCount: number // 대표 상품을 뺀 나머지 상품 수
+}
+
+export type ShipmentPage = {
+  content: ShipmentSummary[]
+  page: number // 0부터
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export type ShipmentAddress = {
+  recipientName: string
+  recipientPhone: string // 숫자만
+  postalCode: string
+  address: string
+  addressDetail: string
+  deliveryNote: string | null
+}
+
+export type ShipmentItem = {
+  orderItemId: number // 구매확정 API에 쓴다
+  productName: string
+  optionName: string | null
+  quantity: number
+  unitPrice: number
+  canceledQuantity: number
+  confirmed: boolean
+}
+
+export type LatestAddressChange = {
+  requestId: number
+  status: AddressChangeStatus
+  requestedAddress: ShipmentAddress
+  additionalFeeNotice: number // 이 요청으로 늘어나는 추가 운임 안내 금액(결제하지 않는다)
+  rejectReason: string | null
+  requestedAt: string
+  processedAt: string | null
+}
+
+/** 내 배송 상세 GET /shipments/{shipmentId}. 없거나 다른 구매자의 배송은 404 */
+export type ShipmentDetail = {
+  shipmentId: number
+  orderId: number
+  status: ShipmentStatus
+  carrier: ShipmentCarrier | null
+  trackingNumber: string | null
+  address: ShipmentAddress // 현재 배송지. 변경이 승인되면 바뀌고 주문의 배송지는 그대로
+  regionGroup: RegionGroup
+  chargedShippingFee: number
+  additionalShippingFee: number // 승인된 배송지 변경으로 판매자에게 따로 낼 추가 운임 합계
+  estimatedDeliveryStart: string
+  estimatedDeliveryEnd: string
+  delayed: boolean
+  createdAt: string
+  shippedAt: string | null
+  deliveredAt: string | null
+  completedAt: string | null
+  cancelledAt: string | null
+  items: ShipmentItem[]
+  latestAddressChange: LatestAddressChange | null
+}
+
 /** 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다 */
 export type ShippingAddress = Pick<
   CreateOrderRequest,
@@ -521,9 +635,7 @@ export type ShippingAddress = Pick<
 // ─── 리뷰 ────────────────────────────────────────────────
 
 export type ProductReviewCreateRequest = {
-  productOptionId: number
-  orderId: number
-  orderItemId: number
+  orderItemId: number // 주문 상세의 주문 상품 ID. 주문·옵션은 서버가 주문에서 가져온다
   rating: number // 1~10 정수 (0.5점 단위 × 2, 9 = 4.5점)
   content: string // 2,000자 이하
   mediaUrls?: string[] // 0~6개, 영상(mp4) 1개까지, 미디어 업로드(PRODUCT_REVIEW) URL만
@@ -729,3 +841,19 @@ export type AdminPayoutListParams = SellerPayoutListParams & {
 }
 
 export type AdminPayoutCandidateParams = SellerPayoutCandidateParams & { sellerId?: number }
+
+// ─── 내 정보 ─────────────────────────────────────────────
+
+/** GET·PUT /members/me. 구매자·판매자·관리자 모두 자기 토큰으로 자기 정보를 받는다 */
+export type MemberInfo = {
+  loginId: string
+  email: string
+  name: string
+  nickname: string // 리뷰와 판매자 화면에 보인다
+}
+
+/** PUT /members/me. 이름·닉네임 둘 다 필수(부분 수정 아님). 아이디·이메일은 바꿀 수 없다 */
+export type MemberInfoUpdateRequest = {
+  name: string // 50자 이하, 앞뒤 공백 제거
+  nickname: string // 2~30자, 앞뒤 공백 제거. 다른 회원과 같아도 된다
+}

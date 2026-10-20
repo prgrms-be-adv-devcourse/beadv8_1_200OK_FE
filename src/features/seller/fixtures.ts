@@ -6,9 +6,11 @@ import {
   type PayoutSellerItem,
   type PayoutSummary,
   ProductCategory,
+  ProductCategoryGroup,
   ProductRegion,
   ProductStatus,
   ProductVisibility,
+  type SellerProductDetail,
   type SellerProductSummary,
   type SellerProfile,
   type SellerProfileResponse,
@@ -131,7 +133,7 @@ export const followers: Follower[] = [
 ].map((nickname, i) => ({ memberId: 100 + i, nickname }))
 
 // ─── 상품 관리 (판매 중 2 · 판매 준비 1 · 판매 종료 1, 센터 홈 상품 현황과 같다) ───
-// ✅ GET /sellers/me/products 응답 모양. 101만 이 기기에서 등록한 상품(productCache)이라 수정할 수 있다.
+// ✅ GET /sellers/me/products 응답 모양.
 
 const summary = (
   row: Pick<
@@ -201,9 +203,6 @@ export const mySellerProducts: SellerProductSummary[] = [
   }),
 ]
 
-/** 이 기기에서 등록·수정한 상품(productCache) → 수정 가능 */
-export const editableProductIds = [101]
-
 export const sellerProducts: SellerProductRow[] = mySellerProducts.map((p) => ({
   productId: p.productId,
   name: p.name,
@@ -215,10 +214,9 @@ export const sellerProducts: SellerProductRow[] = mySellerProducts.map((p) => ({
   visibility: p.visibility,
   updatedAt: p.updatedAt,
   hasLowStock: p.availableStock <= LOW_STOCK_THRESHOLD,
-  editable: editableProductIds.includes(p.productId),
 }))
 
-/** 상품 수정 처음 값 (101) — 판매자 본인 상품 상세 API가 없어 fixtures (bruno README ‘남은 이슈’: version을 받을 곳이 없음) */
+/** 상품 수정 처음 값 (101) — /__design 미리보기와 테스트용. allocatedQuantity는 주문에 배정된 수량 */
 export const appleFormValues: ProductFormValues = {
   category: ProductCategory.FRUIT,
   name: '청송 꿀사과 부사',
@@ -226,12 +224,58 @@ export const appleFormValues: ProductFormValues = {
   description:
     '<p>3대째 사과만 키우는 청송 부남면 과수원이에요. 10월 8일에 수확한 부사를 크기별로 골라 상자에 담아 보내 드려요.</p><h3>보관법</h3><ul><li><p>받으신 뒤 바로 냉장 보관하면 더 오래 아삭하게 드실 수 있어요.</p></li></ul>',
   options: [
-    { id: 1011, name: '1kg (5~6과)', salePrice: 12900, listPrice: 14500, totalStock: 20 },
-    { id: 1012, name: '2kg (11~13과)', salePrice: 23900, listPrice: 27000, totalStock: 11 },
-    { id: 1013, name: '3kg (16~18과)', salePrice: 33900, listPrice: 38000, totalStock: 4 },
+    {
+      id: 1011,
+      name: '1kg (5~6과)',
+      salePrice: 12900,
+      listPrice: 14500,
+      totalStock: 20,
+      allocatedQuantity: 6,
+    },
+    {
+      id: 1012,
+      name: '2kg (11~13과)',
+      salePrice: 23900,
+      listPrice: 27000,
+      totalStock: 11,
+      allocatedQuantity: 3,
+    },
+    {
+      id: 1013,
+      name: '3kg (16~18과)',
+      salePrice: 33900,
+      listPrice: 38000,
+      totalStock: 4,
+      allocatedQuantity: 0,
+    },
   ],
   status: ProductStatus.ON_SALE,
   visibility: ProductVisibility.VISIBLE,
+}
+
+/** ✅ GET /sellers/me/products/101 응답 모양 (수정 화면 상세). 목록 fixtures의 101과 같은 상품 */
+export const sellerProductDetail101: SellerProductDetail = {
+  productId: 101,
+  version: 3,
+  name: appleFormValues.name,
+  descriptionHtml: appleFormValues.description,
+  categoryGroup: ProductCategoryGroup.AGRICULTURE,
+  category: appleFormValues.category,
+  region: appleFormValues.region,
+  status: ProductStatus.ON_SALE,
+  visibility: ProductVisibility.VISIBLE,
+  imageUrls: [],
+  options: appleFormValues.options.map((o) => ({
+    optionId: o.id as number,
+    name: o.name,
+    listPrice: o.listPrice ?? o.salePrice,
+    salePrice: o.salePrice,
+    totalStock: o.totalStock,
+    allocatedQuantity: o.allocatedQuantity ?? 0,
+    availableStock: o.totalStock - (o.allocatedQuantity ?? 0),
+  })),
+  createdAt: '2026-09-01T09:00:00',
+  updatedAt: '2026-10-12T18:20:00',
 }
 
 // ─── 주문·출고 (출고 대기 5건은 센터 홈 ‘오늘 처리할 일’과 같다) ───

@@ -5,16 +5,14 @@ import {
   OrderItemStatus,
   OrderStatus,
   type OrderSummary,
+  type ShipmentAddress,
+  ShipmentCarrier,
+  type ShipmentDetail,
+  ShipmentStatus,
+  type ShipmentSummary,
   type ShippingAddress,
 } from '@/shared/api/types'
-import {
-  type Inquiry,
-  type InquiryTarget,
-  InquiryType,
-  type OrderItemRowItem,
-  ShipmentStage,
-  type ShipmentTracking,
-} from './types'
+import { type Inquiry, type InquiryTarget, InquiryType, type OrderItemRowItem } from './types'
 
 // 샘플 데이터 (DECISIONS.md E). 서버 계약(OrderDetail·OrderSummary) 모양 그대로다.
 // 주문 184는 checkout/fixtures.ts에서 결제한 그 주문(39,800원), 주문 27의 사과즙(271)은 reviews/fixtures.ts의 리뷰 대상이다.
@@ -161,7 +159,7 @@ export const remoteAreaOrder: OrderDetail = detail(185, OrderStatus.PAID, '2026-
   { ...group(7, [apple(OrderItemStatus.PREPARING)]), shippingFee: 3000, remoteAreaFee: 5000 },
 ])
 
-// ─── 배송 조회 (❌ API 없음) ─────────────────────────────
+// ─── 배송 (✅ GET /shipments · /shipments/{id}) — 테스트(MSW)·/__design 전용 ───────────
 
 const rowItem = ({
   orderItemId,
@@ -179,75 +177,124 @@ const rowItem = ({
   itemAmount,
 })
 
-export const shippingTracking: ShipmentTracking = {
+const shipmentAddress: ShipmentAddress = {
+  recipientName: recipient.recipientName,
+  recipientPhone: '01024681357',
+  postalCode: recipient.zipCode,
+  address: recipient.address,
+  addressDetail: recipient.addressDetail ?? '',
+  deliveryNote: '문 앞에 놓아 주세요',
+}
+
+export const shippingShipment: ShipmentDetail = {
   shipmentId: 3,
   orderId: 151,
-  orderNumber: '20261015-0151',
-  orderedAt: '2026-10-15T09:12:00',
-  sellerName: '서귀포 귤빛농장',
-  stage: ShipmentStage.SHIPPING,
-  carrier: 'CJ대한통운',
-  trackingNumber: '6842 1937 5520',
-  estimatedArrival: '2026-10-18T00:00:00',
+  status: ShipmentStatus.SHIPPING,
+  carrier: ShipmentCarrier.CJ_LOGISTICS,
+  trackingNumber: '684219375520',
+  address: shipmentAddress,
+  regionGroup: 'GENERAL',
+  chargedShippingFee: 3000,
+  additionalShippingFee: 0,
+  estimatedDeliveryStart: '2026-10-18',
+  estimatedDeliveryEnd: '2026-10-19',
+  delayed: false,
+  createdAt: '2026-10-15T09:20:00',
+  shippedAt: '2026-10-17T15:20:00',
   deliveredAt: null,
-  autoConfirmAt: null,
-  delay: null,
-  events: [
+  completedAt: null,
+  cancelledAt: null,
+  items: [
     {
-      at: '2026-10-18T07:10:00',
-      status: '배송 출발',
-      location: '서울중구B 대리점',
-      description: '배송 기사가 상품을 싣고 출발했어요',
-    },
-    { at: '2026-10-17T22:30:00', status: '간선 하차', location: '곤지암 Hub' },
-    { at: '2026-10-17T16:10:00', status: '간선 상차', location: '제주서귀포 대리점' },
-    {
-      at: '2026-10-17T15:20:00',
-      status: '집화 처리',
-      location: '제주서귀포 대리점',
-      description: '택배사가 상품을 받았어요',
+      orderItemId: 1511,
+      productName: '제주 노지 조생 감귤',
+      optionName: '3kg (S~M)',
+      quantity: 1,
+      unitPrice: 13900,
+      canceledQuantity: 0,
+      confirmed: false,
     },
   ],
-  items: [rowItem(tangerine)],
-  recipient: { recipientName: recipient.recipientName, address: recipient.address },
+  latestAddressChange: null,
 }
 
-export const deliveredTracking: ShipmentTracking = {
-  ...shippingTracking,
-  stage: ShipmentStage.DELIVERED,
+export const deliveredShipment: ShipmentDetail = {
+  ...shippingShipment,
+  status: ShipmentStatus.DELIVERED,
   deliveredAt: '2026-10-18T13:40:00',
-  autoConfirmAt: '2026-10-21T13:40:00',
-  events: [
-    {
-      at: '2026-10-18T13:40:00',
-      status: '배송 완료',
-      location: '서울중구B 대리점',
-      description: '배송 기사가 배송을 마쳤어요',
-    },
-    ...shippingTracking.events,
-  ],
 }
 
-export const preparingTracking: ShipmentTracking = {
-  ...shippingTracking,
-  stage: ShipmentStage.PREPARING,
+export const completedShipment: ShipmentDetail = {
+  ...deliveredShipment,
+  status: ShipmentStatus.COMPLETED,
+  completedAt: '2026-10-21T13:40:00',
+  items: shippingShipment.items.map((item) => ({ ...item, confirmed: true })),
+}
+
+export const preparingShipment: ShipmentDetail = {
+  ...shippingShipment,
+  status: ShipmentStatus.PREPARING,
   carrier: null,
   trackingNumber: null,
-  estimatedArrival: null,
-  events: [],
+  shippedAt: null,
 }
 
-export const delayedTracking: ShipmentTracking = {
-  ...preparingTracking,
-  stage: ShipmentStage.DELAYED,
-  delay: {
-    reason: '수확 지연',
-    newShipDate: '2026-10-21T00:00:00',
-    notifiedAt: '2026-10-16T17:05:00',
+export const delayedShipment: ShipmentDetail = {
+  ...preparingShipment,
+  delayed: true,
+  estimatedDeliveryStart: '2026-10-16',
+  estimatedDeliveryEnd: '2026-10-17',
+}
+
+export const cancelledShipment: ShipmentDetail = {
+  ...preparingShipment,
+  status: ShipmentStatus.CANCELLED,
+  cancelledAt: '2026-10-16T09:00:00',
+  items: shippingShipment.items.map((item) => ({ ...item, canceledQuantity: item.quantity })),
+}
+
+/** 도서산간 배송지로 바꿔 달라는 요청이 승인된 배송 */
+export const addressChangedShipment: ShipmentDetail = {
+  ...preparingShipment,
+  regionGroup: 'JEJU_MAIN',
+  additionalShippingFee: 3000,
+  latestAddressChange: {
+    requestId: 5,
+    status: 'APPROVED',
+    requestedAddress: {
+      ...shipmentAddress,
+      postalCode: '63000',
+      address: '제주특별자치도 제주시 첨단로 242',
+      addressDetail: '1층',
+    },
+    additionalFeeNotice: 3000,
+    rejectReason: null,
+    requestedAt: '2026-10-15T10:00:00',
+    processedAt: '2026-10-15T11:00:00',
   },
 }
 
-export const trackings: ShipmentTracking[] = [shippingTracking]
+export const shipmentDetails: ShipmentDetail[] = [
+  shippingShipment,
+  { ...deliveredShipment, shipmentId: 4, orderId: 93 },
+]
+
+export const shipmentSummaries: ShipmentSummary[] = shipmentDetails.map((shipment) => {
+  const [first] = shipment.items
+  return {
+    shipmentId: shipment.shipmentId,
+    orderId: shipment.orderId,
+    status: shipment.status,
+    carrier: shipment.carrier,
+    trackingNumber: shipment.trackingNumber,
+    estimatedDeliveryStart: shipment.estimatedDeliveryStart,
+    estimatedDeliveryEnd: shipment.estimatedDeliveryEnd,
+    delayed: shipment.delayed,
+    createdAt: shipment.createdAt,
+    representativeProductName: first?.productName ?? '',
+    otherItemCount: Math.max(shipment.items.length - 1, 0),
+  }
+})
 
 // ─── 고객센터 문의 (❌ API 없음) ──────────────────────────
 

@@ -15,4 +15,9 @@ export const ordersHandlers = [
     const order = orderDetails.find((o) => o.orderId === Number(raw))
     return order ? HttpResponse.json(order) : problem(404, '주문을 찾을 수 없습니다.')
   }),
+  // 구매확정: 기본은 204. 409(배송 완료 아님·이미 확정)·404는 테스트에서 덮는다
+  http.post(
+    '*/api/v1/orders/:orderId/items/:orderItemId/confirm',
+    () => new HttpResponse(null, { status: 204 }),
+  ),
 ]

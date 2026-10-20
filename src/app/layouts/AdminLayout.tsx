@@ -1,8 +1,10 @@
 import { Group } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import { BadgeCheck, User, Wallet } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Outlet } from 'react-router'
 import { usePendingSellerApplicationCount } from '@/features/admin'
+import { myInfoQueryOptions } from '@/shared/api/memberInfo'
 import { useRouteHandle } from '../routeHandle'
 import { type ConsoleNavItem, ConsoleShell } from './ConsoleShell'
 
@@ -63,9 +65,14 @@ export function AdminLayoutView({
 export function AdminLayout() {
   const handle = useRouteHandle()
   const pending = usePendingSellerApplicationCount()
-  // TODO(api): ❌ 관리자 이름(내 정보) API 없음 → 상단 오른쪽은 비워 둔다
+  // ✅ 관리자 이름은 GET /members/me(못 받으면 비움)
+  const info = useQuery(myInfoQueryOptions())
   return (
-    <AdminLayoutView title={handle.title ?? '관리자 콘솔'} pendingSellers={pending.data}>
+    <AdminLayoutView
+      title={handle.title ?? '관리자 콘솔'}
+      pendingSellers={pending.data}
+      adminName={info.data?.name}
+    >
       <Outlet />
     </AdminLayoutView>
   )

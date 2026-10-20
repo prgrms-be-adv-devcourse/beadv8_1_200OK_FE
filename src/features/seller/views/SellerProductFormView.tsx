@@ -83,6 +83,14 @@ export type SellerProductFormViewProps = {
   defaultDeleteOpen?: boolean
 }
 
+/** 재고 칸 안내: 배정 수량이 있으면 그 아래로 못 줄인다고, 아니면 0일 때 품절 안내 */
+function stockHint(stock: number | undefined, allocated: number | undefined) {
+  if (allocated !== undefined && allocated > 0) {
+    return `주문에 배정된 ${allocated}개보다 적게 줄일 수 없어요`
+  }
+  return stock === 0 ? '재고 0이면 품절로 보여요' : undefined
+}
+
 const emptyOption = { name: '', salePrice: undefined as unknown as number, totalStock: 0 }
 
 /**
@@ -456,7 +464,7 @@ export function SellerProductFormView({
                             onChange={(v) => f.onChange(toNumber(v))}
                             onBlur={f.onBlur}
                             ref={f.ref}
-                            description={f.value === 0 ? '재고 0이면 품절로 보여요' : undefined}
+                            description={stockHint(f.value, values.options?.[i]?.allocatedQuantity)}
                             error={optionErrors?.totalStock?.message}
                           />
                         )}
