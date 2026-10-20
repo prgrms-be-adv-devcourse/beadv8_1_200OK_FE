@@ -10,6 +10,7 @@ import { Logo } from '@/shared/ui'
 import { useRouteHandle } from '../routeHandle'
 import { type Session, useSession } from '../session'
 import classes from './PublicLayout.module.css'
+import { SiteFooterView } from './SiteFooter'
 import { SkipLink } from './SkipLink'
 
 // B2C 레이아웃. 데스크톱(≥ 1024): 헤더 64(로고 · 내 메뉴) + 카테고리 48. 모바일: 상단 56(홈만) + 하단 탭 56(최상위 화면만).
@@ -168,6 +169,9 @@ export function PublicLayoutView({
       <main id="main" className={classes.main}>
         {children}
       </main>
+
+      {/* 푸터: 데스크톱은 모든 화면, 모바일은 하단 탭이 있는 화면만(CSS) */}
+      <SiteFooterView variant="full" session={session} className={classes.footer} />
 
       {/* ─── 모바일 하단 탭 ─── */}
       {showTabBar && (

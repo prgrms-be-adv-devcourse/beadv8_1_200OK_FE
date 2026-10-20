@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, Outlet } from 'react-router'
 import { Logo } from '@/shared/ui'
 import classes from './AuthLayout.module.css'
+import { SiteFooterView } from './SiteFooter'
 import { SkipLink } from './SkipLink'
 
 // 로그인·가입·계정 찾기. 데스크톱: 가운데 로고(명조 32) + 흰 카드(최대 488, 패딩 32).
@@ -19,6 +20,7 @@ export function AuthLayoutView({ children }: { children: ReactNode }) {
         <main id="main" className={classes.card}>
           {children}
         </main>
+        <SiteFooterView variant="compact" />
       </div>
     </div>
   )

@@ -1,6 +1,12 @@
 import { TermsType } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
-import { BALANCE_DEFAULT, BALANCE_SHORT, walletTerms, walletTransactions } from './fixtures'
+import {
+  BALANCE_DEFAULT,
+  BALANCE_SHORT,
+  MAX_BALANCE,
+  walletTerms,
+  walletTransactions,
+} from './fixtures'
 import { WalletTxType } from './types'
 import { ChargeResultView } from './views/ChargeResultView'
 import { ChargeView, type ChargeViewProps } from './views/ChargeView'
@@ -23,7 +29,13 @@ const terms = (props: Partial<TermsViewProps> = {}) => (
 const agreedTerms = walletTerms.map((item) => ({ ...item, agreed: true }))
 
 const charge = (props: Partial<ChargeViewProps> = {}) => (
-  <ChargeView balance={BALANCE_DEFAULT} terms={agreedTerms} onCharge={() => {}} {...props} />
+  <ChargeView
+    balance={BALANCE_DEFAULT}
+    maxBalance={MAX_BALANCE}
+    terms={agreedTerms}
+    onCharge={() => {}}
+    {...props}
+  />
 )
 
 const fromOrder = { balance: BALANCE_SHORT, shortfall: 7800, returnTo: '/checkout' }
@@ -45,12 +57,22 @@ export const chargePreviews: ScreenPreview[] = [
       {
         id: 'too-small',
         label: '최소 금액 미만',
+        render: () => charge({ defaultAmount: 5000 }),
+      },
+      {
+        id: 'not-step',
+        label: '10,000원 단위 아님',
         render: () => charge({ defaultAmount: 15000 }),
       },
       {
         id: 'over-limit',
         label: '보유 한도 초과',
-        render: () => charge({ balance: 1950000, defaultAmount: 100000 }),
+        render: () => charge({ balance: 450_000, defaultAmount: 100_000 }),
+      },
+      {
+        id: 'pg-unavailable',
+        label: '결제 서비스 준비 중',
+        render: () => charge({ pgUnavailable: true, defaultAmount: 50000 }),
       },
       {
         id: 'first-terms',
@@ -60,7 +82,7 @@ export const chargePreviews: ScreenPreview[] = [
       {
         id: 'paying',
         label: '결제창 진행',
-        render: () => <ChargeResultView status="paying" amount={20000} />,
+        render: () => <ChargeResultView status="paying" amount={10000} />,
       },
       {
         id: 'success-order',
@@ -68,8 +90,8 @@ export const chargePreviews: ScreenPreview[] = [
         render: () => (
           <ChargeResultView
             status="success"
-            amount={20000}
-            balanceAfter={BALANCE_SHORT + 20000}
+            amount={10000}
+            balanceAfter={BALANCE_SHORT + 10000}
             returnTo="/checkout"
           />
         ),
@@ -91,9 +113,32 @@ export const chargePreviews: ScreenPreview[] = [
         render: () => <ChargeResultView status="failed" returnTo="/checkout" />,
       },
       {
+        id: 'failed-toss',
+        label: '실패 (토스 문구)',
+        render: () => (
+          <ChargeResultView
+            status="failed"
+            returnTo="/checkout"
+            message="사용자가 결제를 취소했습니다. 예치금은 그대로예요."
+          />
+        ),
+      },
+      {
+        id: 'confirming',
+        label: '승인 중',
+        render: () => (
+          <ChargeResultView
+            status="pending"
+            amount={10000}
+            returnTo="/checkout"
+            message="결제를 승인하고 있어요. 잠시만 기다려 주세요."
+          />
+        ),
+      },
+      {
         id: 'pending',
         label: '확인 중',
-        render: () => <ChargeResultView status="pending" amount={20000} returnTo="/checkout" />,
+        render: () => <ChargeResultView status="pending" amount={10000} returnTo="/checkout" />,
       },
       { id: 'expired', label: '시간 만료', render: () => <ChargeResultView status="expired" /> },
     ],
@@ -177,6 +222,11 @@ export const walletHistoryPreviews: ScreenPreview[] = [
           }),
       },
       { id: 'empty', label: '빈 상태', render: () => history({ transactions: [] }) },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        render: () => history({ status: 'error', transactions: [] }),
+      },
       {
         id: 'more',
         label: '더 보기',

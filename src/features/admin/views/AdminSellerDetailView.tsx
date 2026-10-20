@@ -1,32 +1,36 @@
 import { Alert, Button, Group, Skeleton, Stack, Text } from '@mantine/core'
-import { ChevronLeft, CircleAlert, CircleX, NotebookPen } from 'lucide-react'
+import { ChevronLeft, CircleCheck, CircleX, NotebookPen } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router'
+import type { SellerApplicationAdminDetail } from '@/shared/api/types'
 import { formatDate } from '@/shared/lib/format'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { PageHeader, QueryState, StatusBadge } from '@/shared/ui'
 import { type ReviewReasonKind, ReviewReasonModal } from '../components/ReviewReasonModal'
+import { historyOf, reviewerLabel } from '../history'
 import { sellerReviewActionLabels } from '../labels'
-import { type AdminSellerApplication, SellerReviewAction } from '../types'
+import { SellerReviewAction } from '../types'
 import classes from './AdminSellerDetailView.module.css'
 
-// M-02 판매자 심사 상세 /admin/sellers/:sellerId. 시안: admin/AdminSellers (상세 · 모달)
-// 신청 정보 · 정산 계좌 장부 + 처리 카드(상태별 버튼) + 처리 이력.
-// 심사 대기 → 심사 시작 · 심사 중 → 승인 / 반려(사유) · 승인 → 권한 회수(사유 + 주문 일괄 취소 경고)
-// TODO(api): ❌ 신청 상세 API 없음. 📝 승인 POST /admin/sellers/{id}/approval, 반려 .../rejection,
-//   권한 회수 .../suspension. ‘심사 시작’은 API 목록에 없다(시안 기준으로 둠)
+// M-02 판매자 심사 상세 /admin/sellers/:applicationId. 시안: admin/AdminSellers (상세 · 모달)
+// 신청 정보 장부 + 처리 카드(상태별 버튼) + 처리 이력.
+// 심사 대기 → 심사 시작 · 반려 / 심사 중 → 승인 · 반려(사유) / 승인 → 안내만 / 반려 → 사유
+// ✅ GET /api/v1/admin/seller-applications/{id}, POST …/review · approve · reject
+// TODO(api): ❌ 권한 회수(suspension) API 없음 → 승인 뒤 버튼 없음. ❌ 정산 계좌 정보 없음 → 계좌 장부 뺌
 
 type MaybeAsync = unknown
 
 export type AdminSellerDetailViewProps = {
   status: 'pending' | 'error' | 'notFound' | 'success'
-  application: AdminSellerApplication | null
+  application: SellerApplicationAdminDetail | null
   onStartReview: () => MaybeAsync
   onApprove: () => MaybeAsync
+  /** 실패하면 reject(throw)해야 모달이 열려 있는다 */
   onReject: (reason: string) => MaybeAsync
-  onSuspend: (reason: string) => MaybeAsync
   /** 처리 중인 동작 */
   submitting?: SellerReviewAction | null
+  /** 반려 사유의 서버 오류(422) */
+  rejectError?: string | null
   /** 처음부터 사유 모달을 연다 (미리보기) */
   defaultModal?: ReviewReasonKind | null
   onRetry?: () => void
@@ -62,7 +66,7 @@ function ActionCard({
   onApprove,
   onOpen,
 }: {
-  application: AdminSellerApplication
+  application: SellerApplicationAdminDetail
   submitting: SellerReviewAction | null
   onStartReview: () => MaybeAsync
   onApprove: () => MaybeAsync
@@ -71,21 +75,29 @@ function ActionCard({
   const busy = submitting !== null
   let body: ReactNode
   switch (app.status) {
-    case S.APPLIED:
+    case S.PENDING:
       body = (
         <>
-          <Text className={classes.desc}>심사를 시작하면 신청자에게 ‘심사 중’으로 보여요.</Text>
-          <Button
-            loading={submitting === SellerReviewAction.START_REVIEW}
-            disabled={busy && submitting !== SellerReviewAction.START_REVIEW}
-            onClick={() => onStartReview()}
-          >
-            심사 시작
-          </Button>
+          <Text className={classes.desc}>
+            심사를 시작하면 신청자에게 ‘심사 중’으로 보여요. 서류가 맞지 않으면 바로 반려할 수도
+            있어요.
+          </Text>
+          <Group gap="xs" grow>
+            <Button variant="outline" disabled={busy} onClick={() => onOpen('reject')}>
+              반려
+            </Button>
+            <Button
+              loading={submitting === SellerReviewAction.START_REVIEW}
+              disabled={busy && submitting !== SellerReviewAction.START_REVIEW}
+              onClick={() => onStartReview()}
+            >
+              심사 시작
+            </Button>
+          </Group>
         </>
       )
       break
-    case S.UNDER_REVIEW:
+    case S.IN_REVIEW:
       body = (
         <>
           <Text className={classes.desc}>
@@ -109,12 +121,14 @@ function ActionCard({
     case S.APPROVED:
       body = (
         <>
-          <Text className={classes.desc}>
-            판매 중인 판매자예요. 권한을 회수하면 상품 판매가 바로 멈춰요.
-          </Text>
-          <Button color="red" disabled={busy} onClick={() => onOpen('suspend')}>
-            권한 회수
-          </Button>
+          <Alert color="success" icon={<CircleCheck />} title="승인됨">
+            <span className="pd-num">
+              {app.approvedAt ? formatDate(app.approvedAt, 'dateTime') : ''}
+              {app.approvedAt && reviewerLabel(app.reviewerId) ? ' · ' : ''}
+              {reviewerLabel(app.reviewerId)}
+            </span>
+          </Alert>
+          <Text className={classes.help}>판매자 권한 회수는 아직 지원하지 않아요</Text>
         </>
       )
       break
@@ -122,17 +136,10 @@ function ActionCard({
       body = (
         <>
           <Alert color="error" icon={<CircleX />} title="반려됨">
-            {app.reason ?? '사유가 남아 있지 않아요'}
+            {app.rejectReason ?? '사유가 남아 있지 않아요'}
           </Alert>
           <Text className={classes.help}>신청자는 바로 다시 신청할 수 있어요</Text>
         </>
-      )
-      break
-    case S.SUSPENDED:
-      body = (
-        <Alert color="warning" icon={<CircleAlert />} title="권한 정지">
-          {app.reason ?? '사유가 남아 있지 않아요'}
-        </Alert>
       )
       break
   }
@@ -147,25 +154,30 @@ function ActionCard({
   )
 }
 
-function History({ application }: { application: AdminSellerApplication }) {
+function History({ application }: { application: SellerApplicationAdminDetail }) {
   return (
     <section className={classes.card} aria-labelledby="review-history-title">
       <h2 id="review-history-title" className={classes.cardTitle}>
         처리 이력
       </h2>
       <ol className={classes.history}>
-        {[...application.history].reverse().map((line) => (
-          <li key={`${line.action}-${line.at}`}>
-            <time className={`pd-num ${classes.help}`} dateTime={line.at}>
-              {formatDate(line.at, 'dateTime')}
-            </time>
-            <span>
-              {line.adminName && `${line.adminName} · `}
-              {sellerReviewActionLabels[line.action]}
-              {line.reason && ` — ${line.reason}`}
-            </span>
-          </li>
-        ))}
+        {historyOf(application)
+          .reverse()
+          .map((line) => {
+            const reviewer = reviewerLabel(line.reviewerId)
+            return (
+              <li key={`${line.action}-${line.at}`}>
+                <time className={`pd-num ${classes.help}`} dateTime={line.at}>
+                  {formatDate(line.at, 'dateTime')}
+                </time>
+                <span>
+                  {reviewer && `${reviewer} · `}
+                  {sellerReviewActionLabels[line.action]}
+                  {line.reason && ` — ${line.reason}`}
+                </span>
+              </li>
+            )
+          })}
       </ol>
     </section>
   )
@@ -177,18 +189,18 @@ export function AdminSellerDetailView({
   onStartReview,
   onApprove,
   onReject,
-  onSuspend,
   submitting = null,
+  rejectError = null,
   defaultModal = null,
   onRetry,
 }: AdminSellerDetailViewProps) {
   const [modal, setModal] = useState<ReviewReasonKind | null>(defaultModal)
   const confirm = async (reason: string) => {
     try {
-      await (modal === 'suspend' ? onSuspend(reason) : onReject(reason))
+      await onReject(reason)
       setModal(null)
     } catch {
-      // 열어 둔다
+      // 서버 오류는 rejectError로 받아 열어 둔다
     }
   }
 
@@ -218,7 +230,7 @@ export function AdminSellerDetailView({
         onRetry={onRetry}
         notFound={{
           title: '신청을 찾을 수 없어요',
-          description: '판매자 번호를 확인하거나 심사 목록에서 다시 골라 주세요.',
+          description: '신청 번호를 확인하거나 심사 목록에서 다시 골라 주세요.',
           action: { label: '심사 목록 보기', to: '/admin/sellers' },
         }}
       >
@@ -229,7 +241,8 @@ export function AdminSellerDetailView({
               <strong className={classes.mobileName}>{application.storeName}</strong>
               <StatusBadge status={application.status} />
               <span className={`pd-num ${classes.help}`}>
-                신청 {formatDate(application.appliedAt)} · 담당 {application.reviewerName ?? '없음'}
+                신청 {formatDate(application.appliedAt)} · 담당{' '}
+                {reviewerLabel(application.reviewerId) ?? '없음'}
               </span>
             </div>
 
@@ -243,16 +256,8 @@ export function AdminSellerDetailView({
                     { label: '대표자', value: application.representativeName },
                     { label: '사업자등록번호', value: application.businessNumber, num: true },
                     { label: '통신판매업 신고번호', value: application.mailOrderNumber, num: true },
+                    { label: '신청 회원 번호', value: String(application.memberId), num: true },
                     { label: '신청일', value: formatDate(application.appliedAt), num: true },
-                  ]}
-                />
-                <Ledger
-                  id="application-account"
-                  title="정산 계좌"
-                  rows={[
-                    { label: '은행', value: application.bankName },
-                    { label: '계좌번호', value: application.accountNumberMasked, num: true },
-                    { label: '예금주', value: application.accountHolder },
                   ]}
                 />
               </div>
@@ -273,10 +278,8 @@ export function AdminSellerDetailView({
               application={application}
               onClose={() => setModal(null)}
               onConfirm={confirm}
-              submitting={
-                submitting === SellerReviewAction.REJECT ||
-                submitting === SellerReviewAction.SUSPEND
-              }
+              submitting={submitting === SellerReviewAction.REJECT}
+              serverError={rejectError}
             />
           </>
         )}

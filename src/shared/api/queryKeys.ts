@@ -12,6 +12,7 @@ export const queryKeyPrefix = {
   reviews: 'reviews',
   media: 'media',
   seller: 'seller',
+  sellerApply: 'sellerApply',
   payouts: 'payouts',
   admin: 'admin',
 } as const

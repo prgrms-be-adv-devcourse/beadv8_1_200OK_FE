@@ -1,24 +1,23 @@
+import type { SellerApplicationAdminDetail } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
+import { UNSUPPORTED_MESSAGE } from './errors'
 import {
-  adjustmentLogs,
-  adjustTargetOf,
+  ADMIN_MEMBER_ID,
   adminPayoutItems,
   adminPayouts,
+  applicationCounts,
   defaultPayoutFilter,
   filterPayouts,
   findPayoutDetail,
-  lastRun,
-  payeeNameOfPayout,
-  payees,
   runResults,
   sampleAdjustment,
+  sampleAdjustTarget,
+  sellerApplicationSummaries,
   sellerApplications,
-  singlePayoutErrors,
-  withBalances,
 } from './fixtures'
-import { type AdjustLookup, type AdminSellerApplication, SellerReviewAction } from './types'
-import { AdminPayoutsView, type AdminPayoutsViewProps } from './views/AdminPayoutsView'
+import { type AdjustLookup, SellerReviewAction } from './types'
+import { AdminPayoutsView, type AdminPayoutsViewProps, payeeNameOf } from './views/AdminPayoutsView'
 import {
   AdminSellerDetailView,
   type AdminSellerDetailViewProps,
@@ -32,28 +31,23 @@ const S = SellerApplicationStatus
 
 // ─── 판매자 심사 목록 ────────────────────────────────────
 
-const counts = Object.fromEntries(
-  Object.values(S).map((s) => [s, sellerApplications.filter((a) => a.status === s).length]),
-) as Record<SellerApplicationStatus, number>
-
 const sellersView = (tab: SellerApplicationStatus, props: Partial<AdminSellersViewProps> = {}) => (
   <AdminSellersView
     status="success"
     tab={tab}
     onTabChange={noop}
-    counts={counts}
-    applications={sellerApplications.filter((a) => a.status === tab)}
+    counts={applicationCounts}
+    applications={sellerApplicationSummaries.filter((a) => a.status === tab)}
     {...props}
   />
 )
 
 const tabStates = (
   [
-    [S.APPLIED, '심사 대기'],
-    [S.UNDER_REVIEW, '심사 중'],
+    [S.PENDING, '심사 대기'],
+    [S.IN_REVIEW, '심사 중'],
     [S.APPROVED, '승인'],
     [S.REJECTED, '반려'],
-    [S.SUSPENDED, '권한 정지'],
   ] as const
 ).map(([tab, label]) => ({
   id: `tab-${tab.toLowerCase()}`,
@@ -64,10 +58,10 @@ const tabStates = (
 // ─── 판매자 심사 상세 ────────────────────────────────────
 
 const appOf = (status: SellerApplicationStatus) =>
-  sellerApplications.find((a) => a.status === status) as AdminSellerApplication
+  sellerApplications.find((a) => a.status === status) as SellerApplicationAdminDetail
 
 const detailView = (
-  application: AdminSellerApplication | null,
+  application: SellerApplicationAdminDetail | null,
   props: Partial<AdminSellerDetailViewProps> = {},
 ) => (
   <AdminSellerDetailView
@@ -76,33 +70,38 @@ const detailView = (
     onStartReview={noop}
     onApprove={noop}
     onReject={noop}
-    onSuspend={noop}
     {...props}
   />
 )
 
-/** 방금 처리한 결과 (처리 이력 맨 위 + 토스트) */
-const done = (
-  app: AdminSellerApplication,
-  action: SellerReviewAction,
-  patch: Partial<AdminSellerApplication>,
-  reason: string | null = null,
-): AdminSellerApplication => ({
-  ...app,
-  ...patch,
-  history: [...app.history, { action, at: '2026-10-18T14:20:00', adminName: '정민호', reason }],
-})
+const NOW = '2026-10-18T14:20:00'
+const pending = appOf(S.PENDING)
+const reviewing = appOf(S.IN_REVIEW)
 
-const reviewing = appOf(S.UNDER_REVIEW)
-const approved = appOf(S.APPROVED)
+/** 방금 처리한 결과 (서버가 돌려주는 ‘처리 뒤 상세’ 모양) */
+const approvedNow: SellerApplicationAdminDetail = {
+  ...reviewing,
+  status: S.APPROVED,
+  approvedAt: NOW,
+  reviewerId: ADMIN_MEMBER_ID,
+}
+const rejectedNow: SellerApplicationAdminDetail = {
+  ...reviewing,
+  status: S.REJECTED,
+  rejectedAt: NOW,
+  rejectReason: '사업자등록번호와 상호가 일치하지 않아요',
+  reviewerId: ADMIN_MEMBER_ID,
+}
+const reviewingNow: SellerApplicationAdminDetail = {
+  ...pending,
+  status: S.IN_REVIEW,
+  reviewStartedAt: NOW,
+}
 
 // ─── 정산 관리 ───────────────────────────────────────────
 
 const visible = filterPayouts(adminPayouts, defaultPayoutFilter)
-const sampleTarget = adjustTargetOf(Number(sampleAdjustment.orderItemId), adjustmentLogs)
-const found: AdjustLookup = sampleTarget
-  ? { status: 'found', target: sampleTarget }
-  : { status: 'idle' }
+const found: AdjustLookup = { status: 'found', target: sampleAdjustTarget }
 
 const payoutsView = ({
   run,
@@ -111,19 +110,24 @@ const payoutsView = ({
   ...props
 }: Partial<AdminPayoutsViewProps> = {}) => (
   <AdminPayoutsView
-    run={{ lastRun, result: null, onRun: noop, ...run }}
+    run={{
+      pendingCandidateCount: 3,
+      result: null,
+      onRun: noop,
+      onRunSkipWait: noop,
+      ...run,
+    }}
     single={{ result: null, onRun: noop, ...single }}
     adjustment={{
       lookup: { status: 'idle' },
       onOrderItemChange: noop,
       onSubmit: noop,
       result: null,
-      logs: adjustmentLogs,
+      logs: [],
       ...adjustment,
     }}
     status="success"
     payouts={visible}
-    payees={payees}
     filter={defaultPayoutFilter}
     onFilterChange={noop}
     totalElements={visible.length}
@@ -132,14 +136,17 @@ const payoutsView = ({
   />
 )
 
-const adjustWith = (values: Partial<typeof sampleAdjustment>, lookup: AdjustLookup = found) =>
+const adjustWith = (
+  values: Partial<typeof sampleAdjustment>,
+  lookup: AdjustLookup = { status: 'idle' },
+) =>
   payoutsView({
     adjustment: {
       lookup,
       onOrderItemChange: noop,
       onSubmit: noop,
       result: null,
-      logs: adjustmentLogs,
+      logs: [],
       defaultValues: { ...sampleAdjustment, ...values },
       defaultShowErrors: true,
     },
@@ -152,21 +159,9 @@ const detailOf = (payoutId: number): AdminPayoutsViewProps['detail'] => {
     status: detail ? 'success' : 'notFound',
     payout: detail,
     items: adminPayoutItems[payoutId] ?? [],
-    payeeName: detail ? payeeNameOfPayout(detail) : undefined,
+    payeeName: detail ? payeeNameOf(detail) : undefined,
   }
 }
-
-const adjustedLogs = withBalances([
-  {
-    adjustmentId: 4,
-    orderItemId: 1210,
-    amount: -10000,
-    reason: sampleAdjustment.reason,
-    adminName: '정민호',
-    createdAt: '2026-10-18T14:20:00',
-  },
-  ...adjustmentLogs,
-])
 
 export const adminPreviews: ScreenPreview[] = [
   {
@@ -178,15 +173,20 @@ export const adminPreviews: ScreenPreview[] = [
     states: [
       ...tabStates,
       {
+        id: 'counts-loading',
+        label: '개수 불러오는 중',
+        render: () => sellersView(S.PENDING, { counts: {} }),
+      },
+      {
         id: 'empty',
         label: '빈 탭',
-        render: () => sellersView(S.UNDER_REVIEW, { applications: [] }),
+        render: () => sellersView(S.IN_REVIEW, { applications: [] }),
       },
-      { id: 'loading', label: '로딩', render: () => sellersView(S.APPLIED, { status: 'pending' }) },
+      { id: 'loading', label: '로딩', render: () => sellersView(S.PENDING, { status: 'pending' }) },
       {
         id: 'error',
         label: '불러오기 실패',
-        render: () => sellersView(S.APPLIED, { status: 'error', onRetry: noop }),
+        render: () => sellersView(S.PENDING, { status: 'error', onRetry: noop }),
       },
     ],
   },
@@ -197,7 +197,18 @@ export const adminPreviews: ScreenPreview[] = [
     layout: 'admin',
     path: '/admin/sellers/16',
     states: [
-      { id: 'applied', label: '심사 대기 · 심사 시작', render: () => detailView(appOf(S.APPLIED)) },
+      { id: 'applied', label: '심사 대기 · 심사 시작/반려', render: () => detailView(pending) },
+      {
+        id: 'review-starting',
+        label: '심사 시작 처리 중',
+        render: () => detailView(pending, { submitting: SellerReviewAction.START_REVIEW }),
+      },
+      {
+        id: 'reviewing-now',
+        label: '심사 시작 완료',
+        toast: { message: '심사를 시작했어요' },
+        render: () => detailView(reviewingNow),
+      },
       { id: 'reviewing', label: '심사 중 · 승인/반려', render: () => detailView(reviewing) },
       {
         id: 'approving',
@@ -208,8 +219,7 @@ export const adminPreviews: ScreenPreview[] = [
         id: 'approved-now',
         label: '승인 완료',
         toast: { message: `${reviewing.storeName} 판매자를 승인했어요` },
-        render: () =>
-          detailView(done(reviewing, SellerReviewAction.APPROVE, { status: S.APPROVED })),
+        render: () => detailView(approvedNow),
       },
       {
         id: 'reject-modal',
@@ -217,49 +227,37 @@ export const adminPreviews: ScreenPreview[] = [
         render: () => detailView(reviewing, { defaultModal: 'reject' }),
       },
       {
+        id: 'reject-server-error',
+        label: '반려 사유 · 서버 422',
+        render: () =>
+          detailView(reviewing, {
+            defaultModal: 'reject',
+            rejectError: '거절 사유는 500자 이하여야 합니다.',
+          }),
+      },
+      {
         id: 'rejected-now',
         label: '반려 완료',
         toast: { message: '신청을 반려했어요' },
-        render: () =>
-          detailView(
-            done(
-              reviewing,
-              SellerReviewAction.REJECT,
-              { status: S.REJECTED, reason: '사업자등록번호와 상호가 일치하지 않아요' },
-              '사업자등록번호와 상호가 일치하지 않아요',
-            ),
-          ),
-      },
-      { id: 'approved', label: '승인됨 · 권한 회수', render: () => detailView(approved) },
-      {
-        id: 'suspend-modal',
-        label: '권한 회수 (주문 일괄 취소 경고)',
-        render: () => detailView(approved, { defaultModal: 'suspend' }),
+        render: () => detailView(rejectedNow),
       },
       {
-        id: 'suspended-now',
-        label: '회수 완료',
-        toast: {
-          message: `판매 권한을 회수했어요. 진행 중인 주문 ${approved.activeOrderCount}건을 취소했어요`,
-        },
-        render: () =>
-          detailView(
-            done(
-              approved,
-              SellerReviewAction.SUSPEND,
-              { status: S.SUSPENDED, reason: '출고 지연이 반복돼요', activeOrderCount: 0 },
-              '출고 지연이 반복돼요',
-            ),
-          ),
+        id: 'approved',
+        label: '승인됨 · 권한 회수 미지원',
+        render: () => detailView(appOf(S.APPROVED)),
       },
       { id: 'rejected', label: '반려됨', render: () => detailView(appOf(S.REJECTED)) },
-      { id: 'suspended', label: '권한 정지', render: () => detailView(appOf(S.SUSPENDED)) },
       {
         id: 'not-found',
         label: '없는 신청 (404)',
         render: () => detailView(null, { status: 'notFound' }),
       },
       { id: 'loading', label: '로딩', render: () => detailView(null, { status: 'pending' }) },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        render: () => detailView(null, { status: 'error', onRetry: noop }),
+      },
     ],
   },
   {
@@ -274,67 +272,72 @@ export const adminPreviews: ScreenPreview[] = [
         id: 'run-confirm',
         label: '실행 확인',
         render: () =>
-          payoutsView({ run: { lastRun, result: null, onRun: noop, defaultConfirmOpen: true } }),
+          payoutsView({
+            run: { result: null, onRun: noop, onRunSkipWait: noop, defaultConfirm: 'run' },
+          }),
+      },
+      {
+        id: 'run-skip-wait-confirm',
+        label: '대기 건너뛰기 확인',
+        render: () =>
+          payoutsView({
+            run: { result: null, onRun: noop, onRunSkipWait: noop, defaultConfirm: 'skipWait' },
+          }),
       },
       {
         id: 'running',
         label: '실행 중',
-        render: () => payoutsView({ run: { lastRun, result: null, onRun: noop, running: true } }),
+        render: () =>
+          payoutsView({ run: { result: null, onRun: noop, onRunSkipWait: noop, running: true } }),
       },
       {
         id: 'run-ok',
         label: '실행 · 정상',
-        render: () => payoutsView({ run: { lastRun, result: runResults.ok, onRun: noop } }),
+        render: () =>
+          payoutsView({ run: { result: runResults.ok, onRun: noop, onRunSkipWait: noop } }),
       },
       {
-        id: 'run-none',
-        label: '실행 · 후보 없음',
-        render: () => payoutsView({ run: { lastRun, result: runResults.none, onRun: noop } }),
+        id: 'run-skip-wait',
+        label: '실행 · 대기 건너뛰기',
+        render: () =>
+          payoutsView({ run: { result: runResults.skipWait, onRun: noop, onRunSkipWait: noop } }),
       },
       {
-        id: 'run-busy',
-        label: '실행 · 새벽 정산 중 (409)',
-        render: () => payoutsView({ run: { lastRun, result: runResults.busy, onRun: noop } }),
+        id: 'run-error',
+        label: '실행 · 배치 실패 (500)',
+        render: () =>
+          payoutsView({ run: { result: runResults.error, onRun: noop, onRunSkipWait: noop } }),
       },
       {
-        id: 'single-ok',
-        label: '1건 정산 · 성공',
+        id: 'single-unsupported',
+        label: '1건 정산 · 미지원 (501)',
         render: () =>
           payoutsView({
             single: {
               defaultOrderItemId: '1301',
-              result: { kind: 'success', orderItemId: 1301 },
+              result: { kind: 'error', message: UNSUPPORTED_MESSAGE },
               onRun: noop,
             },
           }),
       },
       {
-        id: 'single-unconfirmed',
-        label: '1건 정산 · 구매확정 전',
+        id: 'adjust-filled',
+        label: '조정 · 입력 완료',
         render: () =>
           payoutsView({
-            single: {
-              defaultOrderItemId: '1340',
-              result: { kind: 'error', message: singlePayoutErrors.unconfirmed },
-              onRun: noop,
-            },
-          }),
-      },
-      {
-        id: 'single-paid',
-        label: '1건 정산 · 이미 정산됨',
-        render: () =>
-          payoutsView({
-            single: {
-              defaultOrderItemId: '1210',
-              result: { kind: 'error', message: singlePayoutErrors.alreadyPaid },
-              onRun: noop,
+            adjustment: {
+              lookup: { status: 'idle' },
+              onOrderItemChange: noop,
+              onSubmit: noop,
+              result: null,
+              logs: [],
+              defaultValues: sampleAdjustment,
             },
           }),
       },
       {
         id: 'adjust-preview',
-        label: '조정 · 미리보기',
+        label: '조정 · 미리보기 (금액 조회 API 생기면)',
         render: () =>
           payoutsView({
             adjustment: {
@@ -342,36 +345,26 @@ export const adminPreviews: ScreenPreview[] = [
               onOrderItemChange: noop,
               onSubmit: noop,
               result: null,
-              logs: adjustmentLogs,
+              logs: [],
               defaultValues: sampleAdjustment,
             },
           }),
       },
       {
-        id: 'adjust-ok',
-        label: '조정 · 성공',
+        id: 'adjust-unsupported',
+        label: '조정 · 미지원 (501)',
         render: () =>
           payoutsView({
             adjustment: {
               lookup: { status: 'idle' },
               onOrderItemChange: noop,
               onSubmit: noop,
-              result: sampleTarget
-                ? {
-                    orderItemId: sampleTarget.orderItemId,
-                    amount: -10000,
-                    before: sampleTarget.currentAmount,
-                    after: sampleTarget.currentAmount - 10000,
-                  }
-                : null,
-              logs: adjustedLogs,
+              result: null,
+              logs: [],
+              errorMessage: UNSUPPORTED_MESSAGE,
+              defaultValues: sampleAdjustment,
             },
           }),
-      },
-      {
-        id: 'adjust-not-found',
-        label: '조정 · 없는 주문 상품',
-        render: () => adjustWith({ orderItemId: '9999' }, { status: 'notFound' }),
       },
       {
         id: 'adjust-no-reason',
@@ -380,12 +373,12 @@ export const adminPreviews: ScreenPreview[] = [
       },
       {
         id: 'adjust-negative',
-        label: '조정 · 0원 미만',
-        render: () => adjustWith({ amount: '-30,000' }),
+        label: '조정 · 0원 미만 (금액 조회 API 생기면)',
+        render: () => adjustWith({ amount: '-30,000' }, found),
       },
       {
         id: 'detail',
-        label: '정산 상세 · 판매자',
+        label: '정산 상세 · 판매자 (배송비 묶음 포함)',
         render: () => payoutsView({ detail: detailOf(1021) }),
       },
       {
@@ -395,12 +388,21 @@ export const adminPreviews: ScreenPreview[] = [
       },
       {
         id: 'filter-seller',
-        label: '받는 사람 필터',
+        label: '판매자 지정 필터',
         render: () => {
-          const filter = { ...defaultPayoutFilter, payee: 7 }
+          const filter = { ...defaultPayoutFilter, payee: 'seller' as const, payeeId: '7' }
           const list = filterPayouts(adminPayouts, filter)
           return payoutsView({ filter, payouts: list, totalElements: list.length })
         },
+      },
+      {
+        id: 'filter-seller-empty-id',
+        label: '판매자 지정 · 회원 번호 입력 전',
+        render: () =>
+          payoutsView({
+            filter: { ...defaultPayoutFilter, payee: 'seller', payeeId: '' },
+            status: 'pending',
+          }),
       },
       {
         id: 'empty',
@@ -422,7 +424,12 @@ export const adminPreviews: ScreenPreview[] = [
       {
         id: 'error',
         label: '목록 불러오기 실패',
-        render: () => payoutsView({ status: 'error', onRetry: noop }),
+        render: () =>
+          payoutsView({
+            status: 'error',
+            onRetry: noop,
+            errorMessage: '기간은 최대 1년까지 조회할 수 있습니다.',
+          }),
       },
     ],
   },

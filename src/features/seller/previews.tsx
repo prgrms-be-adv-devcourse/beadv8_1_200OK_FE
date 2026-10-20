@@ -1,6 +1,6 @@
 import { OrderItemStatus, ProductStatus } from '@/shared/api/types'
 import { ClaimState } from '@/shared/lib/claimState'
-import { MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
+import { LOW_STOCK_THRESHOLD, MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
   adjustedPayoutDetail,
@@ -10,6 +10,7 @@ import {
   followers,
   homeAsOf,
   homeStats,
+  myProfile,
   myStore,
   payoutDetails,
   payoutItems,
@@ -33,7 +34,11 @@ import {
   SellerProductFormView,
   type SellerProductFormViewProps,
 } from './views/SellerProductFormView'
-import { SellerProductsView, type SellerProductsViewProps } from './views/SellerProductsView'
+import {
+  NOT_EDITABLE_REASON,
+  SellerProductsView,
+  type SellerProductsViewProps,
+} from './views/SellerProductsView'
 import { SellerProfileView, type SellerProfileViewProps } from './views/SellerProfileView'
 import { SellerWalletView, type SellerWalletViewProps } from './views/SellerWalletView'
 
@@ -56,7 +61,10 @@ const home = (props: Partial<SellerHomeViewProps> = {}) => (
 const profile = (props: Partial<SellerProfileViewProps> = {}) => (
   <SellerProfileView
     status="success"
-    profile={myStore}
+    profile={myProfile}
+    sellerId={myStore.sellerId}
+    followerCount={myStore.followerCount}
+    photoUrl={null}
     onSave={noop}
     onPhotoChange={noop}
     onPhotoRemove={noop}
@@ -98,6 +106,13 @@ export const sellerCenterPreviews: ScreenPreview[] = [
         session: 'seller',
         render: () => home({ status: 'pending' }),
       },
+      {
+        id: 'balance-error',
+        label: '잔액 불러오기 실패',
+        session: 'seller',
+        render: () =>
+          home({ status: 'error', errorMessage: '판매자 지갑을 찾을 수 없습니다.', onRetry: noop }),
+      },
     ],
   },
   {
@@ -114,10 +129,16 @@ export const sellerCenterPreviews: ScreenPreview[] = [
         render: () => profile(),
       },
       {
-        id: 'uploading',
-        label: '사진 올리는 중',
+        id: 'register',
+        label: '등록 전 (빈 폼)',
         session: 'seller',
-        render: () => profile({ photoUploading: true }),
+        render: () => profile({ profile: null, followerCount: 0, followers: [] }),
+      },
+      {
+        id: 'uploading',
+        label: '사진 올리는 중 (저장 막힘)',
+        session: 'seller',
+        render: () => profile({ photoUploading: true, uploading: true, photoUrl: 'blob:preview' }),
       },
       {
         id: 'photo-error',
@@ -126,21 +147,38 @@ export const sellerCenterPreviews: ScreenPreview[] = [
         render: () => profile({ photoError: '사진은 10MB 이하로 올려 주세요' }),
       },
       {
+        id: 'field-errors',
+        label: '칸 오류 (서버 422)',
+        session: 'seller',
+        render: () =>
+          profile({
+            serverErrors: { customerServicePhone: '고객센터 연락처 형식이 올바르지 않습니다.' },
+          }),
+      },
+      {
+        id: 'error',
+        label: '저장 실패 (서버)',
+        session: 'seller',
+        render: () =>
+          profile({ errorMessage: '판매자 프로필용으로 업로드한 사진 주소가 아닙니다.' }),
+      },
+      {
         id: 'empty-profile',
         label: '소개 미입력',
         session: 'seller',
-        render: () => profile({ profile: { ...myStore, introduction: null } }),
+        render: () => profile({ profile: { ...myProfile, introduction: null } }),
       },
       {
         id: 'no-followers',
         label: '팔로워 없음',
         session: 'seller',
-        render: () =>
-          profile({
-            profile: { ...myStore, followerCount: 0 },
-            followers: [],
-            hasMoreFollowers: false,
-          }),
+        render: () => profile({ followerCount: 0, followers: [], hasMoreFollowers: false }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () => profile({ status: 'pending', profile: undefined }),
       },
       {
         id: 'saved',
@@ -155,15 +193,15 @@ export const sellerCenterPreviews: ScreenPreview[] = [
 
 // ─── 1-8 상품 · 주문 · 취소 ──────────────────────────────
 
-const productCounts = { ALL: 4, READY: 1, ON_SALE: 2, PAUSED: 0, ENDED: 1 }
-
 const products = (props: Partial<SellerProductsViewProps> = {}) => (
   <SellerProductsView
     status="success"
     products={sellerProducts}
     tab="ALL"
     onTabChange={noop}
-    counts={productCounts}
+    counts={{ ALL: sellerProducts.length }}
+    onChangeStatus={noop}
+    onChangeVisibility={noop}
     {...props}
   />
 )
@@ -243,20 +281,50 @@ export const sellerWorkPreviews: ScreenPreview[] = [
           products({
             tab: ProductStatus.ON_SALE,
             products: sellerProducts.filter((p) => p.status === ProductStatus.ON_SALE),
+            counts: { ON_SALE: 2 },
           }),
       },
       {
         id: 'paused-empty',
         label: '일시 중지 탭 (빈 상태)',
         session: 'seller',
-        render: () => products({ tab: ProductStatus.PAUSED, products: [] }),
+        render: () => products({ tab: ProductStatus.PAUSED, products: [], counts: { PAUSED: 0 } }),
+      },
+      {
+        id: 'busy',
+        label: '상태 바꾸는 중 (관리 칸 잠금)',
+        session: 'seller',
+        render: () => products({ busyProductId: 101 }),
+      },
+      {
+        id: 'not-editable',
+        label: `수정 불가 (${NOT_EDITABLE_REASON})`,
+        session: 'seller',
+        render: () =>
+          products({ products: sellerProducts.map((p) => ({ ...p, editable: false })) }),
+      },
+      {
+        id: 'low-stock',
+        label: `판매 가능 수량 ${LOW_STOCK_THRESHOLD}개 이하 · 품절`,
+        session: 'seller',
+        render: () =>
+          products({
+            products: sellerProducts.filter((p) => p.hasLowStock || p.soldOut),
+            counts: { ALL: 2 },
+          }),
       },
       {
         id: 'none',
         label: '등록한 상품 없음',
         session: 'seller',
+        render: () => products({ products: [], counts: { ALL: 0 } }),
+      },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        session: 'seller',
         render: () =>
-          products({ products: [], counts: { ALL: 0, READY: 0, ON_SALE: 0, PAUSED: 0, ENDED: 0 } }),
+          products({ status: 'error', errorMessage: '접근 권한이 없습니다.', onRetry: noop }),
       },
       {
         id: 'loading',
@@ -553,7 +621,27 @@ export const sellerMoneyPreviews: ScreenPreview[] = [
             payouts: [],
             totalPages: 1,
             monthSummary: { ...monthSummary, amount: 0, count: 0 },
-            outlook: { ...payoutOutlook, expectedAmount: 0 },
+            outlook: { ...payoutOutlook, expectedAmount: 0, pendingCount: 0 },
+          }),
+      },
+      {
+        id: 'outlook-missing',
+        label: '정산 예정 못 받음 (칸 비움)',
+        session: 'seller',
+        render: () => payoutsView({ outlook: null }),
+      },
+      {
+        id: 'outlook-truncated',
+        label: '정산 예정 후보 100건 초과',
+        session: 'seller',
+        render: () =>
+          payoutsView({
+            outlook: {
+              ...payoutOutlook,
+              expectedAmount: 2_841_300,
+              pendingCount: 137,
+              truncated: true,
+            },
           }),
       },
       {
@@ -577,7 +665,25 @@ export const sellerMoneyPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/wallet',
     states: [
-      { id: 'default', label: '기본', session: 'seller', render: () => walletView() },
+      {
+        id: 'api-only',
+        label: '지금 연결 모양 (잔액만 · 출금 닫힘)',
+        session: 'seller',
+        render: () =>
+          walletView({
+            wallet: {
+              ...sellerWallet,
+              withdrawableAmount: sellerWallet.balance,
+              accountNeedsCheck: false,
+              accountChangePending: false,
+            },
+            withdrawals: [],
+            transactions: [],
+            hasMoreTransactions: false,
+            featureDisabledReason: '출금 신청은 아직 열리지 않았어요',
+          }),
+      },
+      { id: 'default', label: '기본 (시안 전체)', session: 'seller', render: () => walletView() },
       {
         id: 'amount-error',
         label: '금액 오류 (가능 금액 초과)',

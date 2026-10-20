@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { render } from '@/test/render'
-import { BALANCE_DEFAULT, walletTerms } from '../fixtures'
+import { BALANCE_DEFAULT, MAX_BALANCE, walletTerms } from '../fixtures'
 import { ChargeView } from '../views/ChargeView'
 
 describe('TermsAgreementModal 약관 보기', () => {
@@ -10,7 +10,12 @@ describe('TermsAgreementModal 약관 보기', () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter>
-        <ChargeView balance={BALANCE_DEFAULT} terms={walletTerms} onCharge={() => {}} />
+        <ChargeView
+          balance={BALANCE_DEFAULT}
+          maxBalance={MAX_BALANCE}
+          terms={walletTerms}
+          onCharge={() => {}}
+        />
       </MemoryRouter>,
     )
     await user.type(screen.getByLabelText('충전 금액'), '50000')

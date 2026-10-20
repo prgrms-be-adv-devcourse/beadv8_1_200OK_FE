@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Alert, Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core'
-import { CircleCheck } from 'lucide-react'
+import { Alert, Button, Group, Modal, NativeSelect, Stack, Text, TextInput } from '@mantine/core'
+import { CircleCheck, CircleX } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Controller, type FieldPath, useForm } from 'react-hook-form'
+import { PayoutEventType } from '@/shared/api/types'
 import { formatAmount, formatDate, formatPrice, formatSignedAmount } from '@/shared/lib/format'
+import { payoutEventTypeLabels } from '@/shared/lib/labels'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import { DisabledReason, PriceText } from '@/shared/ui'
 import {
@@ -23,9 +25,9 @@ import type {
 import classes from './AdjustmentPanel.module.css'
 
 // 정산 조정. 시안: admin/AdminSettlements ‘정산 조정’ + 확인 모달
-// 기존 기록은 지우지 않고 조정 금액(−/+)을 한 줄 더한다. 오류 3종: 없는 주문 상품 · 사유 없음 · 0원 미만.
-// 왼쪽 입력 + 미리보기, 오른쪽 최근 조정 내역.
-// TODO(api): 📝 POST /payout/payouts/adjustments. 조정 대상 금액 조회·조정 내역 목록은 API 없음(❌)
+// 기존 기록은 지우지 않고 조정 금액(−/+)을 한 줄 더한다. 오류: 사유 없음 · 0원 · (금액 조회가 있을 때) 0원 미만 · 서버 422.
+// POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } — 지금은 서버가 501로 막아 두었다.
+// TODO(api): ❌ 주문 상품별 정산 금액 조회 · 조정 내역 목록 API 없음 → lookup은 idle, logs는 빈 목록으로 온다
 
 type MaybeAsync = unknown
 
@@ -34,13 +36,16 @@ export type AdjustmentPanelProps = {
   lookup: AdjustLookup
   /** 주문 상품 번호가 바뀌면 부른다 (숫자가 아니면 null) */
   onOrderItemChange: (orderItemId: number | null) => void
+  /** 실패하면 reject(throw)한다. 422는 serverErrors, 나머지는 errorMessage로 돌아온다 */
   onSubmit: (input: AdjustmentInput) => MaybeAsync
   submitting?: boolean
   /** 방금 저장한 조정 */
   result: AdjustmentResult | null
   /** 최근 조정 (최신순) */
   logs: AdjustmentLog[]
-  /** 서버 오류(404 없는 주문 상품 · 422 0원 미만 등)를 입력에 붙인다. 문구는 서버 detail */
+  /** 칸에 붙일 수 없는 서버 오류(501 미지원 · 403 등) */
+  errorMessage?: string | null
+  /** 서버가 돌려준 칸 오류(422 errors[].path). 문구는 서버 detail */
   serverErrors?: Partial<Record<keyof AdjustmentFormValues, string>>
   defaultValues?: Partial<AdjustmentFormValues>
   /** 처음부터 검사해 오류를 보여 준다 (미리보기) */
@@ -49,7 +54,17 @@ export type AdjustmentPanelProps = {
 
 const LOG_LIMIT = 3
 
-const empty: AdjustmentFormValues = { orderItemId: '', amount: '', reason: '' }
+const empty: AdjustmentFormValues = {
+  orderItemId: '',
+  eventType: PayoutEventType.SALE_AMOUNT,
+  amount: '',
+  reason: '',
+}
+
+const eventTypeOptions = Object.values(PayoutEventType).map((value) => ({
+  value,
+  label: payoutEventTypeLabels[value],
+}))
 
 /** 스키마 밖 검사: 주문 상품이 있는지 · 조정 후 0원 미만 */
 function lookupErrors(
@@ -75,7 +90,7 @@ function lookupErrors(
 function Preview({ lookup, amount }: { lookup: AdjustLookup; amount: number }) {
   if (lookup.status !== 'found') {
     const text = {
-      idle: '주문 상품 번호를 입력하면 원래 정산 금액과 조정 후 금액을 미리 보여 드려요.',
+      idle: '주문 상품별 정산 금액 조회는 아직 없어요. 조정 전 금액은 정산 상세에서 확인해 주세요.',
       pending: '정산 금액을 찾고 있어요',
       notFound: '입력한 번호와 맞는 주문 상품이 없어요. 번호를 다시 확인해 주세요.',
     }[lookup.status]
@@ -148,6 +163,10 @@ function ConfirmRows({
           </dd>
         </div>
         <div>
+          <dt>항목</dt>
+          <dd>{payoutEventTypeLabels[values.eventType]}</dd>
+        </div>
+        <div>
           <dt>조정 금액</dt>
           <dd className="pd-num">{formatSignedAmount(amount)}원</dd>
         </div>
@@ -179,7 +198,9 @@ function Logs({ logs }: { logs: AdjustmentLog[] }) {
         <span className={`pd-num ${classes.help}`}>최근 {formatAmount(recent.length)}건</span>
       </div>
       {recent.length === 0 ? (
-        <Text className={`${classes.help} ${classes.logsEmpty}`}>아직 조정한 내역이 없어요</Text>
+        <Text className={`${classes.help} ${classes.logsEmpty}`}>
+          조정 내역 목록은 아직 없어요. 조정 건은 정산 상세의 항목에서 ‘정산 조정’으로 보여요.
+        </Text>
       ) : (
         <ul className={classes.logList}>
           {recent.map((log) => (
@@ -218,6 +239,7 @@ export function AdjustmentPanel({
   submitting = false,
   result,
   logs,
+  errorMessage = null,
   serverErrors,
   defaultValues,
   defaultShowErrors = false,
@@ -285,18 +307,21 @@ export function AdjustmentPanel({
     },
   )
 
+  // 성공·실패 모두 모달을 닫는다. 서버 오류는 패널 위(errorMessage)나 칸(serverErrors)에 보인다
   const save = async () => {
     if (!confirming) return
     try {
       await onSubmit({
         orderItemId: Number(confirming.orderItemId.trim()),
+        eventType: confirming.eventType,
         amount: parseSignedAmount(confirming.amount),
         reason: confirming.reason.trim(),
       })
-      setConfirming(null)
       reset(empty)
     } catch {
-      // 모달을 열어 두고 서버 오류는 serverErrors로 받는다
+      // errorMessage · serverErrors로 받는다
+    } finally {
+      setConfirming(null)
     }
   }
 
@@ -318,9 +343,14 @@ export function AdjustmentPanel({
         {result && (
           <Alert color="success" icon={<CircleCheck />}>
             <span className="pd-num">
-              주문 상품 {result.orderItemId} 정산 금액을 {formatSignedAmount(result.amount)}원
-              조정했어요. {formatPrice(result.before)} → {formatPrice(result.after)}으로 기록했어요.
+              주문 상품 {result.orderItemId} {payoutEventTypeLabels[result.eventType]} 금액을{' '}
+              {formatSignedAmount(result.amount)}원 조정했어요. 다음 정산 때 반영돼요.
             </span>
+          </Alert>
+        )}
+        {errorMessage && !result && (
+          <Alert color="error" icon={<CircleX />}>
+            {errorMessage}
           </Alert>
         )}
 
@@ -331,6 +361,13 @@ export function AdjustmentPanel({
           classNames={{ input: 'pd-num' }}
           {...register('orderItemId')}
           error={errors.orderItemId?.message}
+        />
+        <NativeSelect
+          label="항목"
+          description="원래 정산 후보와 같은 종류를 골라요"
+          data={eventTypeOptions}
+          {...register('eventType')}
+          error={errors.eventType?.message}
         />
         <Controller
           control={control}

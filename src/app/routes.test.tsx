@@ -28,14 +28,17 @@ const screens: [path: string, title: string][] = [
   ['/cart', '장바구니'],
   ['/checkout', '주문서'],
   ['/checkout/complete?orderId=1', '주문이 완료됐어요'],
-  ['/wallet/charge/success?amount=20000', '20,000원을 충전했어요'],
+  [
+    '/wallet/charge/success?orderId=CHG-TEST-1&paymentKey=pk_1&amount=20000',
+    '20,000원을 충전했어요',
+  ],
   ['/wallet/charge/fail', '충전하지 못했어요'],
   ['/wallet/charge', '예치금 충전'],
   ['/orders', '주문 내역'],
   ['/orders/184', '주문 상세'],
   ['/orders/151/shipments/3', '배송 조회'],
   ['/orders/1/inquiry', '고객센터 문의'],
-  ['/reviews/new?orderItemId=1', '리뷰 쓰기'],
+  ['/reviews/new?orderId=27&orderItemId=271', '리뷰 쓰기'],
   ['/reviews/5003/edit', '리뷰 수정'],
   ['/me', '마이페이지'],
   ['/me/likes?tab=products', '관심 상품'],
@@ -54,7 +57,7 @@ const screens: [path: string, title: string][] = [
   ['/seller/payouts/1021', '정산 내역'], // 상세는 목록 위 모달
   ['/seller/wallet', '지갑·출금'],
   ['/seller/profile', '상점 프로필'],
-  ['/admin/sellers?status=APPLIED', '판매자 심사'],
+  ['/admin/sellers?status=PENDING', '판매자 심사'],
   ['/admin/sellers/4', '판매자 심사 상세'],
   ['/admin/payouts', '정산 관리'],
 ]

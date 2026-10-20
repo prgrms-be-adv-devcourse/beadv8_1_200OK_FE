@@ -1,0 +1,314 @@
+/* 사이트 푸터. 값은 design/FOOTER.md ‘6. 스타일’. 모바일 먼저, 64em 이상에서 데스크톱 배치 */
+
+.root {
+  background-color: var(--pd-color-surface-subtle);
+  border-top: 1px solid var(--pd-color-border);
+  color: var(--pd-color-text-secondary);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: calc(var(--pd-buyer-max-width) + var(--pd-page-gutter, 1rem) * 2);
+  margin: 0 auto;
+  padding: 1.25rem var(--pd-page-gutter, 1rem) 1.75rem;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  display: none;
+  text-decoration: none;
+}
+
+/* ─── 링크 ─── */
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -0.5rem;
+  padding: 0;
+  list-style: none;
+
+  & li[data-desktop-only] {
+    display: none;
+  }
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--pd-touch-min);
+  padding: 0 0.5rem;
+  border-radius: 0.375rem;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--pd-font-caption);
+  line-height: 1.25rem;
+  text-decoration: none;
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--pd-color-text);
+      text-decoration: underline;
+    }
+  }
+}
+
+.strong {
+  color: var(--pd-color-text);
+  font-weight: 700;
+}
+
+.divider {
+  display: none;
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background-color: var(--pd-color-border);
+}
+
+/* ─── 사업자 정보 펼침 (모바일) ─── */
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: var(--pd-touch-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pd-color-text);
+  font: inherit;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+
+  & svg {
+    flex: none;
+    transition: transform 0.15s ease-out;
+  }
+
+  &[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    & svg {
+      transition: none;
+    }
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.details {
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  &[data-open] {
+    display: flex;
+  }
+}
+
+.biz {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  font-size: var(--pd-font-caption);
+  line-height: 1.25rem;
+
+  & > div {
+    display: flex;
+    gap: 0.375rem;
+  }
+
+  & dt {
+    color: var(--pd-color-text-muted);
+  }
+
+  & dd {
+    margin: 0;
+    color: var(--pd-color-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ─── 고객센터 ─── */
+
+.cs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.csLabel {
+  color: var(--pd-color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+}
+
+.tel {
+  align-self: flex-start;
+  color: var(--pd-color-text);
+  font-size: 1.125rem;
+  line-height: 1.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+
+  @media (hover: hover) {
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.hours {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: 1.125rem;
+}
+
+.closedDesktop,
+.inquiry {
+  display: none;
+}
+
+.note {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: 1.25rem;
+}
+
+.copy {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+/* ─── 간단형 (로그인·가입) ─── */
+
+.root[data-variant="compact"] {
+  padding: 1.5rem var(--pd-page-gutter, 1rem) 2rem;
+  background: none;
+  border-top: 0;
+
+  & .links {
+    justify-content: center;
+    margin: 0;
+  }
+
+  & .link {
+    color: var(--pd-color-text-muted);
+  }
+}
+
+/* ─── 데스크톱 ─── */
+
+@media (min-width: 64em) {
+  .inner {
+    gap: 1.5rem;
+    padding-top: 2.5rem;
+    padding-bottom: 3rem;
+  }
+
+  .brand {
+    display: inline-flex;
+  }
+
+  .links {
+    gap: 0 0.25rem;
+    margin: 0;
+
+    & li[data-desktop-only] {
+      display: list-item;
+    }
+  }
+
+  .link {
+    min-height: 2rem;
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  .divider {
+    display: block;
+  }
+
+  .toggle {
+    display: none;
+  }
+
+  /* 사업자 정보·고지는 왼쪽, 고객센터는 오른쪽 300 */
+  .body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18.75rem;
+    grid-template-areas:
+      "biz cs"
+      "note cs";
+    grid-template-rows: auto 1fr;
+    align-items: start;
+    gap: 0.75rem 2rem;
+  }
+
+  .details,
+  .details[data-open] {
+    display: contents;
+  }
+
+  .biz {
+    grid-area: biz;
+    flex-flow: row wrap;
+    gap: 0.25rem 1rem;
+  }
+
+  .cs {
+    grid-area: cs;
+  }
+
+  .note {
+    grid-area: note;
+  }
+
+  .tel {
+    font-size: 1.375rem;
+    line-height: 1.875rem;
+  }
+
+  .closedDesktop {
+    display: block;
+  }
+
+  .closedMobile {
+    display: none;
+  }
+
+  .inquiry {
+    display: inline-flex;
+    align-self: flex-start;
+    margin-top: 0.5rem;
+  }
+
+  /* 로그인 카드 아래: 위 여백은 AuthLayout 칸 간격(lg)이 맡는다 */
+  .root[data-variant="compact"] {
+    padding-top: 0;
+  }
+}

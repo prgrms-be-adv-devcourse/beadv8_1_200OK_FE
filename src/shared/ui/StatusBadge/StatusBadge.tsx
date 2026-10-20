@@ -13,9 +13,9 @@ import {
   TriangleAlert,
   Truck,
 } from 'lucide-react'
-import { OrderItemStatus, ProductStatus } from '@/shared/api/types'
+import { OrderItemStatus, OrderStatus, ProductStatus } from '@/shared/api/types'
 import { ClaimState, claimStateLabels } from '@/shared/lib/claimState'
-import { orderItemStatusLabels, productStatusLabels } from '@/shared/lib/labels'
+import { orderItemStatusLabels, orderStatusLabels, productStatusLabels } from '@/shared/lib/labels'
 import { ProductSaleState, productSaleStateLabels } from '@/shared/lib/productState'
 import {
   SellerApplicationStatus,
@@ -56,7 +56,7 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [OrderItemStatus.DELIVERED]: { tone: 'success', icon: CircleCheck },
   [OrderItemStatus.PURCHASE_CONFIRMED]: { tone: 'primary', icon: BadgeCheck },
   [OrderItemStatus.CANCEL_REQUESTED]: { tone: 'warning', icon: TriangleAlert },
-  [OrderItemStatus.CANCELED]: { tone: 'neutral', icon: RotateCcw },
+  [OrderItemStatus.REFUNDED]: { tone: 'neutral', icon: RotateCcw },
   // 상품 판매 상태(구매자 화면) + 판매자 정지
   [ProductSaleState.UPCOMING]: { tone: 'neutral', icon: Clock },
   [ProductSaleState.SOLD_OUT]: { tone: 'neutral', icon: Clock },
@@ -75,12 +75,11 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [WithdrawalState.PROCESSING]: { tone: 'info', icon: Loader },
   [WithdrawalState.COMPLETED]: { tone: 'success', icon: CircleCheck },
   [WithdrawalState.FAILED]: { tone: 'error', icon: CircleX },
-  // 판매자 신청·심사 (관리자 심사 목록)
-  [SellerApplicationStatus.APPLIED]: { tone: 'warning', icon: Clock },
-  [SellerApplicationStatus.UNDER_REVIEW]: { tone: 'info', icon: Hourglass },
+  // 판매자 신청·심사 (신청 현황 · 관리자 심사 목록)
+  [SellerApplicationStatus.PENDING]: { tone: 'warning', icon: Clock },
+  [SellerApplicationStatus.IN_REVIEW]: { tone: 'info', icon: Hourglass },
   [SellerApplicationStatus.APPROVED]: { tone: 'success', icon: CircleCheck },
   [SellerApplicationStatus.REJECTED]: { tone: 'error', icon: CircleX },
-  [SellerApplicationStatus.SUSPENDED]: { tone: 'neutral', icon: CirclePause },
 }
 
 export function getStatusBadgeSpec(status: BadgeStatus): BadgeSpec {
@@ -117,6 +116,27 @@ export function ProductStatusBadge({ status, ...props }: ProductStatusBadgeProps
   return (
     <Badge color={tone} leftSection={Icon ? <Icon aria-hidden="true" /> : undefined} {...props}>
       {productStatusLabels[status]}
+    </Badge>
+  )
+}
+
+// 주문 전체 상태(서버 OrderStatus). 주문 상품 상태(OrderItemStatus)와 PAYMENT_PENDING 값이 겹쳐 따로 둔다.
+const orderStatusLooks: Record<OrderStatus, Omit<BadgeSpec, 'label'>> = {
+  [OrderStatus.PAYMENT_PENDING]: { tone: 'warning', icon: Clock },
+  [OrderStatus.PAID]: { tone: 'success', icon: CircleCheck },
+  [OrderStatus.PAYMENT_FAILED]: { tone: 'error', icon: CircleX },
+  [OrderStatus.CANCELED]: { tone: 'neutral', icon: RotateCcw },
+}
+
+export type OrderStatusBadgeProps = Omit<BadgeProps, 'color' | 'leftSection' | 'children'> & {
+  status: OrderStatus
+}
+
+export function OrderStatusBadge({ status, ...props }: OrderStatusBadgeProps) {
+  const { tone, icon: Icon } = orderStatusLooks[status]
+  return (
+    <Badge color={tone} leftSection={Icon ? <Icon aria-hidden="true" /> : undefined} {...props}>
+      {orderStatusLabels[status]}
     </Badge>
   )
 }

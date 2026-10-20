@@ -63,7 +63,9 @@ describe('SellerPayoutsView', () => {
     const first = within(groups).getAllByRole('listitem')[0] as HTMLElement
     expect(first).toHaveTextContent('주문 상품 1210')
     expect(first).toHaveTextContent('상품판매 수수료 3%−717원')
-    expect(first).toHaveTextContent('상품판매 배송비+3,000원')
+    // 배송비 항목은 orderItemId가 null이라 주문 단위로 묶인다
+    expect(groups).toHaveTextContent('주문 121 배송비')
+    expect(groups).toHaveTextContent('상품판매 배송비+3,000원')
     expect(dialog).toHaveTextContent('정산 금액103,762원')
   })
 

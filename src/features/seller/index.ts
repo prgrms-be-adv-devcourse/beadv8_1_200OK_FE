@@ -8,3 +8,4 @@ export {
   SellerProductFormPage,
   SellerProductsPage,
 } from './pages/SellerWorkPages'
+export { useMyProfile } from './queries'

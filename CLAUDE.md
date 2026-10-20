@@ -39,24 +39,25 @@ src/test/      Vitest setup, render 래퍼, fakeToken
 - 요청은 `apiClient`(`shared/api/client.ts`)로만 보내요. 경로는 `/api/v1/...` 그대로 쓰고, 백엔드 주소는 코드에 적지 않고 env로만 정해요(`.env.example`).
   - `VITE_API_PROXY_TARGET`: 개발 서버 프록시가 `/api`를 보낼 백엔드. 지금은 로컬 서버(`http://localhost:8080`)예요.
   - `VITE_API_BASE_URL`: 브라우저가 직접 부를 API 오리진(`/api/v1` 없이). 비우면 같은 오리진으로 보내 프록시를 타요. API 서버가 배포되면 여기에 그 오리진을 넣어요(백엔드 CORS가 열려 있어야 해요).
-- API 계약의 기준은 지금 연결한 백엔드의 Swagger(`{백엔드}/v3/api-docs`)예요. 아직 API 서버가 배포 전이라 로컬 서버 기준이에요. `bruno_for_front/`는 예시·오류 케이스 참고용이에요.
-- **인증**: 로그인 accessToken은 메모리에만 있어요(`shared/api/authToken.ts`). 새로고침하면 다시 로그인해요. 역할·회원 번호는 토큰 payload에서 읽어요(`app/session.ts`의 `useSession`).
-  - 토큰이 거절되면(401) 세션을 끝내고 토큰 없이 한 번 더 보내요. 그래도 401이면 `/login?returnTo=`로 보내요.
-  - 판매자 상품 쓰기·정산 API는 아직 `X-Member-Id`·`X-Member-Role` 임시 헤더로 회원을 받아요. `shared/api/memberHeaders.ts`가 경로를 보고 자동으로 붙여요.
+- API 계약의 기준은 백엔드 `dev` 브랜치의 Swagger(`{백엔드}/v3/api-docs`)예요. 아직 API 서버가 배포 전이라 로컬 서버 기준이에요. `bruno_for_front/`는 dev 기준 요청 예시·오류 케이스·타입 참고용이에요.
+- **인증**: 로그인 accessToken(30분)·refreshToken은 메모리 + sessionStorage에 둬요(`shared/api/authToken.ts`). 새로고침해도 유지되고, 탭을 닫으면 다시 로그인해요. 역할·회원 번호는 토큰 payload(`sub`·`roles[]`)에서 읽어요(`app/session.ts`의 `useSession`). 판매자 승인처럼 권한이 바뀌면 새 토큰을 받아야 해요(`reissueSession()`).
+  - 토큰이 만료돼 401이 오면(또는 보내기 전에 만료를 알면) `POST /auth/reissue`로 한 번 재발급하고 같은 요청을 다시 보내요(`shared/api/reissue.ts`, 동시 요청은 재발급 1회). 재발급이 안 되거나 만료가 아닌 거절이면 세션을 끝내고 토큰 없이 한 번 더 보내요. 그래도 401이면 `/login?returnTo=`로 보내요.
+  - 역할은 서버가 확인해요(SELLER·ADMIN API는 권한이 없으면 403). 임시 `X-Member-*` 헤더는 없어졌어요.
 - **쿼리 키**: 키 팩토리는 feature가 갖고, 첫 칸은 `queryKeyPrefix.*`(`shared/api/queryKeys.ts`)예요. 다른 feature의 캐시는 접두어로 무효화해요(`invalidateQueries({ queryKey: [queryKeyPrefix.products] })`).
 - **오류**: 모든 오류는 `ApiError{status, detail, fieldErrors}`로 와요. 사용자에게는 `detail`을 보여 줘요.
   - 422 → `useServerFieldErrors(setError, error.fieldErrors)`로 칸에 붙이고 첫 칸에 focus해요.
   - `errors` 없이 오는 필드 오류(예: 가입 409 중복)는 `detail` 문구로 칸을 골라요.
-  - 서버에 아직 없는 API는 404 `"No static resource …"`가 와요. 이 원문은 화면에 내지 말고 해요체 안내로 바꿔요(예: `features/reviews/errors.ts`).
+  - 서버에 아직 없는 API는 404 `"No static resource …"`, 아직 막아 둔 기능은 501이 와요. 원문은 화면에 내지 말고 해요체 안내로 바꿔요(예: `features/admin/errors.ts`).
 - **업로드**: `useMediaUploads(MediaPurpose.X)`(`shared/ui`)와 `PhotoUploader`를 같이 써요. 제출할 때는 `urls`(다 올린 서버 주소)만 보내고, `uploading`이면 제출을 막아요.
 - 실서버 확인은 연결한 백엔드에 curl로 해요. 계정은 `POST /api/v1/members/signup`으로 새로 만들어요(가입하면 BUYER). 남의 데이터는 건드리지 않고, 확인용으로 만든 상품은 지워요.
 
 ## API가 없는 곳
 
-- API로 연결된 feature: auth · products · cart · checkout · wallet(약관) · reviews · seller(상품·정산). orders · me · farms · sellerApply · admin, 그리고 연결된 feature 안의 일부는 아직 `fixtures`로 그려요.
+- API로 연결된 feature: auth(재발급 포함) · products · cart · checkout(배송비 견적) · wallet(약관·잔액·충전(토스)·이용 내역) · reviews · orders(목록·상세) · seller(내 상품·프로필·잔액·정산 `/payouts/me`) · sellerApply · admin(판매자 심사·정산 조회·실행).
+- 아직 `fixtures`로 그리는 곳: me(프로필·관심·팔로우·배송지·계정), farms, orders의 배송 조회·문의, seller의 주문·클레임·출금·팔로워, admin의 수취인 이름·조정 내역·1건 정산·조정(서버 501).
 - API가 없어 임시로 처리한 곳에는 `TODO(api)` 주석이 있어요(`grep -rn "TODO(api)" src`). API가 생기면 이 주석을 따라 걷어내요.
 - 브라우저 저장소에 둔 임시 데이터:
-  - `features/seller/productCache.ts`(localStorage): 판매자 본인 상품 목록과 수정용 version. 판매자 상품 목록·상세 API가 없어서 써요.
+  - `features/seller/productCache.ts`(localStorage): 수정 화면용 version·옵션 재고·옵션 id만. 상품 목록은 API지만 판매자 상품 상세 API가 없어서 써요. 이 기기에서 등록·수정한 상품만 수정할 수 있어요.
   - `features/cart/optionProducts.ts`(localStorage): 옵션 번호 → 상품 번호. 장바구니 조회에 `productId`가 없어서 써요.
   - `features/checkout/draftStore.ts`(sessionStorage): 충전하고 돌아올 때까지 남기는 배송지 초안. API가 아니라 정책이라 계속 남아요.
 

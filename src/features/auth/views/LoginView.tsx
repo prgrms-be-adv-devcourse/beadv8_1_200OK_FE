@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Alert, Anchor, Button, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Anchor, Button, PasswordInput, Stack, TextInput } from '@mantine/core'
 import { CircleX } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
@@ -44,7 +44,6 @@ export function LoginView({
       <div className={classes.mobileLogo}>
         <Logo preset="auth" />
       </div>
-      <Text className={classes.lead}>누가, 어디서 키웠는지 확인하고 산지 가격으로 사세요</Text>
 
       <form className={classes.form} onSubmit={handleSubmit(onSubmit)} noValidate>
         <Stack gap="md">

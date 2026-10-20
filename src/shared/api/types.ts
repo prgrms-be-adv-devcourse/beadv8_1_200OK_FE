@@ -1,4 +1,4 @@
-// 백엔드 API 타입. 원본: bruno_for_front/README.md 4장, enum 값은 bruno_for_front/enums.ts (최신 기준은 서버 Swagger)
+// 백엔드 API 타입(origin/dev 기준). 원본: bruno_for_front/README.md 4장, enum 값은 bruno_for_front/enums.ts (최신 기준은 서버 Swagger)
 // 서버 enum은 TS enum으로 둔다(값 = 서버 문자열). const enum은 쓰지 않는다(파일 단위 변환에서 깨짐).
 // 화면 표시명은 shared/lib/labels.ts.
 
@@ -81,8 +81,7 @@ export enum PayoutEventType {
   SALE_FEE = 'SALE_FEE',
 }
 
-// TODO(api): bruno_for_front/enums.ts에 아직 없다(주문 조회 API 없음). 시안의 주문 상품 상태 8종으로 임시로 정했고,
-// API가 나오면 값을 서버 문자열로 바꾼다.
+/** 주문 상품(orderItem) 상태. 주문 상세 GET /orders/{orderId}의 items[].status */
 export enum OrderItemStatus {
   PAYMENT_PENDING = 'PAYMENT_PENDING',
   PAYMENT_FAILED = 'PAYMENT_FAILED',
@@ -91,8 +90,57 @@ export enum OrderItemStatus {
   DELIVERED = 'DELIVERED',
   PURCHASE_CONFIRMED = 'PURCHASE_CONFIRMED',
   CANCEL_REQUESTED = 'CANCEL_REQUESTED',
+  REFUNDED = 'REFUNDED',
+}
+
+/** 주문 전체 상태. 주문 목록·상세의 status */
+export enum OrderStatus {
+  PAYMENT_PENDING = 'PAYMENT_PENDING',
+  PAID = 'PAID',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
   CANCELED = 'CANCELED',
 }
+
+/** 예치금 충전 건 상태 */
+export enum ChargeStatus {
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+}
+
+/** 예치금 이용 내역 유형 */
+export enum LedgerType {
+  CHARGE = 'CHARGE',
+  PAYMENT = 'PAYMENT',
+}
+
+/** 택배사 (출고 등록) */
+export enum ShipmentCarrier {
+  CJ_LOGISTICS = 'CJ_LOGISTICS',
+  POST_OFFICE = 'POST_OFFICE',
+  HANJIN = 'HANJIN',
+  LOTTE = 'LOTTE',
+  LOGEN = 'LOGEN',
+}
+
+/** 판매자 신청 상태. 표시명은 shared/lib/sellerApplicationState.ts */
+export enum SellerApplicationStatus {
+  PENDING = 'PENDING',
+  IN_REVIEW = 'IN_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+/** 배송지 지역 그룹. 도서산간이 아니면 GENERAL. 값은 서버 region_group 테이블 */
+export type RegionGroup =
+  | 'GENERAL'
+  | 'JEJU_MAIN'
+  | 'JEJU_ISLANDS'
+  | 'ULLEUNG'
+  | 'WEST_SEA_ISLANDS'
+  | 'ETC_ISLANDS'
+  | 'MOUNTAIN'
 
 // ─── 공통 ────────────────────────────────────────────────
 
@@ -105,7 +153,8 @@ export type ProblemDetail = {
   errors?: { detail: string; pointer: string; path: string }[] // 422 검증 실패일 때만
 }
 
-export type ProductPage<T> = {
+/** 페이지 응답. 모든 목록 API가 같은 모양이다 */
+export type PageResponse<T> = {
   content: T[]
   page: number // 0부터
   size: number
@@ -113,7 +162,8 @@ export type ProductPage<T> = {
   totalPages: number
 }
 
-export type PayoutPage<T> = ProductPage<T>
+export type ProductPage<T> = PageResponse<T>
+export type PayoutPage<T> = PageResponse<T>
 
 // ─── 회원·인증 ───────────────────────────────────────────
 
@@ -131,13 +181,18 @@ export type SignupResponse = { memberId: number }
 
 export type LoginRequest = { loginId: string; password: string }
 
-export type LoginResponse = {
+/** 로그인·재발급 응답. access 30분. refresh는 한 번만 쓸 수 있어 재발급 뒤 둘 다 바꿔 저장한다 */
+export type TokenResponse = {
   tokenType: 'Bearer'
   accessToken: string
   accessTokenExpiresAt: string // UTC, Z
   refreshToken: string
   refreshTokenExpiresAt: string // UTC, Z
 }
+
+export type LoginResponse = TokenResponse
+
+export type TokenReissueRequest = { refreshToken: string }
 
 // ─── 미디어 ──────────────────────────────────────────────
 
@@ -203,10 +258,10 @@ export type ProductListParams = {
   size?: number
 }
 
-// ─── 판매자 상점 (계획 API) ──────────────────────────────
+// ─── 판매자 상점 (구매자가 보는 쪽, 계획 API) ─────────────
 
-// TODO(api): 📝 GET /sellers/{sellerId} (Notion 계획 API, 아직 서버에 없음). 필드는 시안(b2c/Store) 기준 임시.
-// 상품 목록·상세에도 판매자 정보가 없어 화면이 따로 받는다(DECISIONS.md A-2).
+// TODO(api): 📝 GET /sellers/{sellerId} 없음. 구매자 화면(상품 상세·농가·찜) fixtures 전용 임시 타입.
+// 상품 목록·상세에도 판매자 정보가 없어 화면이 따로 받는다(DECISIONS.md A-2). 판매자 본인 프로필은 아래 SellerProfileResponse.
 export type SellerProfile = {
   sellerId: number
   storeName: string
@@ -219,7 +274,22 @@ export type SellerProfile = {
   suspended: boolean // 판매 중지(정지)된 판매자. API 미정(C-9)
 }
 
-// ─── 상품 (판매자, 임시 헤더) ─────────────────────────────
+// ─── 상품 (판매자, Bearer SELLER) ─────────────────────────
+
+/** 내 상품 목록 항목 GET /sellers/me/products. 숨긴 상품도 나오고 삭제한 상품만 빠진다 */
+export type SellerProductSummary = ProductSummary & {
+  visibility: ProductVisibility
+  availableStock: number // 삭제되지 않은 옵션의 총재고 − 배정 수량
+  createdAt: string
+  updatedAt: string
+}
+
+export type SellerProductListParams = {
+  status?: ProductStatus
+  visibility?: ProductVisibility
+  page?: number
+  size?: number // 1~100
+}
 
 export type ProductCreateRequest = {
   name: string // 100자 이하
@@ -293,6 +363,46 @@ export type TermsResponse = { terms: TermsItem[] }
 
 export type TermsAgreeRequest = { agreements: { type: TermsType; version: number }[] } // 1~10개
 
+// ─── 지갑 잔액·충전·내역 ─────────────────────────────────
+
+/** GET /wallets/me/balance. 지갑이 없으면 balance 0. 충전 가능 금액 = maxBalance − balance */
+export type BuyerBalance = { balance: number; maxBalance: number }
+
+/** POST /wallets/me/charges. 10,000원 이상 10,000원 단위, 충전 뒤 잔액 ≤ maxBalance */
+export type WalletChargeRequest = { amount: number }
+
+/** 201. chargeNo를 토스 결제창의 orderId로 넘긴다 */
+export type WalletChargeResponse = { chargeNo: string; amount: number }
+
+export type ChargeStatusResponse = { chargeNo: string; status: ChargeStatus; amount: number }
+
+/** POST /wallets/me/charges/confirm. successUrl 쿼리의 orderId·paymentKey·amount */
+export type ChargeConfirmRequest = { chargeNo: string; paymentKey: string; amount: number }
+
+/** POST /wallets/me/charges/fail. failUrl 쿼리의 orderId·code·message */
+export type ChargeFailRequest = { chargeNo: string; code: string; message?: string }
+
+/** 이용 내역 한 줄. amount는 항상 양수(충전 +, 결제 −로 표시) */
+export type LedgerEntry = {
+  occurredAt: string
+  type: LedgerType
+  orderId: number | null // 결제일 때만
+  amount: number
+  balanceAfter: number
+}
+
+/** GET /wallets/me/ledgers. from·to는 yyyy-MM-dd(둘 다 포함). size 1~50, 기본 10 */
+export type LedgerParams = {
+  from?: string
+  to?: string
+  type?: LedgerType
+  page?: number
+  size?: number
+}
+
+/** GET /wallets/sellers/me/balance (SELLER). 승인 뒤 만들어지며 없으면 0 */
+export type SellerBalanceResponse = { balance: number }
+
 // ─── 주문 ────────────────────────────────────────────────
 
 export type CheckoutItem = {
@@ -306,7 +416,7 @@ export type CheckoutItem = {
 
 export type CheckoutSellerGroup = {
   sellerId: number
-  shippingFee: number // 지금은 항상 0 (배송비 정책 미정)
+  shippingFee: number // 판매자 묶음 기본 배송비. 도서산간 추가 운임은 빠져 있다
   items: CheckoutItem[]
 }
 
@@ -314,7 +424,7 @@ export type Checkout = {
   sellerGroups: CheckoutSellerGroup[]
   totalProductAmount: number
   totalShippingFee: number
-  totalAmount: number // 도서산간 운임 제외
+  totalAmount: number // 도서산간 운임 제외 → 견적(fee-quotes)의 regionSurcharge를 더해 expectedTotalAmount로 보낸다
 }
 
 export type CreateOrderRequest = {
@@ -328,6 +438,79 @@ export type CreateOrderRequest = {
 }
 
 export type CreateOrderResponse = { orderId: number }
+
+/** 내 주문 목록 한 줄 GET /orders (최신순). size 1~50, 기본 10 */
+export type OrderSummary = {
+  orderId: number
+  status: OrderStatus
+  orderedAt: string
+  representativeProductName: string
+  itemCount: number // 주문 상품 종류 수
+  totalAmount: number
+}
+
+export type OrderListParams = { page?: number; size?: number }
+
+/** 주문 상품 (주문 시점 값) */
+export type OrderDetailItem = {
+  orderItemId: number // 리뷰 작성에 쓴다
+  productId: number
+  productOptionId: number
+  productName: string
+  productOptionName: string
+  unitPrice: number
+  quantity: number
+  itemAmount: number
+  status: OrderItemStatus
+}
+
+export type OrderDetailSellerGroup = {
+  sellerId: number
+  shippingFee: number
+  remoteAreaFee: number // 도서산간 추가 운임
+  items: OrderDetailItem[]
+}
+
+/** 내 주문 상세 GET /orders/{orderId}. 다른 회원 주문은 404. shipmentId는 아직 안 내려준다 */
+export type OrderDetail = {
+  orderId: number
+  status: OrderStatus
+  orderedAt: string
+  recipientName: string
+  recipientPhone: string
+  zipCode: string
+  address: string
+  addressDetail: string
+  sellerGroups: OrderDetailSellerGroup[]
+  totalProductAmount: number
+  totalShippingFee: number
+  totalRemoteAreaFee: number
+  totalAmount: number
+}
+
+// ─── 배송 ────────────────────────────────────────────────
+
+/** 배송비·도착 예정일 견적 요청 POST /shipments/fee-quotes (로그인 불필요). 판매자 1~100명, 중복 불가 */
+export type ShippingFeeQuoteRequest = {
+  postalCode: string // 숫자 5자리
+  sellers: { sellerId: number; itemAmount: number }[] // 판매자별 상품 금액 합계
+}
+
+export type SellerShippingQuote = {
+  sellerId: number
+  baseShippingFee: number // 무료배송 기준 이상이면 0
+  regionSurcharge: number // 도서산간 추가 운임. 무료배송이어도 붙는다
+  shippingFee: number // baseShippingFee + regionSurcharge
+  expectedShipDate: string // yyyy-MM-dd
+  arrivalStartDate: string
+  arrivalEndDate: string
+}
+
+export type ShippingFeeQuote = {
+  regionGroup: RegionGroup
+  sellers: SellerShippingQuote[] // 요청한 순서
+  totalShippingFee: number
+}
 
 /** 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다 */
 export type ShippingAddress = Pick<
@@ -368,7 +551,90 @@ export type ProductReview = {
   updatedAt: string
 }
 
-// ─── 정산 (임시 헤더) ────────────────────────────────────
+// ─── 판매자 신청 ─────────────────────────────────────────
+
+/** POST /sellers/me/applications (BUYER). businessNumber는 10자리 숫자 또는 000-00-00000 */
+export type SellerApplyRequest = {
+  storeName: string // 50자 이하
+  representativeName: string // 50자 이하
+  businessNumber: string
+  mailOrderNumber: string // 통신판매업 신고번호, 50자 이하
+}
+
+export type SellerApplyResponse = { applicationId: number }
+
+/** 내 신청 내역 한 건 GET /sellers/me/applications (최근 신청부터). 상태 enum은 shared/lib/sellerApplicationState */
+export type SellerApplicationHistoryItem = {
+  applicationId: number
+  status: SellerApplicationStatus
+  appliedAt: string
+  reviewStartedAt: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  rejectReason: string | null
+}
+
+export type SellerApplicationHistoryResponse = { applications: SellerApplicationHistoryItem[] }
+
+/** 내 신청 한 건 GET /sellers/me/applications/{applicationId} */
+export type SellerApplicationResponse = {
+  applicationId: number
+  status: SellerApplicationStatus
+  storeName: string
+  representativeName: string
+  businessNumber: string
+  appliedAt: string
+}
+
+/** 관리자 신청 목록 한 건 GET /admin/seller-applications (오래된 신청부터) */
+export type SellerApplicationAdminSummary = {
+  applicationId: number
+  memberId: number
+  storeName: string
+  representativeName: string
+  businessNumber: string
+  status: SellerApplicationStatus
+  appliedAt: string
+}
+
+/** 관리자 신청 상세. review/approve/reject도 처리 뒤 상세를 돌려준다 */
+export type SellerApplicationAdminDetail = SellerApplicationAdminSummary & {
+  mailOrderNumber: string
+  reviewStartedAt: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  rejectReason: string | null
+  reviewerId: number | null // 승인·거절한 관리자 회원 번호
+}
+
+export type SellerApplicationRejectRequest = { reason: string } // 500자 이하
+
+export type SellerApplicationListParams = {
+  status?: SellerApplicationStatus
+  page?: number
+  size?: number // 1~100
+}
+
+// ─── 판매자 프로필 (Bearer SELLER) ───────────────────────
+
+/** POST(등록)·PUT(전체 수정) /sellers/me/profile */
+export type SellerProfileRequest = {
+  storeName: string // 50자 이하
+  representativeName: string // 50자 이하
+  customerServicePhone: string // 0\d{1,2}-\d{3,4}-\d{4} 또는 1\d{3}-\d{4}
+  introduction?: string | null // 200자 이하
+  profileImageUrl?: string | null // POST /media/SELLER_PROFILE 응답 url. null이면 사진 삭제
+}
+
+export type SellerProfileResponse = {
+  storeName: string
+  representativeName: string
+  customerServicePhone: string
+  introduction: string | null
+  profileImageUrl: string | null
+}
+
+// ─── 정산 (Bearer SELLER: /payouts/me, ADMIN: /admin/payouts) ──
 
 export type PayoutSummary = {
   payoutId: number
@@ -379,36 +645,87 @@ export type PayoutSummary = {
   createdAt: string // 정산 확정 시각
 }
 
-export type PayoutDetail = PayoutSummary & {
+/** 상세 공통. 판매자·관리자 모두 받는 필드 */
+export type PayoutDetailCommon = PayoutSummary & {
   periodFrom: string | null // 포함. 첫 정산이면 null
   periodTo: string // 미포함
   itemCount: number
-  systemPayoutId: number | null // 관리자가 판매자 정산을 볼 때만
   sellerFeeAmount: number | null // 판매자 정산일 때만
   sellerFeeItemCount: number | null // 판매자 정산일 때만
 }
 
-export type PayoutItem = {
+/** 관리자 정산 상세 GET /admin/payouts/{payoutId} */
+export type PayoutDetail = PayoutDetailCommon & {
+  systemPayoutId: number | null // 판매자 정산이면 같은 스냅샷의 시스템 몫 정산 ID
+}
+
+/** 판매자 본인 정산 상세 GET /payouts/me/{payoutId}. system은 항상 false */
+export type PayoutSellerDetail = PayoutDetailCommon
+
+/** 항목 공통 */
+export type PayoutItemCommon = {
   payoutItemId: number
   candidateId: number
   eventType: PayoutEventType
-  orderItemId: number
+  orderId: number
+  orderItemId: number | null // 배송비 항목은 null(판매자 묶음 배송 1건의 금액)
   sellerId: number
   amount: number // 조정 건이면 음수 가능
   candidateCreatedAt: string
-  adjustment: {
-    adjustmentId: number | null // 판매자 조회 시 null
-    adminId: number | null // 판매자 조회 시 null
-    reason: string // 관리자 입력 원문 → 출력 시 HTML 이스케이프
-  } | null // 평소 건이면 null
 }
 
-// from(포함)·to(미포함) 필수, "yyyy-MM-ddTHH:mm:ss", 최대 1년. 판매자는 payeeId에 본인 ID 필수. size 1~100
-export type PayoutListParams = {
-  payeeId?: number
-  system?: boolean
-  from: string
-  to: string
-  page?: number
-  size?: number
+/** 관리자 조정 정보. reason은 입력 원문 → 출력 시 이스케이프 */
+export type PayoutAdjustment = { adjustmentId: number; adminId: number; reason: string }
+
+/** 관리자 정산 항목 GET /admin/payouts/{payoutId}/items */
+export type PayoutItem = PayoutItemCommon & { adjustment: PayoutAdjustment | null }
+
+/** 판매자 정산 항목 GET /payouts/me/{payoutId}/items. 조정 건이면 사유만 */
+export type PayoutSellerItem = PayoutItemCommon & { adjustment: { reason: string } | null }
+
+/** 정산후보(구매확정으로 생긴 정산 대상) 공통 */
+type PayoutCandidateCommon = {
+  candidateId: number
+  orderId: number
+  orderItemId: number | null
+  sellerId: number
+  amount: number
+  candidateCreatedAt: string // 평소 건은 구매확정 직후, 조정 건은 조정한 시각
+  settled: boolean
+  payoutId: number | null // 정산 전이면 null
 }
+
+/** 관리자 GET /admin/payouts/candidates */
+export type PayoutCandidate = PayoutCandidateCommon & {
+  eventType: PayoutEventType
+  adjustment: PayoutAdjustment | null
+}
+
+/** 판매자 GET /payouts/me/candidates. 수수료(SALE_FEE) 후보는 안 나온다 */
+export type PayoutSellerCandidate = PayoutCandidateCommon & {
+  eventType: Exclude<PayoutEventType, PayoutEventType.SALE_FEE>
+  adjustment: { reason: string } | null
+}
+
+/** POST /admin/payouts/run, /run/skip-wait */
+export type PayoutRunResponse = { executionId: number; status: string }
+
+/** POST /admin/payouts/adjustments (지금은 501) */
+export type PayoutAdjustmentCreateRequest = {
+  orderItemId: number
+  eventType: PayoutEventType
+  amount: number // 0 불가, 음수면 차감
+  reason: string // 255자 이하
+}
+
+// from(포함)·to(미포함) 필수, "yyyy-MM-ddTHH:mm:ss", 최대 1년. size 1~100
+export type SellerPayoutListParams = { from: string; to: string; page?: number; size?: number }
+
+export type SellerPayoutCandidateParams = SellerPayoutListParams & { unsettledOnly?: boolean }
+
+export type AdminPayoutListParams = SellerPayoutListParams & {
+  payeeId?: number // 생략하면 전체
+  system?: boolean // true 시스템 몫만, false 판매자 몫만
+}
+
+export type AdminPayoutCandidateParams = SellerPayoutCandidateParams & { sellerId?: number }

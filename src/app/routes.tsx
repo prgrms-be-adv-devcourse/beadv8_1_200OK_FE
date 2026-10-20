@@ -100,17 +100,17 @@ export const appRoutes: RouteObject[] = [
             ChargeSuccessPage,
           ),
           page('wallet/charge/fail', { title: '충전 실패', screenId: 'B-05' }, ChargeFailPage),
-          page('orders', { title: '주문 내역', screenId: 'B-07', tabBar: true }, OrderListPage),
           page('orders/:orderId', { title: '주문 상세', screenId: 'B-08' }, OrderDetailPage),
           page('orders/:orderId/shipments/:shipmentId', { title: '배송 조회' }, ShipmentPage),
           page('orders/:orderId/inquiry', { title: '고객센터 문의' }, SupportPage),
           page('reviews/new', { title: '리뷰 쓰기', screenId: 'B-10' }, ReviewNewPage),
           page('reviews/:reviewId/edit', { title: '리뷰 수정', screenId: 'B-10' }, ReviewEditPage),
           {
-            // 마이 묶음: 데스크톱 왼쪽 메뉴 (MyPageLayout)
+            // 마이 묶음: 데스크톱 왼쪽 메뉴 (MyPageLayout). 메뉴에서 여는 주문 내역·판매자 신청도 메뉴를 유지한다
             Component: MyPageLayout,
             children: [
               page('me', { title: '마이페이지', screenId: 'B-12', tabBar: true }, MyPage),
+              page('orders', { title: '주문 내역', screenId: 'B-07', tabBar: true }, OrderListPage),
               page(
                 'me/wallet',
                 { title: '지갑 이용 내역', screenId: 'B-13', tabBar: true },
@@ -118,10 +118,14 @@ export const appRoutes: RouteObject[] = [
               ),
               page('me/likes', { title: '관심', screenId: 'B-14', tabBar: true }, LikesPage),
               page('me/account', { title: '계정 관리', screenId: 'B-15' }, AccountPage),
+              page('seller/apply', { title: '판매자 신청', screenId: 'S-01' }, SellerApplyPage),
+              page(
+                'seller/apply/status',
+                { title: '신청 현황', screenId: 'S-02' },
+                SellerStatusPage,
+              ),
             ],
           },
-          page('seller/apply', { title: '판매자 신청', screenId: 'S-01' }, SellerApplyPage),
-          page('seller/apply/status', { title: '신청 현황', screenId: 'S-02' }, SellerStatusPage),
         ],
       },
       { path: '*', handle: { title: '페이지 없음' }, Component: NotFoundPage },
@@ -190,7 +194,7 @@ export const appRoutes: RouteObject[] = [
           { index: true, element: <Navigate to="/admin/sellers" replace /> },
           adminPage('sellers', { title: '판매자 심사', screenId: 'M-01' }, 'AdminSellersPage'),
           adminPage(
-            'sellers/:sellerId',
+            'sellers/:applicationId',
             { title: '판매자 심사 상세', screenId: 'M-02' },
             'AdminSellerDetailPage',
           ),

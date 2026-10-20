@@ -5,8 +5,8 @@ import { inquiries, inquiryTargets } from '../fixtures'
 import type { InquiryDone } from '../views/SupportView'
 import { SupportView } from '../views/SupportView'
 
-// 고객센터 문의 라우트 /orders/:orderId/inquiry. 1단계: 사진은 브라우저 미리보기로만, 보내면 접수 완료를 보여 준다.
-// TODO(api): 📝 문의 접수·내역, 사진은 미디어 업로드(용도 미정)
+// 고객센터 문의 라우트 /orders/:orderId/inquiry. fixtures 전용(주문 상세에서 링크하지 않는다). 사진은 브라우저 미리보기로만, 보내면 접수 완료를 보여 준다.
+// TODO(api): ❌ 문의 접수·내역 API 없음. 사진은 미디어 업로드(용도 미정)
 
 let photoSeq = 0
 

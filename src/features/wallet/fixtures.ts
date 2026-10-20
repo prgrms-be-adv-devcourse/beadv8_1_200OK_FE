@@ -1,7 +1,7 @@
-import { type TermsItem, TermsType } from '@/shared/api/types'
-import { type WalletTransaction, WalletTxType } from './types'
+import { type LedgerEntry, LedgerType, type TermsItem, TermsType } from '@/shared/api/types'
+import { toWalletTransaction } from './ledger'
 
-// 1단계 샘플 데이터. 약관 본문은 법무 검토 전이라 조항 제목만 둔다(시안도 자리 표시).
+// 샘플 데이터. 약관 본문은 법무 검토 전이라 조항 제목만 둔다(시안도 자리 표시).
 
 const body = (clauses: string[]) =>
   clauses.map((title) => `${title}\n약관 본문은 법무 검토 후 들어가요.`).join('\n\n')
@@ -52,41 +52,39 @@ export const walletTerms: TermsItem[] = [
   },
 ]
 
-// 예치금 잔액. checkout/fixtures.ts와 같은 흐름: 잔액 32,000 → 주문 39,800에 7,800 부족 → 20,000 충전 → 52,000
+// 예치금 잔액(GET /wallets/me/balance 모양). checkout/fixtures.ts와 같은 흐름: 잔액 32,000 → 주문 39,800에 7,800 부족 → 10,000 충전 → 42,000
 export const BALANCE_SHORT = 32000
 export const BALANCE_DEFAULT = 128000
+/** 잔액 보유 한도(서버 maxBalance, 2026-10-20 로컬 서버 500,000원) */
+export const MAX_BALANCE = 500_000
+export const walletBalance = { balance: BALANCE_DEFAULT, maxBalance: MAX_BALANCE }
 
-// ─── 이용 내역 (최신 순) ─────────────────────────────────
-// 마지막 잔액 128,000원 = BALANCE_DEFAULT. 주문 금액·번호는 orders/fixtures.ts, 문의 환불은 고객센터 답변(CS-20261008-0017)과 같다.
+// ─── 이용 내역 (최신 순, GET /wallets/me/ledgers 모양) ────────────────────
+// 마지막 잔액 128,000원 = BALANCE_DEFAULT. 주문 번호·금액은 orders/fixtures.ts와 같다.
 
-export const walletTransactions: WalletTransaction[] = [
-  tx(10, WalletTxType.PAYMENT, '주문 20261018-0184 결제', -39800, 128000, '2026-10-18T14:30:00'),
-  tx(9, WalletTxType.PAYMENT, '주문 20261015-0151 결제', -13900, 167800, '2026-10-15T09:12:00'),
-  tx(
-    8,
-    WalletTxType.PAYMENT_CANCEL,
-    '주문 20261014-0140 결제 취소',
-    9900,
-    181700,
-    '2026-10-14T21:30:00',
-  ),
-  tx(7, WalletTxType.PAYMENT, '주문 20261014-0140 결제', -9900, 171800, '2026-10-14T20:05:00'),
-  tx(6, WalletTxType.PAYMENT, '주문 20261012-0093 결제', -23900, 181700, '2026-10-12T11:40:00'),
-  tx(5, WalletTxType.CHARGE, '토스페이먼츠 카드 충전', 200000, 205600, '2026-10-12T11:30:00'),
-  tx(4, WalletTxType.REFUND, '문의 CS-20261008-0017 환불', 2200, 5600, '2026-10-09T14:10:00'),
-  tx(3, WalletTxType.PAYMENT, '주문 20261006-0027 결제', -29900, 3400, '2026-10-06T08:20:00'),
-  tx(2, WalletTxType.CHARGE, '토스페이먼츠 간편결제 충전', 30000, 33300, '2026-10-01T10:00:00'),
-  tx(1, WalletTxType.PAYMENT, '주문 20260820-0066 결제', -16700, 3300, '2026-08-20T19:12:00'),
-  tx(0, WalletTxType.CHARGE, '토스페이먼츠 카드 충전', 20000, 20000, '2026-08-20T19:05:00'),
-]
-
-function tx(
-  transactionId: number,
-  type: WalletTxType,
-  description: string,
+const ledger = (
+  occurredAt: string,
+  type: LedgerType,
   amount: number,
   balanceAfter: number,
-  occurredAt: string,
-): WalletTransaction {
-  return { transactionId, type, description, amount, balanceAfter, occurredAt }
-}
+  orderId: number | null = null,
+): LedgerEntry => ({ occurredAt, type, orderId, amount, balanceAfter })
+
+export const walletLedgers: LedgerEntry[] = [
+  ledger('2026-10-18T14:30:00', LedgerType.PAYMENT, 39800, 128000, 184),
+  ledger('2026-10-15T09:12:00', LedgerType.PAYMENT, 13900, 167800, 151),
+  ledger('2026-10-14T20:05:00', LedgerType.PAYMENT, 9900, 181700, 140),
+  ledger('2026-10-12T11:40:00', LedgerType.PAYMENT, 23900, 191600, 93),
+  ledger('2026-10-12T11:30:00', LedgerType.CHARGE, 200000, 215500),
+  ledger('2026-10-06T08:20:00', LedgerType.PAYMENT, 29900, 15500, 27),
+  ledger('2026-10-01T10:00:00', LedgerType.CHARGE, 30000, 45400),
+  ledger('2026-08-20T19:12:00', LedgerType.PAYMENT, 14600, 15400, 66),
+  ledger('2026-08-20T19:05:00', LedgerType.CHARGE, 30000, 30000),
+]
+
+export const walletTransactions = walletLedgers.map((entry, index) =>
+  toWalletTransaction(entry, `0-${index}`),
+)
+
+/** 충전 번호 샘플 (토스 orderId) */
+export const SAMPLE_CHARGE_NO = 'CHG-TEST-1'

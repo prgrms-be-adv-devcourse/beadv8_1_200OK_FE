@@ -1,14 +1,19 @@
 import {
+  ChargeStatus,
+  LedgerType,
   MediaPurpose,
   MemberRole,
   OrderItemStatus,
+  OrderStatus,
   PayoutEventType,
   ProductCategory,
   ProductCategoryGroup,
   ProductRegion,
   ProductStatus,
   ProductVisibility,
+  type RegionGroup,
   ReviewMediaType,
+  ShipmentCarrier,
   TermsType,
 } from '@/shared/api/types'
 
@@ -106,7 +111,7 @@ export const payoutEventTypeLabels: Record<PayoutEventType, string> = {
   [PayoutEventType.SALE_SHIPPING_FEE]: '상품판매 배송비',
 }
 
-// TODO(api): bruno_for_front/enums.ts에 아직 없다. 주문 상품 상태 8종 (design/COMPONENTS.md 상태 배지 세트)
+// 주문 상품 상태 8종 (GET /orders/{orderId} items[].status, design/COMPONENTS.md 상태 배지 세트)
 export const orderItemStatusLabels: Record<OrderItemStatus, string> = {
   [OrderItemStatus.PAYMENT_PENDING]: '결제 대기',
   [OrderItemStatus.PAYMENT_FAILED]: '결제 실패',
@@ -115,5 +120,44 @@ export const orderItemStatusLabels: Record<OrderItemStatus, string> = {
   [OrderItemStatus.DELIVERED]: '배송 완료',
   [OrderItemStatus.PURCHASE_CONFIRMED]: '구매확정',
   [OrderItemStatus.CANCEL_REQUESTED]: '취소 요청됨',
-  [OrderItemStatus.CANCELED]: '취소 완료',
+  [OrderItemStatus.REFUNDED]: '환불 완료',
+}
+
+// 주문 전체 상태 (주문 목록·상세 status)
+export const orderStatusLabels: Record<OrderStatus, string> = {
+  [OrderStatus.PAYMENT_PENDING]: '결제 대기',
+  [OrderStatus.PAID]: '결제 완료',
+  [OrderStatus.PAYMENT_FAILED]: '결제 실패',
+  [OrderStatus.CANCELED]: '주문 취소',
+}
+
+export const chargeStatusLabels: Record<ChargeStatus, string> = {
+  [ChargeStatus.PENDING]: '결제 대기',
+  [ChargeStatus.IN_PROGRESS]: '확인 중',
+  [ChargeStatus.COMPLETED]: '충전 완료',
+  [ChargeStatus.FAILED]: '실패',
+}
+
+export const ledgerTypeLabels: Record<LedgerType, string> = {
+  [LedgerType.CHARGE]: '충전',
+  [LedgerType.PAYMENT]: '결제',
+}
+
+export const carrierLabels: Record<ShipmentCarrier, string> = {
+  [ShipmentCarrier.CJ_LOGISTICS]: 'CJ대한통운',
+  [ShipmentCarrier.POST_OFFICE]: '우체국택배',
+  [ShipmentCarrier.HANJIN]: '한진택배',
+  [ShipmentCarrier.LOTTE]: '롯데택배',
+  [ShipmentCarrier.LOGEN]: '로젠택배',
+}
+
+/** 배송지 지역 그룹 이름 (배송비 견적 regionGroup) */
+export const regionGroupLabels: Record<RegionGroup, string> = {
+  GENERAL: '일반 지역',
+  JEJU_MAIN: '제주',
+  JEJU_ISLANDS: '제주 부속 도서',
+  ULLEUNG: '울릉',
+  WEST_SEA_ISLANDS: '서해 5도',
+  ETC_ISLANDS: '기타 도서',
+  MOUNTAIN: '산간',
 }

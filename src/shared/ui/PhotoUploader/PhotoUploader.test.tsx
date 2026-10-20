@@ -65,7 +65,7 @@ describe('validatePhotos', () => {
 
     it('영상을 받지 않으면 mp4는 형식 오류', () => {
       const result = validatePhotos([photo('a.mp4', 5, 'video/mp4')], rules)
-      expect(result.error).toBe('jpg·png·webp 사진만 올릴 수 있어요')
+      expect(result.error).toBe('jpg·png 사진만 올릴 수 있어요')
     })
   })
 })
@@ -83,6 +83,17 @@ describe('PhotoUploader', () => {
 
     expect(onAdd).toHaveBeenCalledWith([expect.objectContaining({ name: 'a.jpg' })])
     expect(screen.getByRole('alert')).toHaveTextContent('사진은 10MB 이하로 올려 주세요')
+  })
+
+  it('서버가 받지 않는 webp는 고르지 않고 알린다', async () => {
+    const user = userEvent.setup({ applyAccept: false })
+    const onAdd = vi.fn()
+    render(<PhotoUploader label="사진" items={[]} max={3} onAdd={onAdd} onRemove={() => {}} />)
+
+    await user.upload(screen.getByLabelText('사진 파일 고르기'), [photo('a.webp', 1, 'image/webp')])
+
+    expect(onAdd).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('jpg·png 사진만 올릴 수 있어요')
   })
 
   it('가득 차면 추가 칸을 숨긴다', () => {

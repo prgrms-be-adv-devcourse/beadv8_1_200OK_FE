@@ -10,7 +10,8 @@ import classes from './SellerHomeView.module.css'
 // S-03 판매자 센터 홈. 시안: seller/SellerHome, SellerHomeMobile
 // 오늘 요약(새 주문 · 출고 대기 · 취소 요청 · 정산 예정) · 오늘 처리할 일 · 판매자 지갑 · 상품 현황 · 상점 프로필 미입력 안내
 // 취소 요청이 걸린 주문은 송장 등록 대신 취소 요청 처리로 보낸다(C-10).
-// TODO(api): 센터 홈 집계 API 없음(❌). 2단계에서도 fixtures 유지, 각 목록 API가 생기면 거기서 센다
+// ✅ 지갑 잔액 GET /wallets/sellers/me/balance · 상품 현황은 내 상품 목록에서 센다 · 프로필 미입력은 GET /sellers/me/profile.
+// TODO(api): 판매자 주문 목록 API 없음(❌) → 오늘 요약(주문·출고·취소)과 처리할 일은 fixtures. 정산 예정 금액은 정산 내역 화면이 후보 합계로 보여 준다
 
 export type SellerHomeViewProps = {
   status: 'pending' | 'error' | 'success'
@@ -20,9 +21,10 @@ export type SellerHomeViewProps = {
   todos: SellerTodo[]
   walletBalance: number
   products: SellerProductStats
-  /** 소개·사진을 아직 안 넣었으면 안내 */
+  /** 상점 프로필을 아직 등록하지 않았거나 소개·사진이 비었으면 안내 */
   profileIncomplete?: boolean
   onRetry?: () => void
+  errorMessage?: string
 }
 
 function HomeSkeleton() {
@@ -43,6 +45,7 @@ export function SellerHomeView({
   products,
   profileIncomplete = false,
   onRetry,
+  errorMessage,
 }: SellerHomeViewProps) {
   const statItems = [
     {
@@ -76,7 +79,12 @@ export function SellerHomeView({
         }
       />
 
-      <QueryState status={status} skeleton={<HomeSkeleton />} onRetry={onRetry}>
+      <QueryState
+        status={status}
+        skeleton={<HomeSkeleton />}
+        onRetry={onRetry}
+        errorMessage={errorMessage}
+      >
         <Stack gap="md">
           {profileIncomplete && (
             <Alert color="info" icon={<Info />} title="상점 프로필을 입력해 주세요">
@@ -204,9 +212,9 @@ export function SellerHomeView({
                     <dt>판매 준비</dt>
                     <dd className="pd-num">{formatAmount(products.ready)}개</dd>
                   </div>
-                  <div data-warn={products.lowStockOptions > 0 || undefined}>
-                    <dt>재고 {LOW_STOCK_THRESHOLD}개 이하 옵션</dt>
-                    <dd className="pd-num">{formatAmount(products.lowStockOptions)}개</dd>
+                  <div data-warn={products.lowStockProducts > 0 || undefined}>
+                    <dt>재고 {LOW_STOCK_THRESHOLD}개 이하 상품</dt>
+                    <dd className="pd-num">{formatAmount(products.lowStockProducts)}개</dd>
                   </div>
                 </dl>
                 <div className={classes.cardActions}>

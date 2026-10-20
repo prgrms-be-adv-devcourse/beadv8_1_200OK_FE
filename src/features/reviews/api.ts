@@ -9,8 +9,7 @@ import type {
 } from '@/shared/api/types'
 
 // 리뷰 작성·수정·삭제와 내 리뷰 조회(08 Review). 모두 로그인 필요.
-// TODO(api): 2026-10-18 로컬 서버(dev)에는 리뷰 API가 아직 없어 404(No static resource).
-//   백엔드 feature/132 브랜치(미병합)의 컨트롤러·Bruno 계약대로 연결해 둔다.
+// 2026-10-20 로컬 서버(dev)에 리뷰 API가 모두 있다(GET /reviews/me 200 확인).
 // 오류: 401 로그인 필요, 403 내 리뷰 아님, 404 상품·옵션·리뷰 없음, 409 이 주문에서 이미 쓴 상품(DUPLICATE_REVIEW),
 //   422 검증 실패(errors[].path: rating·content·mediaUrls…) · 업로드하지 않은 첨부 URL · 영상 2개 이상(errors 없이 detail만)
 

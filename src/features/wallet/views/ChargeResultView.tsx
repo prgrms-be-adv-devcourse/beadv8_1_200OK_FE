@@ -8,7 +8,7 @@ import classes from './ChargeResultView.module.css'
 
 // B-05 충전 진행·결과. 시안: b2c/Charge (결제창 진행 · 성공 · 실패 · 확인 중 · 시간 만료)
 // PG는 토스페이먼츠. 복귀 주소: 성공 /wallet/charge/success, 실패 /wallet/charge/fail (ADR-0005 개정, DECISIONS.md B-1)
-// TODO(api): 📝 POST /wallets/me/charges → confirm·fail. 결제창 만료 시간(15분)은 토스페이먼츠 설정 확인 필요
+// 상태는 ChargeResultPages가 ✅ 승인(confirm)·상태 조회 결과로 정한다. 결제창 만료 시간(15분)은 토스페이먼츠 설정 확인 필요
 
 export type ChargeResultStatus = 'paying' | 'success' | 'failed' | 'pending' | 'expired'
 
@@ -21,6 +21,8 @@ export type ChargeResultViewProps = {
   returnTo?: string | null
   /** 다시 충전하기 경로 (금액·돌아갈 곳을 유지) */
   retryPath?: string
+  /** 기본 본문 대신 보여 줄 문구 (서버·토스 문구 등) */
+  message?: string
 }
 
 type Look = {
@@ -37,6 +39,7 @@ export function ChargeResultView({
   balanceAfter,
   returnTo,
   retryPath = '/wallet/charge',
+  message,
 }: ChargeResultViewProps) {
   const amountText = amount ? formatPrice(amount) : ''
   const looks: Record<ChargeResultStatus, Look> = {
@@ -95,7 +98,7 @@ export function ChargeResultView({
       <h1 id="charge-result" className={`pd-num ${classes.title}`}>
         {look.title}
       </h1>
-      <p className={classes.body}>{look.body}</p>
+      <p className={classes.body}>{message ?? look.body}</p>
       <div className={classes.actions}>
         {status === 'success' && (
           <Button component={Link} to={backPath} size="lg">

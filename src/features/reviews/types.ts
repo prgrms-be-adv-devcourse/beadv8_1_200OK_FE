@@ -7,12 +7,12 @@ export type ReviewTarget = {
   thumbnailUrl: string
   /** 주문에서 왔을 때만. 있으면 뒤로·취소가 주문 상세로 간다 */
   orderId?: number
+  /** TODO(api): 주문 상세에 판매자 이름이 없다(sellerId만) */
   sellerName?: string
   quantity?: number
 }
 
-// 리뷰를 쓸 주문 상품. 작성 API는 productOptionId·orderId·orderItemId를 받는다.
-// TODO(api): orderId·orderItemId와 상품 정보를 줄 주문 조회 API가 없다(PLAN 2-5) → 지금은 fixtures + 쿼리(target.ts).
+// 리뷰를 쓸 주문 상품. 작성 API는 productOptionId·orderId·orderItemId를 받고, 값은 ✅ 주문 상세(GET /orders/{orderId})에서 온다(target.ts).
 export type ReviewOrderItem = ReviewTarget & {
   orderId: number
   orderItemId: number

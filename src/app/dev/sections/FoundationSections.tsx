@@ -9,6 +9,7 @@ import {
   mediaPurposeLabels,
   memberRoleLabels,
   orderItemStatusLabels,
+  orderStatusLabels,
   payoutEventTypeLabels,
   productStatusLabels,
   productVisibilityLabels,
@@ -261,7 +262,8 @@ const labelGroups: { title: string; labels: Record<string, string> }[] = [
   { title: '충전 약관', labels: termsTypeLabels },
   { title: '리뷰 첨부 종류', labels: reviewMediaTypeLabels },
   { title: '정산 항목 종류', labels: payoutEventTypeLabels },
-  { title: '주문 상품 상태 (임시, TODO(api))', labels: orderItemStatusLabels },
+  { title: '주문 상태', labels: orderStatusLabels },
+  { title: '주문 상품 상태', labels: orderItemStatusLabels },
 ]
 
 export function LabelSection() {

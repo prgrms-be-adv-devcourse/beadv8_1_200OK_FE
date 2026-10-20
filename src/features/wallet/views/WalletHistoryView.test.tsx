@@ -25,10 +25,17 @@ function renderHistory(props: Partial<WalletHistoryViewProps> = {}) {
 
 describe('WalletHistoryView', () => {
   it('들어온 돈은 +, 나간 돈은 −로 보여 준다', () => {
-    renderHistory({ transactions: walletTransactions.slice(4, 6) })
-    expect(screen.getAllByText('토스페이먼츠 카드 충전').length).toBeGreaterThan(0)
+    renderHistory({ transactions: walletTransactions.slice(3, 5) })
+    expect(screen.getAllByText('예치금 충전').length).toBeGreaterThan(0)
     expect(screen.getAllByText('+').length).toBeGreaterThan(0)
     expect(screen.getAllByText('−23,900').length).toBeGreaterThan(0)
+  })
+
+  it('결제 줄은 주문 상세로 이어진다', () => {
+    renderHistory({ transactions: walletTransactions.slice(0, 1) })
+    const links = screen.getAllByRole('link', { name: '주문 184 결제' })
+    expect(links.length).toBeGreaterThan(0)
+    for (const link of links) expect(link).toHaveAttribute('href', '/orders/184')
   })
 
   it('시작일이 종료일보다 늦으면 알린다', () => {

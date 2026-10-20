@@ -6,10 +6,10 @@ import {
   Stack,
   Table,
   Text,
+  TextInput,
   VisuallyHidden,
 } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
-import dayjs from 'dayjs'
 import { Wallet } from 'lucide-react'
 import { Link } from 'react-router'
 import type { PayoutSummary } from '@/shared/api/types'
@@ -24,13 +24,15 @@ import {
 import { AdjustmentPanel, type AdjustmentPanelProps } from '../components/AdjustmentPanel'
 import { PayoutRunCard, type PayoutRunCardProps } from '../components/PayoutRunCard'
 import { SinglePayoutCard, type SinglePayoutCardProps } from '../components/SinglePayoutCard'
-import type { Payee, PayeeFilter, PayoutFilter } from '../types'
+import { payeeIdMissing, rangeErrorOf } from '../payoutFilter'
+import type { PayoutFilter, PayoutPayeeFilter } from '../types'
 import classes from './AdminPayoutsView.module.css'
 
 // M-03 정산 관리 /admin/payouts, 상세 /admin/payouts/:payoutId (목록 위 모달). 시안: admin/AdminSettlements
 // 정산 실행 · 1건 정산 · 정산 조정 · 전체 정산(받는 사람 · 완료일 필터, 상세 모달).
 // 목록 API는 정산 금액만 준다 → 건수·판매 대금·수수료·배송비 나눔은 상세에서 보여 준다.
-// ✅ GET /payouts?payeeId&system&from&to (ADMIN), 상세·항목. 실행·1건·조정은 📝
+// ✅ GET /api/v1/admin/payouts?payeeId&system&from&to&page&size, 상세·항목. 실행 ✅, 1건·조정은 서버 501.
+// TODO(api): ❌ 판매자 이름 목록 API 없음 → 받는 사람은 ‘판매자 {회원 번호}’로 보여 주고, 판매자 지정은 회원 번호를 직접 입력한다
 
 export type AdminPayoutsViewProps = {
   run: PayoutRunCardProps
@@ -38,7 +40,6 @@ export type AdminPayoutsViewProps = {
   adjustment: AdjustmentPanelProps
   status: 'pending' | 'error' | 'success'
   payouts: PayoutSummary[]
-  payees: Payee[]
   filter: PayoutFilter
   onFilterChange: (filter: PayoutFilter) => void
   /** 조건에 맞는 전체 정산 수 (모든 페이지) */
@@ -47,26 +48,23 @@ export type AdminPayoutsViewProps = {
   totalPages?: number
   onPageChange?: (page: number) => void
   onRetry?: () => void
+  /** 목록 오류 문구 (서버 detail) */
+  errorMessage?: string
   /** 열린 정산 상세. null이면 닫힘 */
   detail: Omit<PayoutDetailModalProps, 'opened'> | null
   /** 상세 주소 (필터를 주소에 남기려면 바꾼다) */
   getDetailLink?: (payoutId: number) => string
 }
 
-/** API 최대 조회 기간 */
-const MAX_RANGE_DAYS = 366
+const payeeOptions: { value: PayoutPayeeFilter; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'system', label: '플랫폼 수수료' },
+  { value: 'seller', label: '판매자 지정' },
+]
 
-function rangeErrorOf({ from, to }: PayoutFilter) {
-  if (from > to) return '시작일이 종료일보다 늦어요'
-  if (dayjs(to).diff(dayjs(from), 'day') >= MAX_RANGE_DAYS) {
-    return '기간은 1년까지 볼 수 있어요. 시작일이나 종료일을 바꿔 주세요'
-  }
-  return null
-}
-
-const payeeValue = (payee: PayeeFilter) => String(payee)
-const parsePayee = (value: string): PayeeFilter =>
-  value === 'all' || value === 'system' ? value : Number(value)
+/** 받는 사람 표시. 시스템 몫은 플랫폼 수수료, 판매자는 회원 번호로 부른다 */
+export const payeeNameOf = (payout: Pick<PayoutSummary, 'payeeId' | 'system'>) =>
+  payout.system || payout.payeeId === null ? '플랫폼 수수료' : `판매자 ${payout.payeeId}`
 
 export function AdminPayoutsView({
   run,
@@ -74,7 +72,6 @@ export function AdminPayoutsView({
   adjustment,
   status,
   payouts,
-  payees,
   filter,
   onFilterChange,
   totalElements,
@@ -82,16 +79,14 @@ export function AdminPayoutsView({
   totalPages = 1,
   onPageChange,
   onRetry,
+  errorMessage,
   detail,
   getDetailLink = (payoutId) => `/admin/payouts/${payoutId}`,
 }: AdminPayoutsViewProps) {
   const rangeError = rangeErrorOf(filter)
-  const payeeName = (payout: PayoutSummary) =>
-    payout.system || payout.payeeId === null
-      ? '플랫폼 수수료'
-      : (payees.find((p) => p.payeeId === payout.payeeId)?.name ?? `판매자 ${payout.payeeId}`)
+  const needPayeeId = payeeIdMissing(filter)
   const detailLabel = (payout: PayoutSummary) =>
-    `정산 ${payout.payoutId} ${payeeName(payout)} 상세 보기`
+    `정산 ${payout.payoutId} ${payeeNameOf(payout)} 상세 보기`
   const pageSum = payouts.reduce((sum, p) => sum + p.amount, 0)
 
   return (
@@ -114,16 +109,26 @@ export function AdminPayoutsView({
             <NativeSelect
               className={classes.payee}
               label="받는 사람"
-              value={payeeValue(filter.payee)}
+              value={filter.payee}
               onChange={(e) =>
-                onFilterChange({ ...filter, payee: parsePayee(e.currentTarget.value) })
+                onFilterChange({ ...filter, payee: e.currentTarget.value as PayoutPayeeFilter })
               }
-              data={[
-                { value: 'all', label: '전체' },
-                { value: 'system', label: '플랫폼 수수료' },
-                ...payees.map((p) => ({ value: String(p.payeeId), label: p.name })),
-              ]}
+              data={payeeOptions}
             />
+            {filter.payee === 'seller' && (
+              <TextInput
+                className={classes.payee}
+                label="판매자 회원 번호"
+                placeholder="예: 7"
+                inputMode="numeric"
+                classNames={{ input: 'pd-num' }}
+                value={filter.payeeId}
+                onChange={(e) => onFilterChange({ ...filter, payeeId: e.currentTarget.value })}
+                description={
+                  needPayeeId ? '회원 번호를 입력하면 그 판매자 정산만 보여요' : undefined
+                }
+              />
+            )}
             <DatePickerInput
               className={classes.date}
               label="완료일 시작"
@@ -142,7 +147,7 @@ export function AdminPayoutsView({
           </div>
         </div>
 
-        {!rangeError && (
+        {!rangeError && !needPayeeId && (
           <QueryState
             status={status === 'success' && payouts.length === 0 ? 'empty' : status}
             skeleton={
@@ -154,6 +159,7 @@ export function AdminPayoutsView({
             }
             loadingLabel="정산 목록을 불러오고 있어요"
             onRetry={onRetry}
+            errorMessage={errorMessage}
             empty={{
               icon: <Wallet />,
               title: '조건에 맞는 정산이 없어요',
@@ -180,7 +186,7 @@ export function AdminPayoutsView({
                         {formatDate(payout.createdAt, 'short')}
                       </Table.Td>
                       <Table.Td className="pd-num">{payout.payoutId}</Table.Td>
-                      <Table.Td className={classes.strong}>{payeeName(payout)}</Table.Td>
+                      <Table.Td className={classes.strong}>{payeeNameOf(payout)}</Table.Td>
                       <Table.Td className={`${classes.right} ${classes.strong}`}>
                         <PriceText amount={payout.amount} size="S" />
                       </Table.Td>
@@ -206,7 +212,7 @@ export function AdminPayoutsView({
                 <li key={payout.payoutId} className={classes.card}>
                   <div className={classes.cardHead}>
                     <div className={classes.cardTitle}>
-                      <strong>{payeeName(payout)}</strong>
+                      <strong>{payeeNameOf(payout)}</strong>
                       <span className={`pd-num ${classes.help}`}>
                         {formatDate(payout.createdAt, 'short')} · 정산번호 {payout.payoutId}
                       </span>

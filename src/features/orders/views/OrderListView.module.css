@@ -51,3 +51,26 @@
   display: flex;
   justify-content: center;
 }
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--mantine-spacing-sm) 0;
+}
+
+.name {
+  color: var(--pd-color-text);
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--mantine-spacing-sm);
+}

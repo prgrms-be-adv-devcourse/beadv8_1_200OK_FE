@@ -9,7 +9,7 @@ import classes from './SellerClaimsView.module.css'
 
 // S-07 취소 요청 처리 /seller/claims. 시안: seller/SellerCancels, SellerCancelsMobile
 // 탭: 처리 대기 · 처리 완료. 승인(확인 모달) → 바로 환불, 거절(사유 필수) → 구매자 주문 상세에 사유가 보인다.
-// TODO(api): 📝 GET /claims/seller, GET /claims/seller/{id}, 승인 .../approve, 거절 .../reject
+// TODO(api): ❌ 판매자 클레임(취소 요청) 목록·상세·승인·거절 API 없음 → fixtures를 화면 안에서만 바꾼다
 
 type MaybeAsync = unknown
 

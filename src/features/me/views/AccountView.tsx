@@ -32,7 +32,7 @@ import classes from './AccountView.module.css'
 
 // B-15 계정 관리 /me/account?tab=info|password|address|withdraw. 시안: b2c/Account, AccountMobile
 // 탈퇴 차단: 예치금 잔액 · 진행 중 요청 · 판매자 (C-13), 신청 뒤 7일 유예.
-// TODO(api): 📝 PATCH /members/me, POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal
+// TODO(api): ❌ PATCH /members/me, POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal 없음
 
 export type AccountTab = 'info' | 'password' | 'address' | 'withdraw'
 

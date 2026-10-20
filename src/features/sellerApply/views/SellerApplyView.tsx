@@ -1,37 +1,31 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import {
-  Alert,
-  Button,
-  Group,
-  NativeSelect,
-  Stack,
-  Text,
-  TextInput,
-  ThemeIcon,
-} from '@mantine/core'
+import { Alert, Button, Group, Stack, Text, TextInput, ThemeIcon } from '@mantine/core'
 import { CircleCheck, CircleX, Info } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
-import { BANKS } from '@/shared/lib/constants'
+import type { SellerApplyRequest } from '@/shared/api/types'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import { PageHeader, ProgressSteps } from '@/shared/ui'
 import { ApplicationSummary } from '../components/ApplicationSummary'
 import { type ApplyFormValues, applySchema, stepFields } from '../schemas'
-import type { SellerApplication, SellerApplyRequest } from '../types'
 import classes from './SellerApplyView.module.css'
 
-// S-01 판매자 등록 신청 /seller/apply. 시안: b2c/SellerApplyMobile(3단계), b2c/SellerApply(데스크톱 한 페이지)
-// 3단계: 상점 정보 → 정산 계좌 → 신청 내용 확인 (SCREENS.md). 승인은 관리자가 직접 한다(B-4).
-// 사업자등록번호 중복은 제출 뒤 서버 오류(409)로 그 칸에 붙이고 1단계로 돌아간다.
-// TODO(api): 📝 POST /sellers
+// S-01 판매자 등록 신청 /seller/apply. 시안: b2c/SellerApplyMobile(단계), b2c/SellerApply(데스크톱 한 페이지)
+// 2단계: 상점 정보 → 신청 내용 확인. 시안의 ‘정산 계좌’ 단계는 API(SellerApplyRequest)에 없어 뺐다(승인 뒤 지갑에서 등록, 준비 중).
+// 승인은 관리자가 직접 한다(B-4). 사업자등록번호 중복은 제출 뒤 서버 오류(409)로 그 칸에 붙이고 1단계로 돌아간다.
+// ✅ POST /sellers/me/applications
 
-const STEPS = ['상점 정보', '정산 계좌', '신청 내용 확인']
+const STEPS = ['상점 정보', '신청 내용 확인']
+const LAST = STEPS.length - 1
 
 export type ApplyFieldErrors = Partial<Record<keyof ApplyFormValues, string>>
 
+/** 신청을 마친 뒤 보여 줄 내용: 보낸 값 + 서버가 준 신청 번호 */
+export type CompletedApplication = SellerApplyRequest & { applicationId: number; appliedAt: string }
+
 export type SellerApplyViewProps = {
-  onSubmit: (request: SellerApplyRequest) => void
+  onSubmit: (values: ApplyFormValues) => void
   submitting?: boolean
   defaultValues?: Partial<ApplyFormValues>
   serverErrors?: ApplyFieldErrors
@@ -40,7 +34,7 @@ export type SellerApplyViewProps = {
   /** 반려 뒤 다시 신청할 때 반려 사유 */
   rejectReason?: string | null
   /** 신청을 마쳤으면 완료 화면 */
-  completed?: SellerApplication | null
+  completed?: CompletedApplication | null
   /** 처음 단계 (미리보기) */
   defaultStep?: number
 }
@@ -65,16 +59,26 @@ export function SellerApplyView({
     formState: { errors },
   } = useForm<ApplyFormValues>({
     resolver: zodResolver(applySchema),
-    defaultValues: { bankName: BANKS[0], ...defaultValues },
+    defaultValues: {
+      storeName: '',
+      representativeName: '',
+      businessNumber: '',
+      mailOrderNumber: '',
+      ...defaultValues,
+    },
   })
-  useServerFieldErrors(setError, serverErrors)
-
-  // 서버 오류가 붙은 칸이 있는 단계로 돌아간다
+  // 서버 오류가 붙은 칸이 있는 단계로 돌아간 뒤에(숨긴 칸은 focus가 안 된다) 칸에 붙이고 focus한다
+  const errorStep = useMemo(
+    () =>
+      serverErrors
+        ? stepFields.findIndex((fields) => fields.some((field) => serverErrors[field]))
+        : -1,
+    [serverErrors],
+  )
   useEffect(() => {
-    if (!serverErrors) return
-    const target = stepFields.findIndex((fields) => fields.some((field) => serverErrors[field]))
-    if (target >= 0) setStep(target)
-  }, [serverErrors])
+    if (errorStep >= 0) setStep(errorStep)
+  }, [errorStep])
+  useServerFieldErrors(setError, errorStep < 0 || step === errorStep ? serverErrors : undefined)
 
   const hasFieldErrors = Object.keys(errors).length > 0
 
@@ -127,8 +131,8 @@ export function SellerApplyView({
         </Alert>
       )}
       {(hasFieldErrors || errorMessage) && (
-        <Alert color="error" icon={<CircleX />} title="입력값을 확인해 주세요" role="alert">
-          {errorMessage ?? '신청이 아직 접수되지 않았어요.'}
+        <Alert color="error" icon={<CircleX />} title="신청이 아직 접수되지 않았어요" role="alert">
+          {errorMessage ?? '입력값을 확인해 주세요.'}
         </Alert>
       )}
 
@@ -172,38 +176,7 @@ export function SellerApplyView({
           </div>
         </section>
 
-        <section className={classes.card} hidden={step !== 1} aria-labelledby="apply-account">
-          <div>
-            <h2 id="apply-account" className={classes.cardTitle}>
-              정산 계좌
-            </h2>
-            <Text className={classes.help}>
-              구매확정된 판매 대금이 판매자 지갑을 거쳐 이 계좌로 정산돼요
-            </Text>
-          </div>
-          <div className={classes.grid}>
-            <NativeSelect
-              label="은행"
-              data={[...BANKS]}
-              error={errors.bankName?.message}
-              {...register('bankName')}
-            />
-            <TextInput
-              label="계좌번호"
-              inputMode="numeric"
-              classNames={{ input: 'pd-num' }}
-              error={errors.accountNumber?.message}
-              {...register('accountNumber')}
-            />
-            <TextInput
-              label="예금주"
-              error={errors.accountHolder?.message}
-              {...register('accountHolder')}
-            />
-          </div>
-        </section>
-
-        {step === 2 && (
+        {step === LAST && (
           <Stack gap="sm">
             <div>
               <h2 className={classes.cardTitle}>신청 내용 확인</h2>
@@ -212,11 +185,11 @@ export function SellerApplyView({
             <ApplicationSummary
               values={getValues()}
               onEditShop={() => setStep(0)}
-              onEditAccount={() => setStep(1)}
               headingLevel="h3"
             />
             <Alert color="info" icon={<Info />}>
-              관리자가 직접 확인한 뒤 승인해요. 상점 소개와 프로필 사진은 승인 후에 입력해요.
+              관리자가 직접 확인한 뒤 승인해요. 상점 소개와 프로필 사진은 승인 후에 입력해요. 정산
+              계좌는 승인 뒤 지갑에서 등록해요 (준비 중).
             </Alert>
           </Stack>
         )}
@@ -227,7 +200,7 @@ export function SellerApplyView({
               이전
             </Button>
           )}
-          {step < 2 ? (
+          {step < LAST ? (
             <Button size="lg" className={classes.primary} onClick={next}>
               다음
             </Button>

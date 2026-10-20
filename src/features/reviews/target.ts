@@ -1,30 +1,37 @@
-import type { ProductDetail, ProductReview } from '@/shared/api/types'
-import { myReviewTarget, reviewTarget } from './fixtures'
+import type { OrderDetail, ProductDetail, ProductReview } from '@/shared/api/types'
 import type { ReviewOrderItem, ReviewTarget } from './types'
 
-// 리뷰 화면 위 상품 요약을 만든다.
-// TODO(api): 주문 조회 API가 없어 /reviews/new?orderItemId= 의 주문 상품을 fixtures에서 찾는다(PLAN 2-5).
-//   실제 서버로 확인할 때는 ?orderId=&productId=&productOptionId= 로 덮어쓴다(서버가 아직 주문을 검증하지 않음).
-//   주문 상품 조회가 생기면 orderItemId로 조회해 orderId·productId·productOptionId·판매자·수량을 받는다.
-
-const fixtureItems: ReviewOrderItem[] = [reviewTarget, myReviewTarget]
+// 리뷰 화면 위 상품 요약을 만든다. 작성은 주문 상세(✅ GET /orders/{orderId})의 주문 상품에서, 수정은 리뷰 응답에서.
 
 const positiveInt = (value: string | null) => {
   const number = Number(value)
   return value && Number.isInteger(number) && number > 0 ? number : undefined
 }
 
-/** orderItemId가 없거나 잘못됐으면 null */
-export function orderItemFromQuery(params: URLSearchParams): ReviewOrderItem | null {
+/** /reviews/new?orderId=&orderItemId= 의 번호. 둘 중 하나라도 없거나 잘못됐으면 null */
+export function orderItemFromQuery(
+  params: URLSearchParams,
+): { orderId: number; orderItemId: number } | null {
+  const orderId = positiveInt(params.get('orderId'))
   const orderItemId = positiveInt(params.get('orderItemId'))
-  if (!orderItemId) return null
-  const base = fixtureItems.find((item) => item.orderItemId === orderItemId) ?? reviewTarget
+  return orderId && orderItemId ? { orderId, orderItemId } : null
+}
+
+/** 주문 상세에서 리뷰를 쓸 주문 상품을 찾는다. 이 주문에 없는 상품이면 null. 사진은 상품 상세(withProduct)로 채운다 */
+export function targetFromOrder(order: OrderDetail, orderItemId: number): ReviewOrderItem | null {
+  const item = order.sellerGroups
+    .flatMap((group) => group.items)
+    .find((candidate) => candidate.orderItemId === orderItemId)
+  if (!item) return null
   return {
-    ...base,
-    orderItemId,
-    orderId: positiveInt(params.get('orderId')) ?? base.orderId,
-    productId: positiveInt(params.get('productId')) ?? base.productId,
-    productOptionId: positiveInt(params.get('productOptionId')) ?? base.productOptionId,
+    productId: item.productId,
+    productOptionId: item.productOptionId,
+    orderId: order.orderId,
+    orderItemId: item.orderItemId,
+    productName: item.productName,
+    optionName: item.productOptionName,
+    quantity: item.quantity,
+    thumbnailUrl: '',
   }
 }
 

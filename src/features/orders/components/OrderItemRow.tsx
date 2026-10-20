@@ -3,14 +3,14 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { formatAmount } from '@/shared/lib/format'
 import { PriceText } from '@/shared/ui'
-import type { OrderItem } from '../types'
+import type { OrderItemRowItem } from '../types'
 import classes from './OrderItemRow.module.css'
 
 // 주문 상품 한 줄: 사진 64 + (위 줄: 배지·농가) 상품명 · 옵션·수량 · 금액 + 오른쪽 액션
 // 주문 목록·상세·배송 조회·문의·리뷰가 같이 쓴다.
 
 export type OrderItemRowProps = {
-  item: OrderItem
+  item: OrderItemRowItem
   /** 상품명 위 줄 (상태 배지, 농가 이름) */
   meta?: ReactNode
   /** 오른쪽 (버튼·안내) */
@@ -37,7 +37,7 @@ export function OrderItemRow({ item, meta, actions, priceBelow = false }: OrderI
           {item.productName}
         </Link>
         <span className={`pd-num ${classes.option}`}>
-          {item.optionName} · {formatAmount(item.quantity)}개
+          {item.productOptionName} · {formatAmount(item.quantity)}개
         </span>
         {priceBelow && price}
       </div>

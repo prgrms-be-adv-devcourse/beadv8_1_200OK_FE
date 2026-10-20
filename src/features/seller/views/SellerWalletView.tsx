@@ -46,7 +46,8 @@ import classes from './SellerWalletView.module.css'
 // 판매자 지갑·출금 /seller/wallet. 시안: seller/SellerWallet, SellerWalletMobile
 // 요약(지갑 잔액 · 출금 가능 금액 · 등록 계좌) → 출금 신청(최소 10,000원 · 전액 · 확인 모달) → 출금 내역 · 입출금 내역.
 // 출금 결과: 성공 · 잔액 부족 · 계좌 확인 필요. 계좌는 바로 바꾸지 않고 관리자에게 변경 요청(C-6). 출금 규칙은 C-7.
-// TODO(api): 📝 GET /wallets/seller, .../transactions, POST .../withdrawals, GET .../withdrawals/{id} · ❌ 계좌 변경
+// ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌 변경 API 없음 →
+//   featureDisabledReason으로 출금 신청·계좌 변경을 닫아 두고(이유 문구), 내역은 빈 상태로 보여 준다.
 
 export type WithdrawResult = { kind: 'success'; amount: number } | { kind: 'insufficient' }
 
@@ -66,10 +67,13 @@ export type SellerWalletViewProps = {
   onRequestAccountChange: (values: AccountChangeValues) => unknown
   requestingAccountChange?: boolean
   accountChangeError?: string | null
+  /** 출금·계좌 기능이 아직 없을 때 이유. 있으면 출금 신청과 계좌 변경 요청을 막고 이 문구를 보여 준다 */
+  featureDisabledReason?: string | null
   /** 미리보기용 */
   defaultAmount?: number
   defaultModal?: 'confirm' | 'account' | null
   onRetry?: () => void
+  errorMessage?: string
 }
 
 const txLook: Record<SellerWalletTxType, { label: string; tone: StatusTone; icon: ReactNode }> = {
@@ -145,9 +149,11 @@ export function SellerWalletView({
   onRequestAccountChange,
   requestingAccountChange = false,
   accountChangeError = null,
+  featureDisabledReason = null,
   defaultAmount = 0,
   defaultModal = null,
   onRetry,
+  errorMessage,
 }: SellerWalletViewProps) {
   const [amount, setAmount] = useState(defaultAmount)
   const [modal, setModal] = useState(defaultModal)
@@ -162,7 +168,8 @@ export function SellerWalletView({
   const accountText = `${account.bankName} ${account.accountNumberMasked} · ${account.holder}`
   const available = wallet.withdrawableAmount
   const held = wallet.balance - available
-  const formOff = wallet.accountNeedsCheck || available < MIN_WITHDRAWAL_AMOUNT
+  const featureOff = featureDisabledReason !== null
+  const formOff = featureOff || wallet.accountNeedsCheck || available < MIN_WITHDRAWAL_AMOUNT
 
   let amountError: string | null = null
   if (!formOff && amount > 0 && amount < MIN_WITHDRAWAL_AMOUNT) {
@@ -172,7 +179,8 @@ export function SellerWalletView({
   }
 
   let reason: string | null = null
-  if (wallet.accountNeedsCheck) reason = '등록 계좌를 확인한 뒤 출금할 수 있어요'
+  if (featureOff) reason = featureDisabledReason
+  else if (wallet.accountNeedsCheck) reason = '등록 계좌를 확인한 뒤 출금할 수 있어요'
   else if (available < MIN_WITHDRAWAL_AMOUNT) {
     reason =
       available === 0
@@ -214,6 +222,7 @@ export function SellerWalletView({
         skeleton={<WalletSkeleton />}
         loadingLabel="지갑 정보를 불러오고 있어요"
         onRetry={onRetry}
+        errorMessage={errorMessage}
       >
         <section className={classes.summary} aria-label="지갑 요약">
           <div className={classes.stat}>
@@ -232,7 +241,7 @@ export function SellerWalletView({
           </div>
           <div className={classes.stat}>
             <span className={classes.statLabel}>
-              등록 계좌
+              {featureOff ? '정산 받을 계좌 (등록 기능 준비 중)' : '등록 계좌'}
               {wallet.accountNeedsCheck && (
                 <Badge color="warning" leftSection={<CircleAlert aria-hidden="true" />}>
                   확인 필요
@@ -244,13 +253,17 @@ export function SellerWalletView({
                 </Badge>
               )}
             </span>
-            <strong className={`pd-num ${classes.account}`}>
-              {account.bankName} {account.accountNumberMasked}
-            </strong>
-            <span className={classes.help}>
-              예금주 {account.holder} · 판매자 신청 때 등록한 계좌
-            </span>
-            {wallet.accountChangePending ? (
+            {featureOff ? (
+              <span className={classes.help}>계좌 등록 기능은 준비 중이에요</span>
+            ) : (
+              <>
+                <strong className={`pd-num ${classes.account}`}>
+                  {account.bankName} {account.accountNumberMasked}
+                </strong>
+                <span className={classes.help}>예금주 {account.holder}</span>
+              </>
+            )}
+            {featureOff ? null : wallet.accountChangePending ? (
               <span className={classes.help}>
                 관리자가 확인하면 새 계좌로 바뀌어요. 그 전까지는 이 계좌로 출금돼요.
               </span>
@@ -363,7 +376,7 @@ export function SellerWalletView({
             <dl className={classes.ledger}>
               <div>
                 <dt>받는 계좌</dt>
-                <dd className="pd-num">{accountText}</dd>
+                <dd className="pd-num">{featureOff ? '계좌 등록 기능 준비 중' : accountText}</dd>
               </div>
               <div>
                 <dt>출금 수수료</dt>

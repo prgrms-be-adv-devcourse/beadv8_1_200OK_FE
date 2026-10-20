@@ -44,9 +44,7 @@ export function validatePhotos(
   const unit = video ? '개' : '장'
   let error: string | null = null
   if (typeOk.length < files.length) {
-    error = video
-      ? 'jpg·png·webp 사진이나 mp4 영상만 올릴 수 있어요'
-      : 'jpg·png·webp 사진만 올릴 수 있어요'
+    error = video ? 'jpg·png 사진이나 mp4 영상만 올릴 수 있어요' : 'jpg·png 사진만 올릴 수 있어요'
   } else if (sizeOk.length < typeOk.length) {
     const tooBigVideo = typeOk.some(
       (file) => isVideo(file) && file.size > (video?.maxSizeMb ?? 0) * 1024 * 1024,

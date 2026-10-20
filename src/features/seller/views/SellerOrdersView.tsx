@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { OrderItemStatus } from '@/shared/api/types'
 import { formatAmount, formatDate } from '@/shared/lib/format'
+import { carrierLabels } from '@/shared/lib/labels'
 import { PageHeader, PriceText, QueryState, StatusBadge } from '@/shared/ui'
 import {
   AddressRequestModal,
@@ -21,7 +22,8 @@ import classes from './SellerOrdersView.module.css'
 // S-06 주문 · 출고 (출고 지연 포함) /seller/orders. 시안: seller/SellerOrders, SellerOrdersMobile
 // 한 줄 = 한 주문에서 이 농가로 온 배송 묶음. 출고 대기에서 송장 등록 · 출고 지연 알리기 · 판매자 취소 · 배송지 변경 요청 승인.
 // 처리 안 한 취소 요청이 있으면 송장 등록·지연을 막는다(C-10).
-// TODO(api): 판매자 주문 목록 API 없음(❌). 송장·지연·판매자 취소는 📝
+// ✅ 출고(송장) POST /seller/shipments/{id}/dispatch · 배송지 변경 승인·거절 PATCH — 모달 쪽(components/OrderModals) 참고.
+// TODO(api): ❌ 판매자 주문 목록 API가 없어 shipmentId를 받을 곳이 없다 → fixtures. 지연·판매자 취소도 ❌
 
 type MaybeAsync = unknown
 type ModalType = 'invoice' | 'delay' | 'cancel' | 'address'
@@ -154,7 +156,7 @@ export function SellerOrdersView({
       <div className={classes.actions}>
         {order.trackingNumber && (
           <span className="pd-num">
-            {order.carrier} {order.trackingNumber}
+            {order.carrier ? carrierLabels[order.carrier] : ''} {order.trackingNumber}
           </span>
         )}
         {order.note && <span className={`pd-num ${classes.help}`}>{order.note}</span>}

@@ -1,18 +1,14 @@
-// 판매자 신청·심사 상태. 판매자 신청 현황(sellerApply)과 관리자 심사(admin)가 같이 쓴다. 배지 모양은 StatusBadge.
-// TODO(api): ❌ 신청 현황·신청 목록 API가 나오면 서버 값에 맞춘다.
+import { SellerApplicationStatus } from '@/shared/api/types'
 
-export enum SellerApplicationStatus {
-  APPLIED = 'APPLIED',
-  UNDER_REVIEW = 'UNDER_REVIEW',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  SUSPENDED = 'SUSPENDED',
-}
+// 판매자 신청·심사 상태(서버 enum). 판매자 신청 현황(sellerApply)과 관리자 심사(admin)가 같이 쓴다. 배지 모양은 StatusBadge.
+// 흐름: PENDING(심사 대기) → IN_REVIEW(심사 중) → APPROVED | REJECTED. PENDING에서 바로 REJECTED도 된다.
+// 거절된 회원은 바로 다시 신청할 수 있다. 권한 정지(suspension) API는 없다(❌).
+
+export { SellerApplicationStatus }
 
 export const sellerApplicationStatusLabels: Record<SellerApplicationStatus, string> = {
-  [SellerApplicationStatus.APPLIED]: '신청 완료',
-  [SellerApplicationStatus.UNDER_REVIEW]: '심사 중',
+  [SellerApplicationStatus.PENDING]: '심사 대기',
+  [SellerApplicationStatus.IN_REVIEW]: '심사 중',
   [SellerApplicationStatus.APPROVED]: '승인',
   [SellerApplicationStatus.REJECTED]: '반려',
-  [SellerApplicationStatus.SUSPENDED]: '권한 정지',
 }

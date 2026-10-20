@@ -1,30 +1,30 @@
 import { Alert, Button, ThemeIcon } from '@mantine/core'
 import { CircleCheck, Info } from 'lucide-react'
 import { Link } from 'react-router'
-import type { Checkout } from '@/shared/api/types'
-import { formatAmount } from '@/shared/lib/format'
+import type { OrderDetail } from '@/shared/api/types'
+import { formatAmount, formatDate } from '@/shared/lib/format'
 import { PriceText } from '@/shared/ui'
 import classes from './CheckoutCompleteView.module.css'
 
 // B-06 주문 완료 /checkout/complete?orderId=. 시안: b2c/Checkout (주문 완료 상태)
-// 주문 생성 응답은 orderId만 준다. 금액·상품은 결제 직전 주문서 값을 넘겨받는다(없으면 주문번호만).
-// TODO(api): 주문 시각·남은 예치금은 📝 주문 상세·지갑 API가 생기면 채운다.
+// 주문 생성 응답은 orderId만 준다. 금액·상품은 ✅ 주문 상세, 남은 예치금은 ✅ 잔액 API로 채운다(못 받았으면 주문번호만).
+// TODO(api): 농가 이름은 주문 상세에 없다(sellerId만).
 
 export type CheckoutCompleteViewProps = {
   orderId: number
-  checkout?: Checkout
+  order?: OrderDetail
   sellerNames?: Record<number, string>
   /** 결제 후 남은 예치금 */
-  balanceAfter?: number
+  balance?: number
 }
 
 export function CheckoutCompleteView({
   orderId,
-  checkout,
+  order,
   sellerNames = {},
-  balanceAfter,
+  balance,
 }: CheckoutCompleteViewProps) {
-  const shippingGroups = checkout?.sellerGroups.length ?? 0
+  const shippingGroups = order?.sellerGroups.length ?? 0
 
   return (
     <div className={classes.root}>
@@ -33,31 +33,34 @@ export function CheckoutCompleteView({
           <CircleCheck size={32} />
         </ThemeIcon>
         <h1 className={classes.title}>주문이 완료됐어요</h1>
-        <p className={`pd-num ${classes.meta}`}>주문번호 {orderId}</p>
+        <p className={`pd-num ${classes.meta}`}>
+          주문번호 {orderId}
+          {order ? ` · ${formatDate(order.orderedAt, 'dateTime')}` : ''}
+        </p>
       </div>
 
-      {checkout && (
+      {order && (
         <section className={classes.card} aria-label="결제 내역">
           <dl className={classes.rows}>
             <div className={classes.strong}>
               <dt>결제 금액</dt>
               <dd>
-                <PriceText amount={checkout.totalAmount} size="M" />
+                <PriceText amount={order.totalAmount} size="M" />
               </dd>
             </div>
-            {balanceAfter !== undefined && (
+            {balance !== undefined && (
               <div>
                 <dt>남은 예치금</dt>
                 <dd>
-                  <PriceText amount={balanceAfter} size="S" />
+                  <PriceText amount={balance} size="S" />
                 </dd>
               </div>
             )}
           </dl>
           <ul className={classes.items}>
-            {checkout.sellerGroups.flatMap((group) =>
+            {order.sellerGroups.flatMap((group) =>
               group.items.map((item) => (
-                <li key={item.productOptionId}>
+                <li key={item.orderItemId}>
                   <span>
                     {sellerNames[group.sellerId] ? `${sellerNames[group.sellerId]} · ` : ''}
                     {item.productName} {item.productOptionName} × {formatAmount(item.quantity)}
@@ -68,8 +71,14 @@ export function CheckoutCompleteView({
             )}
             <li>
               <span className="pd-num">배송비 (농가 {shippingGroups}곳)</span>
-              <PriceText amount={checkout.totalShippingFee} size="S" />
+              <PriceText amount={order.totalShippingFee} size="S" />
             </li>
+            {order.totalRemoteAreaFee > 0 && (
+              <li>
+                <span>도서산간 추가 운임</span>
+                <PriceText amount={order.totalRemoteAreaFee} size="S" />
+              </li>
+            )}
           </ul>
         </section>
       )}

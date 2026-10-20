@@ -13,15 +13,16 @@ import {
 } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import type { CachedProduct } from '../productCache'
+import { mySellerProducts } from '../fixtures'
+import { type CachedProduct, PATCH_VERSION_STEP } from '../productCache'
 import { SellerProductFormPage, SellerProductsPage } from './SellerWorkPages'
 
 const S3 = 'https://bucket.s3.ap-northeast-2.amazonaws.com/product'
 const MEMBER_ID = 7
+const CACHE_KEY = `paldo.seller.products.${MEMBER_ID}`
 
-/** 상품 관리 목록(데스크톱 표)에 보이는 상품명 링크 */
-const listedProduct = async (name: string) =>
-  within(await screen.findByRole('table', { name: '상품 목록' })).getByRole('link', { name })
+/** 상품 관리 목록(데스크톱 표) */
+const table = () => screen.findByRole('table', { name: '상품 목록' })
 
 const problem = (status: number, detail: string, extra: object = {}) =>
   HttpResponse.json(
@@ -42,6 +43,14 @@ const saved: CachedProduct = {
   options: [{ name: '2kg', salePrice: 23900, listPrice: 27000, totalStock: 11 }],
   updatedAt: '2026-10-18T10:00:00',
 }
+
+/** 101은 fixtures에서 이 기기에서 등록한 상품 */
+const cached101: CachedProduct = { ...saved, productId: 101, name: '청송 꿀사과 부사' }
+
+const storedVersion = (productId: number) =>
+  (JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as CachedProduct[]).find(
+    (p) => p.productId === productId,
+  )?.version
 
 function renderAt(path: string) {
   render(
@@ -68,8 +77,119 @@ beforeEach(() => {
 
 afterEach(() => clearAccessToken())
 
+describe('상품 관리 목록', () => {
+  it('내 상품 목록 API(Bearer)로 그리고, 탭은 status로 다시 받는다', async () => {
+    const requests: { params: URLSearchParams; auth: string | null }[] = []
+    server.use(
+      http.get('*/api/v1/sellers/me/products', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        requests.push({ params, auth: request.headers.get('Authorization') })
+        const status = params.get('status')
+        const list = mySellerProducts.filter((p) => !status || p.status === status)
+        return HttpResponse.json({
+          content: list,
+          page: 0,
+          size: 20,
+          totalElements: list.length,
+          totalPages: 1,
+        })
+      }),
+    )
+    const user = renderAt('/seller/products')
+
+    const rows = within(await table())
+      .getAllByRole('row')
+      .slice(1)
+    expect(rows).toHaveLength(4)
+    expect(rows[0]).toHaveTextContent('청송 꿀사과 부사')
+    expect(rows[0]).toHaveTextContent('12,900')
+    expect(rows[0]).toHaveTextContent(`판매 가능 수량이 5개 이하예요`)
+    expect(rows[3]).toHaveTextContent('품절')
+    expect(requests[0]?.auth).toMatch(/^Bearer /)
+    expect(requests[0]?.params.get('page')).toBe('0')
+    expect(requests[0]?.params.get('size')).toBe('20')
+    expect(requests[0]?.params.has('status')).toBe(false)
+
+    await user.click(screen.getByRole('tab', { name: /판매 중/ }))
+    await waitFor(() => expect(requests.at(-1)?.params.get('status')).toBe(ProductStatus.ON_SALE))
+    expect(
+      within(await table())
+        .getAllByRole('row')
+        .slice(1),
+    ).toHaveLength(2)
+  })
+
+  it('판매 중지 → PATCH status PAUSED → 목록을 다시 받고, 캐시 version을 올린다', async () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify([cached101]))
+    const patches: unknown[] = []
+    let listCount = 0
+    server.use(
+      http.get('*/api/v1/sellers/me/products', () => {
+        listCount += 1
+        return HttpResponse.json({
+          content: mySellerProducts,
+          page: 0,
+          size: 20,
+          totalElements: 4,
+          totalPages: 1,
+        })
+      }),
+      http.patch('*/api/v1/products/101/status', async ({ request }) => {
+        patches.push(await request.json())
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const user = renderAt('/seller/products')
+    const t = await table()
+    const before = listCount
+
+    await user.click(within(t).getByRole('button', { name: '청송 꿀사과 부사 판매 중지' }))
+
+    await waitFor(() => expect(patches).toEqual([{ status: ProductStatus.PAUSED }]))
+    expect(await screen.findByText('판매 상태를 바꿨어요')).toBeInTheDocument()
+    await waitFor(() => expect(listCount).toBeGreaterThan(before))
+    expect(storedVersion(101)).toBe(cached101.version + PATCH_VERSION_STEP)
+  })
+
+  it('노출 스위치를 끄면 PATCH visibility HIDDEN, 실패하면 서버 detail을 보여 준다', async () => {
+    const patches: unknown[] = []
+    server.use(
+      http.patch('*/api/v1/products/101/visibility', async ({ request }) => {
+        patches.push(await request.json())
+        return new HttpResponse(null, { status: 204 })
+      }),
+      http.patch('*/api/v1/products/106/visibility', () =>
+        problem(409, '다른 요청이 먼저 상품을 바꿨습니다.'),
+      ),
+    )
+    const user = renderAt('/seller/products')
+    const t = await table()
+
+    await user.click(within(t).getByRole('switch', { name: '청송 꿀사과 부사 노출' }))
+    await waitFor(() => expect(patches).toEqual([{ visibility: ProductVisibility.HIDDEN }]))
+    expect(await screen.findByText('숨겼어요')).toBeInTheDocument()
+
+    await user.click(within(t).getByRole('switch', { name: '청송 사과즙 100% (30포) 노출' }))
+    expect(await screen.findByText('다른 요청이 먼저 상품을 바꿨습니다.')).toBeInTheDocument()
+  })
+
+  it('이 기기에 없는 상품은 수정을 막고 이유를 보여 준다', async () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify([cached101]))
+    renderAt('/seller/products')
+    const t = await table()
+    const editable = within(t).getByRole('link', { name: '청송 꿀사과 부사 수정' })
+    expect(editable).toHaveAttribute('href', '/seller/products/101/edit')
+    const blocked = within(t).getByRole('button', { name: '청송 사과즙 100% (30포) 수정' })
+    expect(blocked).toBeDisabled()
+    expect(blocked).toHaveAccessibleDescription(
+      '이 기기에서 등록하거나 고친 상품만 수정할 수 있어요',
+    )
+    expect(within(t).queryByRole('link', { name: '청송 홍로 사과' })).not.toBeInTheDocument()
+  })
+})
+
 describe('상품 등록', () => {
-  it('사진을 올리는 동안은 막고, 다 올리면 서버 url만 보내 등록한 상품을 목록에 남긴다', async () => {
+  it('사진을 올리는 동안은 막고, 다 올리면 서버 url만 보내 등록한 상품을 캐시에 남긴다', async () => {
     let finishUpload: () => void = () => {}
     let body: unknown
     let headers: Headers | undefined
@@ -106,15 +226,16 @@ describe('상품 등록', () => {
     await waitFor(() => expect(submit).toBeEnabled())
     await user.click(submit)
 
-    expect(await listedProduct('청송 꿀사과')).toBeInTheDocument()
+    await table()
     expect(body).toMatchObject({
       name: '청송 꿀사과',
       descriptionHtml: '<p>아삭한 사과예요</p>',
       imageUrls: [`${S3}/a.jpg`],
       options: [{ name: '2kg', salePrice: 23900, totalStock: 11 }],
     })
-    expect(headers?.get('X-Member-Id')).toBe(String(MEMBER_ID))
-    expect(headers?.get('X-Member-Role')).toBe(MemberRole.SELLER)
+    expect(headers?.get('Authorization')).toMatch(/^Bearer /)
+    expect(headers?.get('X-Member-Id')).toBeNull()
+    expect(storedVersion(77)).toBe(0)
   })
 
   it('422 errors[].path(options[0].salePrice)를 그 칸에 붙이고 focus한다', async () => {
@@ -157,7 +278,7 @@ describe('상품 등록', () => {
 
 describe('상품 수정', () => {
   beforeEach(() => {
-    localStorage.setItem(`paldo.seller.products.${MEMBER_ID}`, JSON.stringify([saved]))
+    localStorage.setItem(CACHE_KEY, JSON.stringify([saved]))
   })
 
   it('저장해 둔 version으로 보내고, 409면 충돌 안내 → 최신 내용 불러오기로 폼을 다시 그린다', async () => {
@@ -228,20 +349,22 @@ describe('상품 수정', () => {
 
     await user.click(await screen.findByRole('button', { name: '저장' }))
 
-    expect(await listedProduct('청송 꿀사과')).toBeInTheDocument()
+    await table()
     expect(bodies[0]).toMatchObject({
       version: 2,
       visibility: ProductVisibility.VISIBLE,
       options: [{ id: 501, name: '2kg', salePrice: 23900, totalStock: 11 }],
     })
-    const [stored] = JSON.parse(localStorage.getItem(`paldo.seller.products.${MEMBER_ID}`) ?? '[]')
-    expect(stored).toMatchObject({ productId: 31, version: 3 })
+    expect(storedVersion(31)).toBe(3)
   })
 
-  it('이 기기에 없는 상품은 고칠 수 없다고 안내한다', async () => {
+  it('이 기기에 없는 상품은 고칠 수 없다고 안내한다 (version 0으로 보내지 않는다)', async () => {
     localStorage.clear()
-    server.use(http.get('*/api/v1/products/99', () => problem(404, '상품을 찾을 수 없습니다.')))
     renderAt('/seller/products/99/edit')
-    expect(await screen.findByText('이 상품 정보를 불러오지 못했어요')).toBeInTheDocument()
+    expect(await screen.findByText('이 상품은 여기서 수정할 수 없어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '상품 관리' })).toHaveAttribute(
+      'href',
+      '/seller/products',
+    )
   })
 })

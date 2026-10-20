@@ -5,6 +5,10 @@
 }
 
 .orderMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
   margin: calc(var(--mantine-spacing-xs) * -1) 0 0;
   color: var(--pd-color-text-secondary);
   font-size: var(--mantine-font-size-sm);
@@ -67,33 +71,6 @@ aside.card {
   gap: var(--mantine-spacing-xs);
 }
 
-.notice,
-.invoice,
-.support {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--mantine-spacing-xs);
-  font-size: var(--mantine-font-size-sm);
-}
-
-.notice {
-  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
-  border-radius: var(--mantine-radius-sm);
-  background-color: var(--pd-color-info-bg);
-  color: var(--pd-color-info);
-}
-
-.invoice {
-  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
-  border-radius: var(--mantine-radius-sm);
-  background-color: var(--pd-color-surface-subtle);
-}
-
-.support {
-  color: var(--pd-color-text-secondary);
-}
-
 .groupFoot {
   display: flex;
   flex-wrap: wrap;
@@ -102,6 +79,12 @@ aside.card {
   gap: var(--mantine-spacing-sm);
   padding-top: var(--mantine-spacing-sm);
   border-top: 1px solid var(--pd-color-divider);
+}
+
+.fees {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .row {

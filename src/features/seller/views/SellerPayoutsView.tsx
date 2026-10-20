@@ -2,7 +2,7 @@ import { Alert, Button, Pagination, Skeleton, Stack, Table, VisuallyHidden } fro
 import { Info, Wallet } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import type { PayoutSummary } from '@/shared/api/types'
-import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
+import { PAYOUT_FEE_RATE, PAYOUT_HOLD_DAYS, PAYOUT_RUN_HOUR } from '@/shared/lib/constants'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import {
   PageHeader,
@@ -17,12 +17,12 @@ import classes from './SellerPayoutsView.module.css'
 // S-08 정산 내역 /seller/payouts, 상세 /seller/payouts/:payoutId (목록 위 모달). 시안: seller/SellerSettlements, SellerSettlementsMobile
 // 요약(정산 예정 금액 · 이번 달 정산 완료 · 다음 정산 예정일) + 목록. 데스크톱 표, 모바일 카드.
 // 목록 API는 정산 금액만 준다 → 판매 대금·수수료·배송비 나눔은 상세에서 보여 준다.
-// ✅ GET /payouts?payeeId&from&to, GET /payouts/{id}, GET /payouts/{id}/items (임시 헤더)
+// ✅ GET /payouts/me?from&to, /payouts/me/{id}, /payouts/me/{id}/items, 정산 예정 = /payouts/me/candidates?unsettledOnly=true 합계
 
 export type SellerPayoutsViewProps = {
   status: 'pending' | 'error' | 'success'
   payouts: PayoutSummary[]
-  /** TODO(api): 정산 예정 금액·다음 정산 예정일 API 없음(❌). null이면 칸을 비워 둔다 */
+  /** 정산 예정(미정산 후보 합계)·다음 정산일. 아직 못 받았거나 실패하면 null → 칸을 비워 둔다 */
   outlook: PayoutOutlook | null
   /** 이번 달(month가 속한 달) 정산 완료 합계 */
   monthSummary: { month: string; amount: number; count: number }
@@ -53,7 +53,11 @@ function Summary({
         <strong className={classes.statValue}>
           {outlook ? <PriceText amount={outlook.expectedAmount} size="L" /> : blank}
         </strong>
-        <span className={classes.help}>구매확정됐고 아직 정산 전인 금액</span>
+        <span className={`pd-num ${classes.help}`}>
+          구매확정됐고 아직 정산 전인 금액
+          {outlook &&
+            ` · ${formatAmount(outlook.pendingCount)}건${outlook.truncated ? ' 이상' : ''}`}
+        </span>
       </div>
       <div className={classes.stat}>
         <span className={classes.statLabel}>이번 달 정산 완료</span>
@@ -69,7 +73,9 @@ function Summary({
         <strong className={`pd-num ${classes.statValue}`}>
           {outlook ? formatDate(outlook.nextPayoutDate, 'monthDayWeek') : blank}
         </strong>
-        <span className={classes.help}>새벽 2시에 판매자 지갑으로 입금돼요</span>
+        <span className={`pd-num ${classes.help}`}>
+          구매확정 {PAYOUT_HOLD_DAYS}일 뒤부터 매일 새벽 {PAYOUT_RUN_HOUR}시에 정산돼요
+        </span>
       </div>
     </section>
   )
@@ -101,8 +107,10 @@ export function SellerPayoutsView({
       <Summary outlook={outlook} monthSummary={monthSummary} />
 
       <Alert color="info" icon={<Info />}>
-        구매확정된 상품만 정산돼요. 매일 새벽 2시에 정산돼요. 정산 금액 = 판매 대금 − 판매 수수료(
-        {PAYOUT_FEE_RATE}%) + 배송비
+        <span className="pd-num">
+          구매확정된 상품만 정산돼요. 매일 새벽 {PAYOUT_RUN_HOUR}시에 정산돼요. 정산 금액 = 판매
+          대금 − 판매 수수료({PAYOUT_FEE_RATE}%) + 배송비
+        </span>
       </Alert>
 
       <section aria-labelledby="payout-list-title" className={classes.list}>
@@ -124,8 +132,7 @@ export function SellerPayoutsView({
           empty={{
             icon: <Wallet />,
             title: '아직 정산된 내역이 없어요',
-            description:
-              '구매확정된 상품은 매일 새벽 2시에 정산돼요. 정산되면 이곳에 날짜별로 모여요.',
+            description: `구매확정된 상품은 매일 새벽 ${PAYOUT_RUN_HOUR}시에 정산돼요. 정산되면 이곳에 날짜별로 모여요.`,
             action: { label: '주문·출고로 가기', to: '/seller/orders' },
           }}
         >

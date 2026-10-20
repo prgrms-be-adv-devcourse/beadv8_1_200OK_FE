@@ -1,22 +1,18 @@
-import { Button, Chip, Group, Skeleton, Stack } from '@mantine/core'
+import { Button, Skeleton, Stack } from '@mantine/core'
 import { ReceiptText } from 'lucide-react'
 import { Link } from 'react-router'
-import { formatDate } from '@/shared/lib/format'
-import { PageHeader, PriceText, QueryState, StatusBadge } from '@/shared/ui'
-import { OrderItemRow } from '../components/OrderItemRow'
-import { orderFilterLabels } from '../labels'
-import { OrderFilter, type OrderSummary } from '../types'
+import type { OrderSummary } from '@/shared/api/types'
+import { formatAmount, formatDate } from '@/shared/lib/format'
+import { OrderStatusBadge, PageHeader, PriceText, QueryState } from '@/shared/ui'
 import classes from './OrderListView.module.css'
 
 // B-07 주문 내역. 시안: b2c/Orders, OrdersMobile
-// 필터(전체 · 진행 중 · 구매확정 · 취소)는 주문 상품 상태로 고른다. 목록은 ‘더 보기’로 이어 불러온다.
-// TODO(api): 📝 GET /orders (필터 파라미터 미정 — 서버가 안 받으면 불러온 목록에서 거른다)
+// ✅ GET /orders는 최신순 페이지 조회만 있고 상태 필터가 없다. 목록 한 줄은 대표 상품명 + 종류 수 · 주문 상태 · 총 금액이라
+// 시안의 상태 필터 칩과 상품별 줄은 뺐다(상품별 상태는 주문 상세에서 본다). 목록은 ‘더 보기’로 이어 불러온다.
 
 export type OrderListViewProps = {
   status: 'pending' | 'error' | 'success'
   orders: OrderSummary[]
-  filter: OrderFilter
-  onFilterChange: (filter: OrderFilter) => void
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
@@ -28,17 +24,22 @@ function ListSkeleton() {
   return (
     <Stack gap="md">
       {[1, 2, 3].map((n) => (
-        <Skeleton key={n} h={180} radius="md" />
+        <Skeleton key={n} h={150} radius="md" />
       ))}
     </Stack>
   )
 }
 
+/** 대표 상품명 + 다른 종류 수: `청송 꿀사과 부사 외 1건` */
+export function orderTitle(order: OrderSummary): string {
+  return order.itemCount > 1
+    ? `${order.representativeProductName} 외 ${formatAmount(order.itemCount - 1)}건`
+    : order.representativeProductName
+}
+
 export function OrderListView({
   status,
   orders,
-  filter,
-  onFilterChange,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -49,16 +50,6 @@ export function OrderListView({
     <div className={classes.root}>
       <PageHeader title="주문 내역" backTo="/me" />
 
-      <Chip.Group value={filter} onChange={(value) => onFilterChange(value as OrderFilter)}>
-        <Group gap="xs" role="radiogroup" aria-label="주문 상태로 보기">
-          {Object.values(OrderFilter).map((value) => (
-            <Chip key={value} value={value}>
-              {orderFilterLabels[value]}
-            </Chip>
-          ))}
-        </Group>
-      </Chip.Group>
-
       <QueryState
         status={status === 'success' && orders.length === 0 ? 'empty' : status}
         skeleton={<ListSkeleton />}
@@ -67,10 +58,7 @@ export function OrderListView({
         onRetry={onRetry}
         empty={{
           icon: <ReceiptText />,
-          title:
-            filter === OrderFilter.ALL
-              ? '아직 주문한 상품이 없어요'
-              : `${orderFilterLabels[filter]} 주문이 없어요`,
+          title: '아직 주문한 상품이 없어요',
           description: '산지에서 막 수확한 상품을 둘러보세요.',
           action: { label: '장보러 가기', to: '/products' },
         }}
@@ -87,34 +75,34 @@ export function OrderListView({
                   <h2 id={`order-${order.orderId}`} className={`pd-num ${classes.date}`}>
                     {formatDate(order.orderedAt, 'monthDay')} 주문
                   </h2>
-                  <span className={`pd-num ${classes.help}`}>주문번호 {order.orderNumber}</span>
+                  <span className={`pd-num ${classes.help}`}>주문번호 {order.orderId}</span>
                 </div>
-                <Button
-                  component={Link}
-                  to={`/orders/${order.orderId}`}
-                  variant="subtle"
-                  aria-label={`${order.orderNumber} 주문 상세`}
-                >
-                  주문 상세
-                </Button>
+                <OrderStatusBadge status={order.status} />
               </div>
-              {order.items.map((item) => (
-                <OrderItemRow
-                  key={item.orderItemId}
-                  item={item}
-                  meta={
-                    <>
-                      <StatusBadge status={item.status} />
-                      {item.sellerName}
-                    </>
-                  }
-                />
-              ))}
+              <div className={classes.body}>
+                <Link to={`/orders/${order.orderId}`} className={classes.name}>
+                  {orderTitle(order)}
+                </Link>
+                <span className={`pd-num ${classes.help}`}>
+                  상품 {formatAmount(order.itemCount)}종
+                </span>
+              </div>
               <div className={classes.total}>
                 <span>
                   총 결제 금액 <span className={classes.help}>(배송비 포함)</span>
                 </span>
                 <PriceText amount={order.totalAmount} size="M" />
+              </div>
+              <div className={classes.foot}>
+                <Button
+                  component={Link}
+                  to={`/orders/${order.orderId}`}
+                  variant="outline"
+                  size="sm"
+                  aria-label={`주문번호 ${order.orderId} 주문 상세`}
+                >
+                  주문 상세
+                </Button>
               </div>
             </article>
           ))}

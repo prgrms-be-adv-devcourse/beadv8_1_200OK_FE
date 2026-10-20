@@ -74,5 +74,5 @@ export function draftAddressOf(
 export const clearCheckoutDraft = () => useCheckoutDraftStore.getState().clear()
 
 // 세션이 끝나면(로그아웃·만료·서버가 토큰 거절) 지운다. 이 모듈은 라우트가 주문서 화면을 불러올 때 함께 읽힌다.
-// 새로고침으로 메모리 토큰만 사라진 경우는 세션 종료가 아니라 남는다(PG 복귀 뒤 다시 로그인해도 배송지가 있다)
+// 세션 종료(로그아웃·만료)가 아니면 남는다. 토큰도 sessionStorage에 있어 PG 복귀 뒤에도 보통 로그인이 유지된다
 onSessionEnd(clearCheckoutDraft)

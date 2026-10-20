@@ -1,20 +1,7 @@
-import { CancelReason, InquiryType, OrderFilter } from './types'
+import { InquiryType } from './types'
 
-// orders 화면 표시명. 서버 enum이 정해지면 shared/lib/labels.ts로 옮긴다(TODO(api)).
-
-export const orderFilterLabels: Record<OrderFilter, string> = {
-  [OrderFilter.ALL]: '전체',
-  [OrderFilter.IN_PROGRESS]: '진행 중',
-  [OrderFilter.CONFIRMED]: '구매확정',
-  [OrderFilter.CANCELED]: '취소',
-}
-
-export const cancelReasonLabels: Record<CancelReason, string> = {
-  [CancelReason.ORDER_MISTAKE]: '주문 실수 (옵션·수량)',
-  [CancelReason.ADDRESS_PROBLEM]: '배송지 문제',
-  [CancelReason.REORDER]: '다른 상품으로 다시 주문',
-  [CancelReason.ETC]: '기타 (직접 입력)',
-}
+// orders 화면 표시명. 주문·주문 상품 상태 표시명은 shared/lib/labels.ts(orderStatusLabels·orderItemStatusLabels).
+// TODO(api): ❌ 문의 API가 없어 문의 유형은 화면 임시값이다.
 
 export const inquiryTypeLabels: Record<InquiryType, string> = {
   [InquiryType.DAMAGED]: '상품 파손·변질',

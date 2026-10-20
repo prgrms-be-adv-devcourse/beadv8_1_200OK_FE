@@ -6,15 +6,19 @@ import {
   type ProductDetail,
   ProductStatus,
   ProductVisibility,
+  type SellerProductSummary,
 } from '@/shared/api/types'
 import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { QueryState, showToast, useMediaUploads } from '@/shared/ui'
 import { cancelClaims, sellerOrders } from '../fixtures'
-import type { CachedProduct } from '../productCache'
+import { type CachedProduct, readCachedProducts } from '../productCache'
 import { toProductFormFailure } from '../productErrors'
 import { htmlToText, type ProductFormValues } from '../productSchema'
 import {
+  PRODUCT_PAGE_SIZE,
+  useChangeProductStatus,
+  useChangeProductVisibility,
   useCreateProduct,
   useDeleteProduct,
   useMemberId,
@@ -34,47 +38,104 @@ import { SellerProductFormView } from '../views/SellerProductFormView'
 import { type ProductTab, SellerProductsView } from '../views/SellerProductsView'
 
 // S-04 ~ S-07 판매자 상품·주문·취소 라우트 (판매자 센터 청크).
-// 상품: ✅ 등록 POST /products, 수정 PUT /products/{id}(version, 판매 상태·노출 포함), 삭제 DELETE, 사진 POST /media/PRODUCT.
-// TODO(api): 본인 상품 목록·상세(version · 재고 · 노출) API 없음(❌) → 이 브라우저에서 등록·수정한 상품을
-//   productCache(localStorage)에 두고 목록·수정 처음 값으로 쓴다. 공개 상품은 구매자 상세로 옵션 id를 맞춘다.
-// TODO(api): 판매자 주문 목록 API 없음(❌), 송장·지연·클레임은 📝 → 주문·취소는 fixtures를 화면 안에서만 바꾼다.
+// 상품: ✅ 목록 GET /sellers/me/products, 등록 POST /products, 수정 PUT /products/{id}(version, 판매 상태·노출 포함),
+//   상태·노출 PATCH /products/{id}/status · /visibility(목록에서 바로), 삭제 DELETE, 사진 POST /media/PRODUCT.
+// TODO(api): 판매자 상품 상세(version · 옵션 재고 · 옵션 id) API 없음(❌) → 이 브라우저에서 등록·수정한 상품을
+//   productCache(localStorage)에 두고 수정 처음 값으로 쓴다. 캐시에 없는 상품은 수정을 막는다. 공개 상품은 구매자 상세로 옵션 id를 맞춘다.
+// TODO(api): 판매자 주문 목록 API 없음(❌), 지연·판매자 취소·클레임은 ❌ → 주문·취소는 fixtures를 화면 안에서만 바꾼다.
 
 const productTabs: ProductTab[] = ['ALL', ...Object.values(ProductStatus)]
 
-function toRow(product: CachedProduct): SellerProductRow {
+function toRow(summary: SellerProductSummary, cachedIds: Set<number>): SellerProductRow {
   return {
-    productId: product.productId,
-    name: product.name,
-    thumbnailUrl: product.imageUrls[0] ?? '',
-    optionCount: product.options.length,
-    totalStock: product.options.reduce((sum, o) => sum + o.totalStock, 0),
-    status: product.status,
-    visibility: product.visibility,
-    updatedAt: product.updatedAt,
-    hasLowStock: product.options.some((o) => o.totalStock <= LOW_STOCK_THRESHOLD),
+    productId: summary.productId,
+    name: summary.name,
+    thumbnailUrl: summary.thumbnailUrl,
+    minSalePrice: summary.minSalePrice,
+    availableStock: summary.availableStock,
+    soldOut: summary.soldOut,
+    status: summary.status,
+    visibility: summary.visibility,
+    updatedAt: summary.updatedAt,
+    hasLowStock: summary.availableStock <= LOW_STOCK_THRESHOLD,
+    editable: cachedIds.has(summary.productId),
   }
 }
 
 export function SellerProductsPage() {
   const [params, setParams] = useSearchParams()
   const tab = productTabs.find((value) => value === params.get('status')) ?? 'ALL'
-  const query = useMyProducts(useMemberId())
-  const rows = useMemo(() => (query.data ?? []).map(toRow), [query.data])
-  const counts = Object.fromEntries(
-    productTabs.map((value) => [
-      value,
-      value === 'ALL' ? rows.length : rows.filter((p) => p.status === value).length,
-    ]),
-  ) as Record<ProductTab, number>
+  const page = Math.max(1, Number(params.get('page')) || 1)
+  const memberId = useMemberId()
+  const query = useMyProducts({
+    status: tab === 'ALL' ? undefined : tab,
+    page: page - 1,
+    size: PRODUCT_PAGE_SIZE,
+  })
+  const changeStatus = useChangeProductStatus(memberId)
+  const changeVisibility = useChangeProductVisibility(memberId)
+
+  // 캐시(이 기기에서 등록·수정한 상품)는 서버 목록이 새로 올 때마다 다시 읽어 수정 가능 여부를 맞춘다
+  const rows = useMemo(() => {
+    const cachedIds = new Set(
+      memberId === null ? [] : readCachedProducts(memberId).map((p) => p.productId),
+    )
+    return (query.data?.content ?? []).map((summary) => toRow(summary, cachedIds))
+  }, [memberId, query.data])
+  const busyProductId = changeStatus.isPending
+    ? (changeStatus.variables?.productId ?? null)
+    : changeVisibility.isPending
+      ? (changeVisibility.variables?.productId ?? null)
+      : null
+
+  const setSearch = (next: { status?: ProductTab; page?: number }) => {
+    const search: Record<string, string> = {}
+    const status = next.status ?? tab
+    if (status !== 'ALL') search.status = status
+    if (next.page !== undefined && next.page > 1) search.page = String(next.page)
+    setParams(search, { replace: true })
+  }
 
   return (
     <SellerProductsView
-      status={query.status}
-      products={tab === 'ALL' ? rows : rows.filter((p) => p.status === tab)}
+      status={query.isError ? 'error' : query.isPending ? 'pending' : 'success'}
+      products={rows}
       tab={tab}
-      onTabChange={(next) => setParams(next === 'ALL' ? {} : { status: next }, { replace: true })}
-      counts={counts}
+      onTabChange={(next) => setSearch({ status: next, page: 1 })}
+      counts={{ [tab]: query.data?.totalElements }}
+      page={page}
+      totalPages={query.data?.totalPages ?? 1}
+      onPageChange={(next) => setSearch({ page: next })}
+      busyProductId={busyProductId}
+      onChangeStatus={(productId, status) =>
+        changeStatus.mutate(
+          { productId, status },
+          {
+            onSuccess: () => showToast({ message: '판매 상태를 바꿨어요' }),
+            onError: (error) =>
+              showToast({
+                message: error.status === 404 ? '이미 삭제된 상품이에요' : error.detail,
+              }),
+          },
+        )
+      }
+      onChangeVisibility={(productId, visibility) =>
+        changeVisibility.mutate(
+          { productId, visibility },
+          {
+            onSuccess: () =>
+              showToast({
+                message: visibility === ProductVisibility.VISIBLE ? '노출을 바꿨어요' : '숨겼어요',
+              }),
+            onError: (error) =>
+              showToast({
+                message: error.status === 404 ? '이미 삭제된 상품이에요' : error.detail,
+              }),
+          },
+        )
+      }
       onRetry={() => void query.refetch()}
+      errorMessage={query.error?.detail}
     />
   )
 }
@@ -151,28 +212,34 @@ function toFormValues(cached: CachedProduct, detail: ProductDetail | undefined):
 
 function ProductEdit({ productId }: { productId: number }) {
   const memberId = useMemberId()
-  const products = useMyProducts(memberId)
   const detail = useSellerProductDetail(productId)
   // 최신 내용 불러오기: 상세를 다시 받고 폼을 새로 그린다
   const [loadCount, setLoadCount] = useState(0)
-  const cached = products.data?.find((p) => p.productId === productId)
+  // TODO(api): 판매자 상품 상세 API가 없어 version·재고는 productCache(이 기기에서 등록·수정한 상품)에서만 받는다.
+  //   없는 상품에 version 0으로 보내면 409가 나고 되돌릴 길이 없어 수정 자체를 막는다.
+  const cached = useMemo(
+    () =>
+      memberId === null
+        ? undefined
+        : readCachedProducts(memberId).find((p) => p.productId === productId),
+    [memberId, productId],
+  )
 
-  if (Number.isInteger(productId) && (products.isPending || detail.isPending)) {
-    return <QueryState status="pending" loadingLabel="상품 정보를 불러오고 있어요" />
-  }
   if (!cached) {
-    // TODO(api): 판매자 상품 상세 API가 없어 이 브라우저에서 등록·수정한 상품만 고칠 수 있다
     return (
       <QueryState
         status="notFound"
         notFound={{
-          title: '이 상품 정보를 불러오지 못했어요',
+          title: '이 상품은 여기서 수정할 수 없어요',
           description:
-            '지금은 이 기기에서 등록한 상품만 고칠 수 있어요. 상품 관리에서 다시 골라 주세요.',
+            '지금은 이 기기에서 등록하거나 고친 상품만 수정할 수 있어요. 판매 상태와 노출은 상품 관리 목록에서 바로 바꿀 수 있어요.',
           action: { label: '상품 관리', to: '/seller/products' },
         }}
       />
     )
+  }
+  if (detail.isPending) {
+    return <QueryState status="pending" loadingLabel="상품 정보를 불러오고 있어요" />
   }
   return (
     <ProductEditForm
@@ -265,7 +332,7 @@ const tabOf = (row: SellerOrderRow): SellerOrderTab => {
     case OrderItemStatus.DELIVERED:
     case OrderItemStatus.PURCHASE_CONFIRMED:
       return SellerOrderTab.DELIVERED
-    case OrderItemStatus.CANCELED:
+    case OrderItemStatus.REFUNDED:
       return SellerOrderTab.CANCELED
     default:
       return SellerOrderTab.WAITING
@@ -302,7 +369,7 @@ export function SellerOrdersPage() {
         showToast({ message: '출고 지연을 알렸어요' })
       }}
       onSellerCancel={(id) => {
-        update(id, { status: OrderItemStatus.CANCELED, note: '판매자 취소 · 환불 완료' })
+        update(id, { status: OrderItemStatus.REFUNDED, note: '판매자 취소 · 환불 완료' })
         showToast({ message: '주문을 취소하고 환불했어요' })
       }}
       onAnswerAddressChange={(id, approve) => {

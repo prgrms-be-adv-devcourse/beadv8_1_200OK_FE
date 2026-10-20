@@ -34,7 +34,7 @@ import classes from './SupportView.module.css'
 
 // 고객센터 문의 (배송 후 문제) /orders/:orderId/inquiry. 시안: b2c/Support, SupportMobile
 // 유형 4종 · 내용 10~1,000자 · 사진 3장(장당 10MB). 답변은 영업일 1~2일, 이메일 알림(C-8).
-// TODO(api): 📝 POST /shipments/{shipmentId}/claims(추정), 문의 내역 조회 API 없음
+// TODO(api): ❌ 문의 접수·내역 API 없음 (주문 상세에서 링크하지 않는 fixtures 전용 화면)
 
 export type InquiryDone = {
   inquiryNumber: string
@@ -264,7 +264,7 @@ export function SupportView({
                         label="문의할 상품"
                         data={targets.map((t) => ({
                           value: String(t.orderItemId),
-                          label: `${t.productName} · ${t.optionName}`,
+                          label: `${t.productName} · ${t.productOptionName}`,
                         }))}
                         value={String(field.value ?? '')}
                         onChange={(event) => field.onChange(Number(event.currentTarget.value))}

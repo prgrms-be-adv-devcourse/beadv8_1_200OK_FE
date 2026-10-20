@@ -1,5 +1,5 @@
 import { Button, Modal, Skeleton, Stack, Text } from '@mantine/core'
-import { type PayoutDetail, PayoutEventType, type PayoutItem } from '@/shared/api/types'
+import { type PayoutDetailCommon, PayoutEventType, type PayoutItemCommon } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import { payoutEventTypeLabels } from '@/shared/lib/labels'
@@ -11,16 +11,22 @@ import classes from './PayoutDetailModal.module.css'
 // 시안: seller/SellerSettlements ‘정산 상세’, admin/AdminSettlements ‘정산 상세’
 // 항목을 주문 상품별로 묶어 판매 대금 · 수수료 · 배송비 · 정산 조정을 보여 준다.
 // 플랫폼 수수료 몫(system)은 수수료가 들어오는 돈이라 차감 부호 없이 그린다.
-// TODO(api): 항목에 주문번호·상품명이 없어 ‘주문 상품 번호’만 보여 준다. SALE_FEE 부호는 상관없이 차감으로 그린다.
+// 판매자(/payouts/me)·관리자(/admin/payouts) 응답 모양이 조금 달라(systemPayoutId, adjustment 상세) 구조적 타입으로 받는다.
+// TODO(api): 항목에 상품명이 없어 주문 번호·주문 상품 번호만 보여 준다. SALE_FEE 부호는 상관없이 차감으로 그린다.
+
+/** 판매자·관리자 상세 공통 + 관리자만 주는 수수료 정산번호 */
+export type PayoutDetailLike = PayoutDetailCommon & { systemPayoutId?: number | null }
+/** 항목. 조정 정보는 사유만 있으면 된다 */
+export type PayoutItemLike = PayoutItemCommon & { adjustment: { reason: string } | null }
 
 export type PayoutDetailModalProps = {
   opened: boolean
   onClose: () => void
   /** notFound: 없는 정산이거나 내 정산이 아님 */
   status: 'pending' | 'error' | 'notFound' | 'success'
-  payout: PayoutDetail | null
+  payout: PayoutDetailLike | null
   /** 지금까지 불러온 항목 (페이지 단위로 더 불러온다) */
-  items: PayoutItem[]
+  items: PayoutItemLike[]
   hasMoreItems?: boolean
   loadingMoreItems?: boolean
   onLoadMoreItems?: () => void
@@ -30,7 +36,7 @@ export type PayoutDetailModalProps = {
 }
 
 // 시안 표기: 판매 대금 23,900 · 수수료 −717 · 배송비 +3,000. 조정은 받은 부호 그대로
-function ItemAmount({ item, system }: { item: PayoutItem; system: boolean }) {
+function ItemAmount({ item, system }: { item: PayoutItemLike; system: boolean }) {
   if (item.eventType === PayoutEventType.SALE_FEE && !item.adjustment && !system) {
     return <PriceText amount={item.amount} size="S" deduct />
   }
@@ -44,7 +50,7 @@ function ItemAmount({ item, system }: { item: PayoutItem; system: boolean }) {
   )
 }
 
-const itemLabel = (item: PayoutItem) => {
+const itemLabel = (item: PayoutItemLike) => {
   if (item.adjustment) return '정산 조정'
   if (item.eventType === PayoutEventType.SALE_FEE) {
     return `${payoutEventTypeLabels[item.eventType]} ${PAYOUT_FEE_RATE}%`
@@ -52,16 +58,21 @@ const itemLabel = (item: PayoutItem) => {
   return payoutEventTypeLabels[item.eventType]
 }
 
-/** 주문 상품 번호별로 묶는다 (처음 나온 순서) */
-function groupByOrderItem(items: PayoutItem[]) {
-  const groups = new Map<number, PayoutItem[]>()
+/** 주문 상품 번호별로 묶는다 (처음 나온 순서). 배송비 항목(orderItemId null)은 주문 단위로 묶는다 */
+function groupByOrderItem(items: PayoutItemLike[]) {
+  const groups = new Map<string, { title: string; lines: PayoutItemLike[] }>()
   for (const item of items) {
-    groups.set(item.orderItemId, [...(groups.get(item.orderItemId) ?? []), item])
+    const key = item.orderItemId === null ? `order-${item.orderId}` : `item-${item.orderItemId}`
+    const title =
+      item.orderItemId === null ? `주문 ${item.orderId} 배송비` : `주문 상품 ${item.orderItemId}`
+    const group = groups.get(key) ?? { title, lines: [] }
+    group.lines.push(item)
+    groups.set(key, group)
   }
   return [...groups.entries()]
 }
 
-function Period({ payout }: { payout: PayoutDetail }) {
+function Period({ payout }: { payout: PayoutDetailLike }) {
   const to = formatDate(payout.periodTo, 'dateTime')
   return (
     <span className="pd-num">
@@ -135,7 +146,7 @@ export function PayoutDetailModal({
                   <dd className="pd-num">{formatAmount(orderItemCount)}건</dd>
                 </div>
               )}
-              {payout.systemPayoutId !== null && (
+              {payout.systemPayoutId != null && (
                 <div>
                   <dt>수수료 정산번호</dt>
                   <dd className="pd-num">{payout.systemPayoutId}</dd>
@@ -144,9 +155,9 @@ export function PayoutDetailModal({
             </dl>
 
             <ul className={classes.groups} aria-label="주문 상품별 정산 항목">
-              {groupByOrderItem(items).map(([orderItemId, lines]) => (
-                <li key={orderItemId} className={classes.group}>
-                  <span className={`pd-num ${classes.groupTitle}`}>주문 상품 {orderItemId}</span>
+              {groupByOrderItem(items).map(([key, { title, lines }]) => (
+                <li key={key} className={classes.group}>
+                  <span className={`pd-num ${classes.groupTitle}`}>{title}</span>
                   <dl className={classes.lines}>
                     {lines.map((item) => (
                       <div key={item.payoutItemId}>

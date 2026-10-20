@@ -23,8 +23,10 @@ export {
 } from './PageHeader/PageHeader'
 export { PasswordRules } from './PasswordRules/PasswordRules'
 export {
+  type PayoutDetailLike,
   PayoutDetailModal,
   type PayoutDetailModalProps,
+  type PayoutItemLike,
 } from './PayoutDetailModal/PayoutDetailModal'
 export {
   type PhotoItem,
@@ -50,6 +52,8 @@ export { RatingStars, type RatingStarsProps } from './RatingStars/RatingStars'
 export {
   type BadgeStatus,
   getStatusBadgeSpec,
+  OrderStatusBadge,
+  type OrderStatusBadgeProps,
   ProductStatusBadge,
   type ProductStatusBadgeProps,
   StatusBadge,

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-// 판매자 신청 검증. TODO(api): 📝 POST /sellers 제약이 나오면 맞춘다(지금은 시안·일반 형식 기준).
+// 판매자 신청 검증. ✅ SellerApplyRequest(POST /sellers/me/applications) 규칙:
+// 상호·대표자 50자, 사업자등록번호 숫자 10자리(하이픈 없이 보내도 000-00-00000으로 저장), 통신판매업 신고번호 50자.
 
 export const applySchema = z.object({
   storeName: z
@@ -16,21 +17,25 @@ export const applySchema = z.object({
   businessNumber: z
     .string()
     .trim()
-    .regex(/^\d{3}-\d{2}-\d{5}$/, '사업자등록번호 10자리를 000-00-00000 형식으로 입력해 주세요'),
-  mailOrderNumber: z.string().trim().min(1, '통신판매업 신고번호를 입력해 주세요'),
-  bankName: z.string().min(1, '은행을 골라 주세요'),
-  accountNumber: z
+    .regex(/^(\d{10}|\d{3}-\d{2}-\d{5})$/, '사업자등록번호 10자리를 입력해 주세요 (000-00-00000)'),
+  mailOrderNumber: z
     .string()
     .trim()
-    .regex(/^[\d-]{8,20}$/, '계좌번호는 숫자와 -로 8~20자 입력해 주세요'),
-  accountHolder: z.string().trim().min(1, '예금주를 입력해 주세요'),
+    .min(1, '통신판매업 신고번호를 입력해 주세요')
+    .max(50, '통신판매업 신고번호는 50자 이하로 입력해 주세요'),
 })
 
 export type ApplyFormValues = z.infer<typeof applySchema>
 
-/** 단계별 칸 (다음 단계로 갈 때 이 칸만 검사한다) */
+/** 단계별 칸 (다음 단계로 갈 때 이 칸만 검사한다). 정산 계좌 단계는 API에 없어 뺐다(승인 뒤 지갑에서 등록, 준비 중) */
 export const stepFields: (keyof ApplyFormValues)[][] = [
   ['storeName', 'representativeName', 'businessNumber', 'mailOrderNumber'],
-  ['bankName', 'accountNumber', 'accountHolder'],
   [],
 ]
+
+/** 숫자만 뽑아 000-00-00000 으로 맞춘다(서버가 저장하는 모양과 같게) */
+export function formatBusinessNumber(value: string): string {
+  const digits = value.replace(/\D/g, '')
+  if (digits.length !== 10) return value.trim()
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
+}

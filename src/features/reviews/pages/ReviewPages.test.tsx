@@ -1,10 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HttpResponse, http } from 'msw'
+import { HttpResponse, http, type RequestHandler } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
-import type { ProductReview } from '@/shared/api/types'
-import { ReviewMediaType } from '@/shared/api/types'
+import type { OrderDetail, ProductReview } from '@/shared/api/types'
+import { OrderItemStatus, OrderStatus, ReviewMediaType } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { ReviewEditPage, ReviewNewPage } from './ReviewPages'
 
@@ -33,14 +33,58 @@ const savedReview: ProductReview = {
   updatedAt: '2026-10-12T10:20:00',
 }
 
+// 주문 100의 주문 상품 345(구매확정) → 상품 1 · 옵션 11
+const orderItem = {
+  orderItemId: 345,
+  productId: 1,
+  productOptionId: 11,
+  productName: '청송 꿀사과',
+  productOptionName: '3kg',
+  unitPrice: 32000,
+  quantity: 1,
+  itemAmount: 32000,
+  status: OrderItemStatus.PURCHASE_CONFIRMED,
+}
+
+const order: OrderDetail = {
+  orderId: 100,
+  status: OrderStatus.PAID,
+  orderedAt: '2026-10-01T10:00:00',
+  recipientName: '이서연',
+  recipientPhone: '010-2468-1357',
+  zipCode: '04524',
+  address: '서울 중구 세종대로 110',
+  addressDetail: '',
+  sellerGroups: [{ sellerId: 7, shippingFee: 0, remoteAreaFee: 0, items: [orderItem] }],
+  totalProductAmount: 32000,
+  totalShippingFee: 0,
+  totalRemoteAreaFee: 0,
+  totalAmount: 32000,
+}
+
+const orderOf = (status: OrderItemStatus) => ({
+  ...order,
+  sellerGroups: order.sellerGroups.map((g) => ({
+    ...g,
+    items: g.items.map((i) => ({ ...i, status })),
+  })),
+})
+
+const NEW_PATH = '/reviews/new?orderId=100&orderItemId=345'
+
 const problem = (status: number, detail: string, extra: object = {}) =>
   HttpResponse.json(
     { type: 'about:blank', title: 'Error', status, detail, ...extra },
     { status, headers: { 'Content-Type': 'application/problem+json' } },
   )
 
-function renderAt(path: string) {
-  server.use(http.get('*/api/v1/products/:productId', () => HttpResponse.json(product)))
+/** 상품 1·주문 100 기본 응답. 덮을 응답은 overrides로(먼저 등록한 것이 뒤에 오므로 여기서 앞에 둔다) */
+function renderAt(path: string, ...overrides: RequestHandler[]) {
+  server.use(
+    ...overrides,
+    http.get('*/api/v1/products/:productId', () => HttpResponse.json(product)),
+    http.get('*/api/v1/orders/100', () => HttpResponse.json(order)),
+  )
   const router = createMemoryRouter(
     [
       { path: '/reviews/new', element: <ReviewNewPage /> },
@@ -77,9 +121,7 @@ describe('ReviewNewPage', () => {
         return HttpResponse.json({ reviewId: 9 }, { status: 201 })
       }),
     )
-    const { user } = renderAt(
-      '/reviews/new?orderItemId=345&orderId=100&productId=1&productOptionId=11',
-    )
+    const { user } = renderAt(NEW_PATH)
 
     expect(await screen.findByText('청송 꿀사과')).toBeInTheDocument()
     await fillReview(user)
@@ -116,7 +158,7 @@ describe('ReviewNewPage', () => {
         }),
       ),
     )
-    const { user } = renderAt('/reviews/new?orderItemId=345')
+    const { user } = renderAt(NEW_PATH)
     await fillReview(user)
     await user.click(screen.getByRole('button', { name: '등록하기' }))
 
@@ -132,7 +174,7 @@ describe('ReviewNewPage', () => {
         }),
       ),
     )
-    const { user } = renderAt('/reviews/new?orderItemId=345')
+    const { user } = renderAt(NEW_PATH)
     await fillReview(user)
     await user.click(screen.getByRole('button', { name: '등록하기' }))
 
@@ -147,32 +189,59 @@ describe('ReviewNewPage', () => {
     [401, '로그인이 필요합니다.'],
   ])('%i 응답은 폼 위에 서버 문구로 보여 준다', async (status, detail) => {
     server.use(http.post('*/api/v1/products/:productId/reviews', () => problem(status, detail)))
-    const { user } = renderAt('/reviews/new?orderItemId=345')
+    const { user } = renderAt(NEW_PATH)
     await fillReview(user)
     await user.click(screen.getByRole('button', { name: '등록하기' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(detail)
   })
 
-  // TODO(api): 로컬 서버에 리뷰 API가 없는 동안의 응답. API가 나오면 지운다
-  it.each([
-    ['No static resource api/v1/products/1/reviews.', '지금은 리뷰를 등록할 수 없어요'],
-    ['옵션을 찾을 수 없습니다.', '옵션을 찾을 수 없습니다.'],
-  ])('404 "%s"는 "%s"로 보여 준다', async (detail, shown) => {
-    server.use(http.post('*/api/v1/products/:productId/reviews', () => problem(404, detail)))
-    const { user } = renderAt('/reviews/new?orderItemId=345')
-    await fillReview(user)
-    await user.click(screen.getByRole('button', { name: '등록하기' }))
+  it.each(['/reviews/new', '/reviews/new?orderItemId=345', '/reviews/new?orderId=100'])(
+    '%s 처럼 주문·주문 상품 번호가 없으면 주문 내역으로 안내한다',
+    async (path) => {
+      renderAt(path)
+      expect(await screen.findByText('리뷰를 쓸 주문 상품을 찾지 못했어요')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '주문 내역' })).toHaveAttribute('href', '/orders')
+    },
+  )
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(shown)
-    expect(alert).not.toHaveTextContent('No static resource')
+  it('주문이 없으면(404) 주문 내역으로 안내한다', async () => {
+    renderAt(
+      NEW_PATH,
+      http.get('*/api/v1/orders/100', () => problem(404, '주문을 찾을 수 없습니다.')),
+    )
+    expect(await screen.findByText('주문을 찾지 못했어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '주문 내역' })).toHaveAttribute('href', '/orders')
   })
 
-  it('orderItemId가 없으면 주문 내역으로 안내한다', async () => {
-    renderAt('/reviews/new')
-    expect(await screen.findByText('리뷰를 쓸 주문 상품을 찾지 못했어요')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '주문 내역' })).toHaveAttribute('href', '/orders')
+  it('주문에 없는 주문 상품이면 알려 준다', async () => {
+    renderAt('/reviews/new?orderId=100&orderItemId=999')
+    expect(
+      await screen.findByText('이 주문에서 리뷰를 쓸 상품을 찾지 못했어요'),
+    ).toBeInTheDocument()
+  })
+
+  it('구매확정 전 상품이면 리뷰를 쓸 수 없다고 알려 준다', async () => {
+    renderAt(
+      NEW_PATH,
+      http.get('*/api/v1/orders/100', () => HttpResponse.json(orderOf(OrderItemStatus.DELIVERED))),
+    )
+    expect(await screen.findByText('구매확정한 상품만 리뷰를 쓸 수 있어요')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '등록하기' })).not.toBeInTheDocument()
+  })
+
+  it('주문을 불러오지 못하면 서버 문구와 다시 시도를 보여 준다', async () => {
+    let fail = true
+    const { user } = renderAt(
+      NEW_PATH,
+      http.get('*/api/v1/orders/100', () =>
+        fail ? problem(500, '주문을 불러오지 못했습니다.') : HttpResponse.json(order),
+      ),
+    )
+    expect(await screen.findByText('주문을 불러오지 못했습니다.')).toBeInTheDocument()
+    fail = false
+    await user.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByText('청송 꿀사과')).toBeInTheDocument()
   })
 })
 
@@ -249,18 +318,6 @@ describe('ReviewEditPage', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       '리뷰를 수정하거나 삭제할 권한이 없습니다.',
     )
-  })
-
-  it('내 리뷰 API가 없으면(404 No static resource) 불러올 수 없다고 안내한다', async () => {
-    server.use(
-      http.get('*/api/v1/reviews/me', () => problem(404, 'No static resource api/v1/reviews/me.')),
-    )
-    renderAt('/reviews/5/edit')
-    // 알림(토스트) 영역도 role=alert라 문구로 찾는다
-    expect(
-      await screen.findByText('지금은 리뷰를 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요'),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/No static resource/)).not.toBeInTheDocument()
   })
 
   it('내 리뷰 목록에 없으면 찾지 못했다고 알려 준다', async () => {

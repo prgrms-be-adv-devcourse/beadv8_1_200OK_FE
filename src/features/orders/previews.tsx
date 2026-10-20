@@ -7,12 +7,12 @@ import {
   inquiryTargets,
   orderDetails,
   orderSummaries,
-  orderWithStatus,
+  orderWithItemStatus,
   preparingTracking,
+  remoteAreaOrder,
   shippingTracking,
 } from './fixtures'
-import { filterOrders } from './pages/OrderListPage'
-import { InquiryType, OrderFilter } from './types'
+import { InquiryType } from './types'
 import { OrderDetailView, type OrderDetailViewProps } from './views/OrderDetailView'
 import { OrderListView, type OrderListViewProps } from './views/OrderListView'
 import { ShipmentView, type ShipmentViewProps } from './views/ShipmentView'
@@ -23,30 +23,14 @@ import { SupportView, type SupportViewProps } from './views/SupportView'
 const noop = () => {}
 
 const list = (props: Partial<OrderListViewProps> = {}) => (
-  <OrderListView
-    status="success"
-    orders={orderSummaries}
-    filter={OrderFilter.ALL}
-    onFilterChange={noop}
-    onRetry={noop}
-    {...props}
-  />
+  <OrderListView status="success" orders={orderSummaries} onRetry={noop} {...props} />
 )
 
 const detail = (props: Partial<OrderDetailViewProps> = {}) => (
-  <OrderDetailView
-    status="success"
-    order={orderDetails[0]}
-    onCancelRequest={noop}
-    onWithdraw={noop}
-    onConfirm={noop}
-    onAddressChangeRequest={noop}
-    onRetry={noop}
-    {...props}
-  />
+  <OrderDetailView status="success" order={orderDetails[0]} onRetry={noop} {...props} />
 )
 
-const status = (value: OrderItemStatus) => () => detail({ order: orderWithStatus(value) })
+const status = (value: OrderItemStatus) => () => detail({ order: orderWithItemStatus(value) })
 
 const shipment = (props: Partial<ShipmentViewProps> = {}) => (
   <ShipmentView status="success" shipment={shippingTracking} onRetry={noop} {...props} />
@@ -76,20 +60,6 @@ export const orderPreviews: ScreenPreview[] = [
     tabBar: true,
     states: [
       { id: 'all', label: '전체', render: () => list() },
-      {
-        id: 'in-progress',
-        label: '진행 중',
-        render: () =>
-          list({
-            filter: OrderFilter.IN_PROGRESS,
-            orders: filterOrders(orderSummaries, OrderFilter.IN_PROGRESS),
-          }),
-      },
-      {
-        id: 'canceled-empty',
-        label: '필터 결과 없음',
-        render: () => list({ filter: OrderFilter.CANCELED, orders: [] }),
-      },
       { id: 'empty', label: '빈 목록', render: () => list({ orders: [] }) },
       { id: 'more', label: '더 보기', render: () => list({ hasMore: true, onLoadMore: noop }) },
       { id: 'loading', label: '로딩', render: () => list({ status: 'pending' }) },
@@ -98,64 +68,36 @@ export const orderPreviews: ScreenPreview[] = [
   },
   {
     id: 'order-detail',
-    title: 'B-08 · B-09 주문 상세 · 취소 · 구매확정',
+    title: 'B-08 주문 상세',
     layout: 'public',
     path: '/orders/184',
     states: [
       { id: 'preparing', label: '상품 준비 중', render: status(OrderItemStatus.PREPARING) },
       {
-        id: 'cancel-modal',
-        label: '취소 요청 모달',
-        render: () => detail({ defaultModal: { type: 'cancel', shipmentId: 1 } }),
-      },
-      {
-        id: 'already-shipped',
-        label: '이미 출고됨 오류',
-        render: () =>
-          detail({
-            defaultModal: { type: 'cancel', shipmentId: 1 },
-            cancelError: {
-              title: '이미 출고된 상품은 취소할 수 없어요',
-              message: '판매자가 방금 송장을 등록했어요.',
-            },
-          }),
-      },
-      {
         id: 'cancel-requested',
-        label: '취소 요청됨 (철회)',
+        label: '취소 요청됨',
         render: status(OrderItemStatus.CANCEL_REQUESTED),
-      },
-      {
-        id: 'address-requested',
-        label: '배송지 변경 요청 중',
-        render: () =>
-          detail({
-            order: orderWithStatus(OrderItemStatus.PREPARING, { addressChangeRequested: true }),
-          }),
-      },
-      {
-        id: 'address-modal',
-        label: '배송지 변경 요청 모달',
-        render: () => detail({ defaultModal: { type: 'address', shipmentId: 1 } }),
       },
       { id: 'shipping', label: '배송 중', render: status(OrderItemStatus.SHIPPING) },
       { id: 'delivered', label: '배송 완료', render: status(OrderItemStatus.DELIVERED) },
-      {
-        id: 'confirm-modal',
-        label: '구매확정 모달',
-        render: () =>
-          detail({
-            order: orderWithStatus(OrderItemStatus.DELIVERED),
-            defaultModal: { type: 'confirm', shipmentId: 1 },
-          }),
-      },
       {
         id: 'confirmed',
         label: '구매확정 (리뷰 쓰기)',
         render: status(OrderItemStatus.PURCHASE_CONFIRMED),
       },
-      { id: 'canceled', label: '취소 완료', render: status(OrderItemStatus.CANCELED) },
+      { id: 'refunded', label: '환불 완료', render: status(OrderItemStatus.REFUNDED) },
+      {
+        id: 'payment-failed',
+        label: '결제 실패',
+        render: status(OrderItemStatus.PAYMENT_FAILED),
+      },
+      {
+        id: 'remote-area',
+        label: '도서산간 추가 운임',
+        render: () => detail({ order: remoteAreaOrder }),
+      },
       { id: 'loading', label: '로딩', render: () => detail({ status: 'pending' }) },
+      { id: 'error', label: '불러오기 실패', render: () => detail({ status: 'error' }) },
       {
         id: 'not-found',
         label: '없는 주문',
@@ -165,7 +107,7 @@ export const orderPreviews: ScreenPreview[] = [
   },
   {
     id: 'shipment',
-    title: '배송 조회',
+    title: '배송 조회 (❌ API 없음)',
     layout: 'public',
     path: '/orders/151/shipments/3',
     states: [
@@ -187,7 +129,7 @@ export const orderPreviews: ScreenPreview[] = [
   },
   {
     id: 'support',
-    title: '고객센터 문의',
+    title: '고객센터 문의 (❌ API 없음)',
     layout: 'public',
     path: '/orders/93/inquiry',
     states: [

@@ -17,7 +17,7 @@ import classes from './LikesView.module.css'
 
 // B-14 관심 상품 · 팔로우한 농가 /me/likes?tab=products|farms. 시안: b2c/Likes, LikesMobile
 // 상품: 일시 품절·판매 종료는 카드 막으로 흐리게, 하트를 누르면 관심에서 뺀다. 농가: 판매 중지 배지, 팔로잉 취소.
-// TODO(api): 📝 wishlist 조회·삭제, followings 조회·언팔로우
+// TODO(api): ❌ wishlist 조회·삭제, followings 조회·언팔로우 API 없음
 
 export type LikesTab = 'products' | 'farms'
 

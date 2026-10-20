@@ -1,6 +1,6 @@
 import type { SellerProfile } from '@/shared/api/types'
 
-// TODO(api): 내 정보·배송지·관심·팔로우·탈퇴는 Notion 계획(📝)만 있다. 필드는 시안 기준 임시.
+// TODO(api): ❌ 내 정보·배송지·관심·팔로우·탈퇴 API 없음. 필드는 시안 기준 임시.
 
 /** 📝 GET /members/me */
 export type MyProfile = {
@@ -10,11 +10,11 @@ export type MyProfile = {
   nickname: string
 }
 
-/** 판매자 상태 (마이 홈 배지·판매자 안내 카드) */
+/** 판매자 상태 (마이 홈 배지·판매자 안내 카드). 상점 이름은 판매자 프로필을 등록했을 때만 안다 */
 export type MySellerStatus =
   | { status: 'none' }
   | { status: 'applying' }
-  | { status: 'approved'; storeName: string }
+  | { status: 'approved'; storeName?: string }
 
 /** 주문 현황 숫자 */
 export type OrderCounts = { preparing: number; shipping: number; delivered: number }

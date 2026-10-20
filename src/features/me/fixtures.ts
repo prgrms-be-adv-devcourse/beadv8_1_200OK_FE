@@ -8,7 +8,7 @@ import type { ProductCardItem } from '@/shared/ui'
 import type { FollowedFarm, MyProfile, OrderCounts } from './types'
 
 // 1단계 샘플 데이터. 다른 feature fixtures와 같은 값이다(DECISIONS.md E):
-// 잔액 128,000원(wallet), 주문 현황(orders: 준비 중 2 · 배송 중 1 · 배송 완료 1), 배송지(checkout·orders)
+// 잔액 128,000원(wallet, 미리보기·테스트 전용 — 화면은 GET /wallets/me/balance), 주문 현황(orders: 준비 중 2 · 배송 중 1 · 배송 완료 1), 배송지(checkout·orders)
 
 export const myProfile: MyProfile = {
   loginId: 'seoyeon88',

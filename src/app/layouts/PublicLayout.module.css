@@ -162,7 +162,17 @@
 }
 
 .root[data-tab-bar] .main {
-  padding-bottom: calc(var(--pd-tabbar-height) + env(safe-area-inset-bottom) + 2rem);
+  padding-bottom: 2rem;
+}
+
+/* ─── 푸터: 모바일은 하단 탭 화면에만, 탭 높이만큼 아래 여백 ─── */
+
+.root:not([data-tab-bar]) .footer {
+  display: none;
+}
+
+.root[data-tab-bar] .footer {
+  padding-bottom: calc(var(--pd-tabbar-height) + env(safe-area-inset-bottom));
 }
 
 /* ─── 모바일 하단 탭 56 + safe area ─── */
@@ -211,5 +221,13 @@
 
   .root[data-tab-bar] .main {
     padding-bottom: 5rem;
+  }
+
+  .root:not([data-tab-bar]) .footer {
+    display: block;
+  }
+
+  .root[data-tab-bar] .footer {
+    padding-bottom: 0;
   }
 }

@@ -12,6 +12,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
 import { registerAuthHandlers } from '@/features/auth'
+import { restoreAccessToken } from '@/shared/api/authToken'
 import { queryClient } from '@/shared/api/queryClient'
 import { AppProviders } from './providers/AppProviders'
 import { router } from './router'
@@ -22,6 +23,9 @@ registerAuthHandlers({
   navigate: (to, options) => router.navigate(to, options),
   getCurrentPath: () => `${router.state.location.pathname}${router.state.location.search}`,
 })
+
+// 새로고침 전 로그인(sessionStorage)을 첫 화면 전에 되살린다. 가드가 로그인 화면으로 보내지 않게
+restoreAccessToken()
 
 const container = document.getElementById('root')
 if (!container) {

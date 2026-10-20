@@ -13,12 +13,12 @@ import {
   clearCheckoutDraft,
   useCheckoutDraftStore,
 } from '../draftStore'
-import { checkoutSample, SAMPLE_ORDER_ID } from '../fixtures'
+import { checkoutSample, remoteQuoteSample, SAMPLE_ORDER_ID } from '../fixtures'
 import { CheckoutCompletePage } from './CheckoutCompletePage'
 import { CheckoutPage } from './CheckoutPage'
 
-// 주문서 → 주문 생성. 2026-10-18 로컬 서버에 주문 API가 없어 성공·409 흐름은 여기서 확인한다.
-// 기본 응답(mocks/handlers/checkout.ts): 주문서 39,800원, 주문 생성 201 { orderId: 184 }
+// 주문서 → 배송비 견적 → 주문 생성 → 주문 완료.
+// 기본 응답: 주문서 39,800원(checkout.ts), 견적 추가 운임 0(shipments.ts), 주문 생성 201 { orderId: 184 }, 잔액 128,000(wallet.ts), 주문 상세 184(orders.ts)
 
 const openPostcode = vi.hoisted(() =>
   vi.fn(async (onPick: (picked: { zipCode: string; address: string }) => void) =>
@@ -70,20 +70,43 @@ afterEach(() => {
 })
 
 describe('CheckoutPage', () => {
-  it('결제하면 주문을 만들고 주문 완료로 가서 결제 직전 금액을 보여 준다', async () => {
+  it('배송지를 넣으면 견적을 받고, 결제하면 주문을 만들어 주문 완료에서 주문 상세·잔액을 보여 준다', async () => {
     const bodies: unknown[] = []
+    let quoteBody: unknown
     server.use(
+      http.post('*/api/v1/shipments/fee-quotes', async ({ request }) => {
+        quoteBody = await request.json()
+        return HttpResponse.json({
+          ...remoteQuoteSample,
+          regionGroup: 'GENERAL',
+          sellers: remoteQuoteSample.sellers.map((s) => ({ ...s, regionSurcharge: 0 })),
+        })
+      }),
       http.post('*/api/v1/orders', async ({ request }) => {
         bodies.push(await request.json())
         return HttpResponse.json({ orderId: SAMPLE_ORDER_ID }, { status: 201 })
       }),
+      http.get('*/api/v1/wallets/me/balance', () =>
+        HttpResponse.json({ balance: 88200, maxBalance: 500000 }),
+      ),
     )
     const { router, user } = renderCheckout()
 
+    expect((await screen.findAllByText('88,200')).length).toBeGreaterThan(0)
     await fillAndAgree(user)
+    await waitFor(() =>
+      expect(quoteBody).toEqual({
+        postalCode: '04524',
+        sellers: [
+          { sellerId: 7, itemAmount: 23900 },
+          { sellerId: 8, itemAmount: 15900 },
+        ],
+      }),
+    )
+    expect((await screen.findAllByText('10월 27일~10월 28일(수)')).length).toBe(2)
     await pay(user, '39,800원 결제하기')
 
-    expect(await screen.findByText(`주문번호 ${SAMPLE_ORDER_ID}`)).toBeInTheDocument()
+    expect(await screen.findByText(/주문번호 184/)).toBeInTheDocument()
     expect(router.state.location.search).toBe(`?orderId=${SAMPLE_ORDER_ID}`)
     expect(bodies).toEqual([
       {
@@ -95,7 +118,41 @@ describe('CheckoutPage', () => {
         expectedTotalAmount: 39800,
       },
     ])
+    expect(await screen.findByText('청송 꿀사과 부사 2kg (11~13과) × 1')).toBeInTheDocument()
     expect(screen.getByText('결제 금액')).toBeInTheDocument()
+    expect(screen.getByText('남은 예치금')).toBeInTheDocument()
+  })
+
+  it('도서산간이면 추가 운임을 더한 금액으로 주문한다', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.post('*/api/v1/shipments/fee-quotes', () => HttpResponse.json(remoteQuoteSample)),
+      http.post('*/api/v1/orders', async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ orderId: SAMPLE_ORDER_ID }, { status: 201 })
+      }),
+    )
+    const { user } = renderCheckout()
+
+    await fillAndAgree(user)
+    await pay(user, '45,800원 결제하기')
+
+    expect(await screen.findByText(/주문번호 184/)).toBeInTheDocument()
+    expect(bodies[0]).toMatchObject({ expectedTotalAmount: 45800 })
+  })
+
+  it('잔액이 부족하면 부족한 만큼 충전하러 보낸다', async () => {
+    server.use(
+      http.get('*/api/v1/wallets/me/balance', () =>
+        HttpResponse.json({ balance: 32000, maxBalance: 500000 }),
+      ),
+    )
+    const { user } = renderCheckout()
+    await fillAndAgree(user)
+    expect(await screen.findByRole('link', { name: '예치금 충전하기' })).toHaveAttribute(
+      'href',
+      `/wallet/charge?shortfall=7800&returnTo=${encodeURIComponent('/checkout')}`,
+    )
   })
 
   it('금액이 바뀌면(409) 주문서를 다시 불러와 바뀐 금액을 알리고, 입력한 배송지는 그대로 둔다', async () => {
@@ -142,21 +199,7 @@ describe('CheckoutPage', () => {
     expect(screen.getByText('예치금 잔액이 부족합니다.')).toBeInTheDocument()
     fail = false
     await user.click(screen.getByRole('button', { name: '다시 결제하기' }))
-    await waitFor(() => expect(screen.getByText(`주문번호 ${SAMPLE_ORDER_ID}`)).toBeInTheDocument())
-  })
-
-  it('서버에 주문서 API가 없으면(404 No static resource) 내부 문구 대신 안내한다', async () => {
-    server.use(
-      http.get('*/api/v1/orders/checkout', () =>
-        problem(404, 'No static resource api/v1/orders/checkout.'),
-      ),
-    )
-    renderCheckout()
-
-    expect(
-      await screen.findByText('지금은 주문서를 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요'),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/No static resource/)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(/주문번호 184/)).toBeInTheDocument())
   })
 
   it('충전에 다녀와도(다시 그려도) 적어 둔 배송지를 채우고, 주문하면 초안을 지운다', async () => {
@@ -175,7 +218,7 @@ describe('CheckoutPage', () => {
 
     await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
     await pay(user, '39,800원 결제하기')
-    expect(await screen.findByText(`주문번호 ${SAMPLE_ORDER_ID}`)).toBeInTheDocument()
+    expect(await screen.findByText(/주문번호 184/)).toBeInTheDocument()
     expect(useCheckoutDraftStore.getState().draft).toBeNull()
     expect(sessionStorage.getItem(CHECKOUT_DRAFT_STORAGE_KEY)).not.toContain('이서연')
   })

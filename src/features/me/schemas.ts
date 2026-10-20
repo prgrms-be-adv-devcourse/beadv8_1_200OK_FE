@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { passwordField } from '@/shared/lib/password'
 
 // 계정 관리 검증. 이름·닉네임 규칙은 회원가입(Bruno SignupRequest)과 같다.
-// TODO(api): 📝 PATCH /members/me, POST /members/me/password 제약이 나오면 맞춘다.
+// TODO(api): ❌ PATCH /members/me, POST /members/me/password 없음. 생기면 제약을 맞춘다.
 
 export const infoSchema = z.object({
   name: z

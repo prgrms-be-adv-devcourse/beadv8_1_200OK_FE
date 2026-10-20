@@ -1,7 +1,6 @@
 import { Badge, Button, Skeleton, Stack } from '@mantine/core'
 import { BadgeCheck, ChevronRight, Clock } from 'lucide-react'
 import { Link } from 'react-router'
-import { WALLET_BALANCE_LIMIT } from '@/shared/lib/constants'
 import { formatAmount, formatPrice } from '@/shared/lib/format'
 import { FarmAvatar, PageHeader, PriceText, QueryState } from '@/shared/ui'
 import type { MyProfile, MySellerStatus, OrderCounts } from '../types'
@@ -10,13 +9,15 @@ import classes from './MyPageView.module.css'
 // B-12 마이페이지 홈. 시안: b2c/MyPage, MyPageMobile
 // 프로필 · 예치금(충전·이용 내역) · 주문 현황 · 관심/팔로우/배송지 바로가기 · 판매자 안내(역할 3종).
 // 메뉴(데스크톱 왼쪽 · 모바일 아래 목록)는 MyPageLayout이 그린다.
-// TODO(api): 📝 GET /members/me, GET /wallets/me, 주문 현황·관심 수는 각 목록 API로 센다
+// 예치금·보유 한도는 ✅ GET /wallets/me/balance. TODO(api): ❌ GET /members/me(프로필)·관심·팔로우·배송지 API 없음, 주문 현황 수는 주문 목록에 상태별 집계가 없어 fixtures
 
 export type MyPageViewProps = {
   status: 'pending' | 'error' | 'success'
   profile?: MyProfile
   seller: MySellerStatus
   balance?: number
+  /** 잔액 보유 한도 (GET /wallets/me/balance의 maxBalance) */
+  maxBalance?: number
   orderCounts?: OrderCounts
   likedCount?: number
   followingCount?: number
@@ -35,7 +36,7 @@ function sellerText(seller: MySellerStatus): [string, string] {
   switch (seller.status) {
     case 'approved':
       return [
-        `${seller.storeName}을 운영하고 있어요`,
+        seller.storeName ? `${seller.storeName}을 운영하고 있어요` : '판매자로 승인됐어요',
         '주문 출고와 정산은 판매자 센터에서 관리해요.',
       ]
     case 'applying':
@@ -63,6 +64,7 @@ export function MyPageView({
   profile,
   seller,
   balance = 0,
+  maxBalance = 500_000,
   orderCounts = { preparing: 0, shipping: 0, delivered: 0 },
   likedCount = 0,
   followingCount = 0,
@@ -70,7 +72,7 @@ export function MyPageView({
   onRetry,
 }: MyPageViewProps) {
   const [sellerTitle, sellerDesc] = sellerText(seller)
-  const room = Math.max(0, WALLET_BALANCE_LIMIT - balance)
+  const room = Math.max(0, maxBalance - balance)
   const counts = [
     { label: '상품 준비 중', value: orderCounts.preparing },
     { label: '배송 중', value: orderCounts.shipping },
@@ -95,7 +97,7 @@ export function MyPageView({
                   <strong className={classes.nickname}>{profile.nickname}</strong>
                   {seller.status === 'approved' && (
                     <Badge color="primary" leftSection={<BadgeCheck aria-hidden="true" />}>
-                      판매자 · {seller.storeName}
+                      {seller.storeName ? `판매자 · ${seller.storeName}` : '판매자'}
                     </Badge>
                   )}
                   {seller.status === 'applying' && (
@@ -144,7 +146,7 @@ export function MyPageView({
                 <ul className={classes.strip}>
                   {counts.map((count) => (
                     <li key={count.label}>
-                      <Link to="/orders?filter=IN_PROGRESS" className={classes.stripItem}>
+                      <Link to="/orders" className={classes.stripItem}>
                         <strong className="pd-num">{formatAmount(count.value)}</strong>
                         <span>{count.label}</span>
                       </Link>

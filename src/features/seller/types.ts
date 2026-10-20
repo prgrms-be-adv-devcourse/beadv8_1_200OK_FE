@@ -1,8 +1,13 @@
-import type { OrderItemStatus, ProductStatus, ProductVisibility } from '@/shared/api/types'
+import type {
+  OrderItemStatus,
+  ProductStatus,
+  ProductVisibility,
+  ShipmentCarrier,
+} from '@/shared/api/types'
 import type { ClaimState } from '@/shared/lib/claimState'
 import type { WithdrawalState } from '@/shared/lib/withdrawalState'
 
-// 판매자 센터 화면 전용 타입. TODO(api): 센터 홈 집계 API는 없다(❌). 필드는 시안 기준 임시.
+// 판매자 센터 화면 전용 타입. TODO(api): 센터 홈 주문 집계 API는 없다(❌). 주문 쪽 필드는 시안 기준 임시.
 
 export type SellerHomeStats = {
   /** 오늘 들어온 주문 */
@@ -26,29 +31,35 @@ export type SellerTodo = {
   addressChangeRequested: boolean
 }
 
-export type SellerProductStats = { onSale: number; ready: number; lowStockOptions: number }
+/** ✅ 내 상품 목록에서 센다. lowStockProducts = 판매 가능 수량이 LOW_STOCK_THRESHOLD 이하인 상품 수 */
+export type SellerProductStats = { onSale: number; ready: number; lowStockProducts: number }
 
-/** 📝 GET /sellers/me/followers — 팔로워는 닉네임만 보여 준다 */
+/** TODO(api): ❌ 팔로워 API 없음 → fixtures. 팔로워는 닉네임만 보여 준다 */
 export type Follower = { memberId: number; nickname: string }
 
 // ─── 상품 관리 ───────────────────────────────────────────
-// TODO(api): 판매자 본인 상품 목록 API 없음(❌). 등록·수정·상태·노출·삭제는 ✅(임시 헤더)
+// ✅ 목록 GET /sellers/me/products, 등록·수정·상태·노출·삭제. 한 줄 = SellerProductSummary + 이 기기에서 고칠 수 있는지
 
 export type SellerProductRow = {
   productId: number
   name: string
   thumbnailUrl: string
-  optionCount: number
-  totalStock: number
+  /** 옵션 중 최저 판매가 */
+  minSalePrice: number
+  /** 판매 가능 수량 (총재고 − 배정 수량) */
+  availableStock: number
+  soldOut: boolean
   status: ProductStatus
   visibility: ProductVisibility
   updatedAt: string
-  /** 재고 적은 옵션이 있음 (LOW_STOCK_THRESHOLD 이하) */
+  /** 판매 가능 수량이 LOW_STOCK_THRESHOLD 이하 */
   hasLowStock: boolean
+  /** TODO(api): 판매자 상품 상세 API가 없어 productCache에 있는(이 기기에서 등록·수정한) 상품만 수정할 수 있다 */
+  editable: boolean
 }
 
 // ─── 주문·출고 ───────────────────────────────────────────
-// TODO(api): 판매자 주문 목록 API 없음(❌). 송장·지연·판매자 취소는 📝
+// ✅ 출고(송장) POST /seller/shipments/{id}/dispatch · 배송지 변경 승인·거절 PATCH. TODO(api): ❌ 판매자 주문 목록 API 없음(shipmentId를 받을 곳이 없어 연결 보류), ❌ 지연·판매자 취소
 
 /** 한 줄 = 한 주문에서 이 농가로 온 배송 묶음 */
 export type SellerOrderRow = {
@@ -64,7 +75,7 @@ export type SellerOrderRow = {
   cancelRequested: boolean
   addressChange: { after: string; requestedAt: string } | null
   delay: { reason: string; newShipDate: string } | null
-  carrier: string | null
+  carrier: ShipmentCarrier | null
   trackingNumber: string | null
   /** 처리 결과 한 줄 (예: 10.13 승인된 배송지로 보내요) */
   note?: string
@@ -91,7 +102,7 @@ export enum SellerCancelReason {
 }
 
 // ─── 취소 요청 ───────────────────────────────────────────
-// TODO(api): 📝 GET /claims/seller, 승인·거절
+// TODO(api): ❌ 판매자 클레임(취소 요청) 목록·승인·거절 API 없음 → fixtures
 
 export type CancelClaim = {
   claimId: number
@@ -107,19 +118,22 @@ export type CancelClaim = {
 }
 
 // ─── 정산 ────────────────────────────────────────────────
-// 목록·상세·항목은 ✅(shared/api/types의 Payout*). 아래 요약 두 값만 API가 없다.
+// 목록·상세·항목·후보는 ✅(shared/api/types의 Payout*, /payouts/me).
 
-/** TODO(api): 정산 예정 금액·다음 정산 예정일 API 없음(❌). 시안 기준 임시 */
+/** ✅ 정산 예정 = 미정산 후보(GET /payouts/me/candidates?unsettledOnly=true) 합계. 다음 정산일은 정책 상수(PAYOUT_RUN_HOUR) */
 export type PayoutOutlook = {
   /** 구매확정됐고 아직 정산 전인 금액 */
   expectedAmount: number
-  /** 다음 정산 배치 날짜 (C-12) */
+  /** 아직 정산 전인 후보 건수 */
+  pendingCount: number
+  /** 후보가 한 페이지(100건)를 넘어 합계가 일부만인지 */
+  truncated: boolean
+  /** 다음 정산 배치 시각 (C-12) */
   nextPayoutDate: string
 }
 
 // ─── 지갑·출금 ───────────────────────────────────────────
-// TODO(api): 📝 GET /wallets/seller, .../transactions, POST .../withdrawals, GET .../withdrawals/{id} · ❌ 계좌 변경.
-//   필드는 시안 기준 임시.
+// ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌(등록·변경) API 없음 → 그 부분은 시안 기준 임시.
 
 export type PayoutAccount = {
   bankName: string

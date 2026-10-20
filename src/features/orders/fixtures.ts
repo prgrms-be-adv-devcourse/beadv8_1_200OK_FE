@@ -1,18 +1,24 @@
-import { OrderItemStatus, type ShippingAddress } from '@/shared/api/types'
+import {
+  type OrderDetail,
+  type OrderDetailItem,
+  type OrderDetailSellerGroup,
+  OrderItemStatus,
+  OrderStatus,
+  type OrderSummary,
+  type ShippingAddress,
+} from '@/shared/api/types'
 import {
   type Inquiry,
   type InquiryTarget,
   InquiryType,
-  type OrderDetail,
-  type OrderItem,
-  type OrderShipment,
-  type OrderSummary,
+  type OrderItemRowItem,
   ShipmentStage,
   type ShipmentTracking,
 } from './types'
 
-// 1단계 샘플 데이터 (DECISIONS.md E). 주문 184는 checkout/fixtures.ts에서 결제한 그 주문이다(39,800원).
-// 배송비는 지금 API 값(0원)으로 둔다(A-8).
+// 샘플 데이터 (DECISIONS.md E). 서버 계약(OrderDetail·OrderSummary) 모양 그대로다.
+// 주문 184는 checkout/fixtures.ts에서 결제한 그 주문(39,800원), 주문 27의 사과즙(271)은 reviews/fixtures.ts의 리뷰 대상이다.
+// 배송비는 샘플 흐름의 금액을 지키려고 0원으로 둔다(실서버는 판매자별 3,000원·도서산간 추가 운임이 붙는다).
 
 export const recipient: ShippingAddress = {
   recipientName: '이서연',
@@ -27,140 +33,151 @@ const item = (
   productId: number,
   productOptionId: number,
   productName: string,
-  optionName: string,
-  itemAmount: number,
-): OrderItem => ({
+  productOptionName: string,
+  unitPrice: number,
+  status: OrderItemStatus,
+): OrderDetailItem => ({
   orderItemId,
   productId,
   productOptionId,
   productName,
-  optionName,
+  productOptionName,
+  unitPrice,
   quantity: 1,
-  itemAmount,
-  thumbnailUrl: '',
+  itemAmount: unitPrice,
+  status,
 })
 
-const apple = item(1841, 101, 1012, '청송 꿀사과 부사', '2kg (11~13과)', 23900)
-const sweetPotato = item(1842, 102, 1021, '해남 꿀고구마 베니하루카', '3kg 한입 크기', 15900)
-const tangerine = item(1511, 103, 1031, '제주 노지 조생 감귤', '3kg (S~M)', 13900)
-const cabbage = item(1401, 104, 1041, '평창 고랭지 알배기배추', '2포기', 9900)
-const sweetPotato5 = item(931, 102, 1022, '해남 꿀고구마 베니하루카', '5kg 중간 크기', 23900)
-const appleJuice = item(271, 106, 1061, '청송 사과즙 100% (30포)', '120ml × 30포', 29900)
+const apple = (status: OrderItemStatus) =>
+  item(1841, 101, 1012, '청송 꿀사과 부사', '2kg (11~13과)', 23900, status)
+const sweetPotato = (status: OrderItemStatus) =>
+  item(1842, 102, 1021, '해남 꿀고구마 베니하루카', '3kg 한입 크기', 15900, status)
+const tangerine = item(
+  1511,
+  103,
+  1031,
+  '제주 노지 조생 감귤',
+  '3kg (S~M)',
+  13900,
+  OrderItemStatus.SHIPPING,
+)
+const cabbage = item(
+  1401,
+  104,
+  1041,
+  '평창 고랭지 알배기배추',
+  '2포기',
+  9900,
+  OrderItemStatus.REFUNDED,
+)
+const sweetPotato5 = item(
+  931,
+  102,
+  1022,
+  '해남 꿀고구마 베니하루카',
+  '5kg 중간 크기',
+  23900,
+  OrderItemStatus.DELIVERED,
+)
+const appleJuice = item(
+  271,
+  106,
+  1061,
+  '청송 사과즙 100% (30포)',
+  '120ml × 30포',
+  29900,
+  OrderItemStatus.PURCHASE_CONFIRMED,
+)
 
-const shipment = (
-  shipmentId: number,
-  sellerId: number,
-  sellerName: string,
-  status: OrderItemStatus,
-  items: OrderItem[],
-  extra: Partial<OrderShipment> = {},
-): OrderShipment => ({
-  shipmentId,
+const group = (sellerId: number, items: OrderDetailItem[]): OrderDetailSellerGroup => ({
   sellerId,
-  sellerName,
-  status,
   shippingFee: 0,
-  carrier: null,
-  trackingNumber: null,
-  addressChangeRequested: false,
-  autoConfirmAt: null,
-  claimId: null,
-  refundedAmount: null,
-  refundedAt: null,
+  remoteAreaFee: 0,
   items,
-  ...extra,
 })
 
 const detail = (
   orderId: number,
-  orderNumber: string,
+  status: OrderStatus,
   orderedAt: string,
-  shipments: OrderShipment[],
+  sellerGroups: OrderDetailSellerGroup[],
 ): OrderDetail => {
-  const total = shipments.flatMap((s) => s.items).reduce((sum, i) => sum + i.itemAmount, 0)
+  const totalProductAmount = sellerGroups
+    .flatMap((g) => g.items)
+    .reduce((sum, i) => sum + i.itemAmount, 0)
+  const totalShippingFee = sellerGroups.reduce((sum, g) => sum + g.shippingFee, 0)
+  const totalRemoteAreaFee = sellerGroups.reduce((sum, g) => sum + g.remoteAreaFee, 0)
   return {
     orderId,
-    orderNumber,
+    status,
     orderedAt,
-    recipient,
-    totalProductAmount: total,
-    totalShippingFee: 0,
-    totalAmount: total,
-    shipments,
+    ...recipient,
+    addressDetail: recipient.addressDetail ?? '',
+    sellerGroups,
+    totalProductAmount,
+    totalShippingFee,
+    totalRemoteAreaFee,
+    totalAmount: totalProductAmount + totalShippingFee + totalRemoteAreaFee,
   }
 }
-
-const invoice = { carrier: 'CJ대한통운', trackingNumber: '6842 1937 5520' }
 
 export const orderDetails: OrderDetail[] = [
-  detail(184, '20261018-0184', '2026-10-18T14:30:00', [
-    shipment(1, 7, '청송 햇살농원', OrderItemStatus.PREPARING, [apple]),
-    shipment(2, 8, '땅끝고구마농장', OrderItemStatus.PREPARING, [sweetPotato]),
+  detail(184, OrderStatus.PAID, '2026-10-18T14:30:00', [
+    group(7, [apple(OrderItemStatus.PREPARING)]),
+    group(8, [sweetPotato(OrderItemStatus.PREPARING)]),
   ]),
-  detail(151, '20261015-0151', '2026-10-15T09:12:00', [
-    shipment(3, 9, '서귀포 귤빛농장', OrderItemStatus.SHIPPING, [tangerine], invoice),
-  ]),
-  detail(140, '20261014-0140', '2026-10-14T20:05:00', [
-    shipment(4, 10, '대관령 고원농장', OrderItemStatus.CANCELED, [cabbage], {
-      refundedAmount: 9900,
-      refundedAt: '2026-10-14T21:30:00',
-    }),
-  ]),
-  detail(93, '20261012-0093', '2026-10-12T11:40:00', [
-    shipment(5, 8, '땅끝고구마농장', OrderItemStatus.DELIVERED, [sweetPotato5], {
-      ...invoice,
-      trackingNumber: '6842 1937 4410',
-      autoConfirmAt: '2026-10-19T21:40:00',
-    }),
-  ]),
-  detail(27, '20261006-0027', '2026-10-06T08:20:00', [
-    shipment(6, 7, '청송 햇살농원', OrderItemStatus.PURCHASE_CONFIRMED, [appleJuice], {
-      ...invoice,
-      trackingNumber: '6842 1937 1180',
-    }),
-  ]),
+  detail(151, OrderStatus.PAID, '2026-10-15T09:12:00', [group(9, [tangerine])]),
+  detail(140, OrderStatus.CANCELED, '2026-10-14T20:05:00', [group(10, [cabbage])]),
+  detail(93, OrderStatus.PAID, '2026-10-12T11:40:00', [group(8, [sweetPotato5])]),
+  detail(27, OrderStatus.PAID, '2026-10-06T08:20:00', [group(7, [appleJuice])]),
 ]
 
-export const orderSummaries: OrderSummary[] = orderDetails.map((order) => ({
-  orderId: order.orderId,
-  orderNumber: order.orderNumber,
-  orderedAt: order.orderedAt,
-  totalAmount: order.totalAmount,
-  items: order.shipments.flatMap((s) =>
-    s.items.map((i) => ({ ...i, sellerName: s.sellerName, status: s.status })),
-  ),
-}))
+export const orderSummaries: OrderSummary[] = orderDetails.map((order) => {
+  const items = order.sellerGroups.flatMap((g) => g.items)
+  return {
+    orderId: order.orderId,
+    status: order.status,
+    orderedAt: order.orderedAt,
+    representativeProductName: items[0]?.productName ?? '',
+    itemCount: items.length,
+    totalAmount: order.totalAmount,
+  }
+})
 
-/** 주문 184의 첫 묶음 상태만 바꾼 상세 (미리보기·상태 확인용) */
-export function orderWithStatus(status: OrderItemStatus, extra: Partial<OrderShipment> = {}) {
+/** 주문 184의 첫 판매자 묶음 상품 상태만 바꾼 상세 (미리보기·상태 확인용) */
+export function orderWithItemStatus(status: OrderItemStatus): OrderDetail {
   const [first] = orderDetails
   if (!first) throw new Error('fixtures: 주문 없음')
-  const [head, ...rest] = first.shipments
-  if (!head) throw new Error('fixtures: 배송 묶음 없음')
-  const withInvoice =
-    status === OrderItemStatus.SHIPPING ||
-    status === OrderItemStatus.DELIVERED ||
-    status === OrderItemStatus.PURCHASE_CONFIRMED
+  const [head, ...rest] = first.sellerGroups
+  if (!head) throw new Error('fixtures: 판매자 묶음 없음')
   return {
     ...first,
-    shipments: [
-      {
-        ...head,
-        status,
-        ...(withInvoice ? invoice : {}),
-        ...(status === OrderItemStatus.DELIVERED ? { autoConfirmAt: '2026-10-21T21:40:00' } : {}),
-        ...(status === OrderItemStatus.CANCEL_REQUESTED ? { claimId: 77 } : {}),
-        ...(status === OrderItemStatus.CANCELED
-          ? { refundedAmount: head.items[0]?.itemAmount ?? 0, refundedAt: '2026-10-18T15:02:00' }
-          : {}),
-        ...extra,
-      },
-      ...rest,
-    ],
+    sellerGroups: [{ ...head, items: head.items.map((i) => ({ ...i, status })) }, ...rest],
   }
 }
 
-// ─── 배송 조회 ───────────────────────────────────────────
+/** 도서산간 주문 (추가 운임이 붙은 상세, 미리보기용) */
+export const remoteAreaOrder: OrderDetail = detail(185, OrderStatus.PAID, '2026-10-19T10:05:00', [
+  { ...group(7, [apple(OrderItemStatus.PREPARING)]), shippingFee: 3000, remoteAreaFee: 5000 },
+])
+
+// ─── 배송 조회 (❌ API 없음) ─────────────────────────────
+
+const rowItem = ({
+  orderItemId,
+  productId,
+  productName,
+  productOptionName,
+  quantity,
+  itemAmount,
+}: OrderDetailItem): OrderItemRowItem => ({
+  orderItemId,
+  productId,
+  productName,
+  productOptionName,
+  quantity,
+  itemAmount,
+})
 
 export const shippingTracking: ShipmentTracking = {
   shipmentId: 3,
@@ -191,7 +208,7 @@ export const shippingTracking: ShipmentTracking = {
       description: '택배사가 상품을 받았어요',
     },
   ],
-  items: [tangerine],
+  items: [rowItem(tangerine)],
   recipient: { recipientName: recipient.recipientName, address: recipient.address },
 }
 
@@ -232,10 +249,10 @@ export const delayedTracking: ShipmentTracking = {
 
 export const trackings: ShipmentTracking[] = [shippingTracking]
 
-// ─── 고객센터 문의 ───────────────────────────────────────
+// ─── 고객센터 문의 (❌ API 없음) ──────────────────────────
 
 export const inquiryTargets: InquiryTarget[] = [
-  { ...sweetPotato5, sellerName: '땅끝고구마농장', orderNumber: '20261012-0093' },
+  { ...rowItem(sweetPotato5), sellerName: '땅끝고구마농장', orderNumber: '20261012-0093' },
 ]
 
 export const inquiries: Inquiry[] = [

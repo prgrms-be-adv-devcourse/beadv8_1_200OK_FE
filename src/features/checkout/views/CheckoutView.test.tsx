@@ -6,6 +6,7 @@ import {
   BALANCE_ENOUGH,
   BALANCE_SHORT,
   checkoutSample,
+  remoteQuoteSample,
   savedAddress,
   sellerNames,
 } from '../fixtures'
@@ -66,6 +67,39 @@ describe('CheckoutView', () => {
 
     expect(screen.getByRole('button', { name: '배송지 입력' })).toBeInTheDocument()
     expect(screen.getAllByText('배송지를 입력해 주세요').length).toBeGreaterThan(0)
+  })
+
+  it('도서산간 견적이 오면 추가 운임·도착 예정일을 보여 주고 최종 금액에 더한다', async () => {
+    const { user, onPay } = renderCheckout({
+      feeQuote: remoteQuoteSample,
+      feeQuoteStatus: 'success',
+    })
+
+    expect(screen.getAllByText('도서산간 추가 운임')).toHaveLength(3)
+    expect(screen.getAllByText('+3,000원')).toHaveLength(2)
+    expect(screen.getAllByText('10월 27일~10월 28일(수)')).toHaveLength(2)
+    await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
+    const [desktop] = screen.getAllByRole('button', { name: '45,800원 결제하기' })
+    if (!desktop) throw new Error('결제 버튼 없음')
+    await user.click(desktop)
+
+    expect(onPay).toHaveBeenCalledWith(expect.objectContaining({ expectedTotalAmount: 45800 }))
+  })
+
+  it('배송비를 계산하는 동안은 결제를 기다리게 한다', () => {
+    renderCheckout({ feeQuoteStatus: 'pending' })
+    for (const button of payButtons()) expect(button).toBeDisabled()
+    expect(screen.getAllByText('배송비를 계산하고 있어요').length).toBeGreaterThan(0)
+  })
+
+  it('견적에 실패하면 알리되 결제는 막지 않는다', async () => {
+    const { user, onPay } = renderCheckout({ feeQuoteStatus: 'error' })
+    expect(screen.getByText(/배송비 견적을 불러오지 못했어요/)).toBeInTheDocument()
+    await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
+    const [desktop] = payButtons()
+    if (!desktop) throw new Error('결제 버튼 없음')
+    await user.click(desktop)
+    expect(onPay).toHaveBeenCalledWith(expect.objectContaining({ expectedTotalAmount: 39800 }))
   })
 
   it('금액이 바뀌면(409) 이전 금액과 함께 알린다', () => {

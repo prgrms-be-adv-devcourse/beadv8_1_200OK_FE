@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { STORE_INTRO_MAX } from '@/shared/lib/constants'
 
-// 상점 프로필 검증. TODO(api): 📝 PATCH /sellers/me 제약이 나오면 맞춘다.
+// 상점 프로필 검증. ✅ SellerProfileRequest(POST·PUT /sellers/me/profile) 규칙: 상호·대표자 50자, 연락처 하이픈 포함, 소개 200자.
 
 export const profileSchema = z.object({
   storeName: z
@@ -9,11 +9,18 @@ export const profileSchema = z.object({
     .trim()
     .min(1, '상호명을 입력해 주세요')
     .max(50, '상호명은 50자 이하로 입력해 주세요'),
-  representativeName: z.string().trim().min(1, '대표자명을 입력해 주세요'),
+  representativeName: z
+    .string()
+    .trim()
+    .min(1, '대표자명을 입력해 주세요')
+    .max(50, '대표자명은 50자 이하로 입력해 주세요'),
   customerServicePhone: z
     .string()
     .trim()
-    .regex(/^0\d{1,2}-\d{3,4}-\d{4}$/, '연락처를 054-873-2210 형식으로 입력해 주세요'),
+    .regex(
+      /^(0\d{1,2}-\d{3,4}-\d{4}|1\d{3}-\d{4})$/,
+      '연락처를 054-873-2210 또는 1588-1234 형식으로 입력해 주세요',
+    ),
   introduction: z
     .string()
     .trim()

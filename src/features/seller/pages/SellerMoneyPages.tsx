@@ -1,26 +1,31 @@
-import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { WithdrawalState } from '@/shared/lib/withdrawalState'
-import { showToast } from '@/shared/ui'
-import { withdrawals as initialWithdrawals, sellerWallet, sellerWalletTxs } from '../fixtures'
-import { useMemberId, useMonthPayouts, usePayout, usePayoutItems, usePayouts } from '../queries'
+import { sellerWallet } from '../fixtures'
+import {
+  useMonthPayouts,
+  usePayout,
+  usePayoutItems,
+  usePayoutOutlook,
+  usePayouts,
+  useSellerBalance,
+} from '../queries'
 import { SellerPayoutsView } from '../views/SellerPayoutsView'
-import { SellerWalletView, type WithdrawResult } from '../views/SellerWalletView'
+import { SellerWalletView } from '../views/SellerWalletView'
 
 // S-08 정산 내역 · 지갑·출금 라우트 (판매자 센터 청크).
-// 정산: ✅ GET /payouts?payeeId=본인&from&to(최근 1년, 서버 최대 범위), GET /payouts/{id}, GET /payouts/{id}/items (임시 헤더).
-// TODO(api): 정산 예정 금액·다음 정산 예정일 API 없음(❌) → 요약 두 칸은 비워 둔다.
-// TODO(api): 지갑 GET /wallets/seller, .../transactions, 출금 POST .../withdrawals는 📝, 계좌 변경은 ❌ → fixtures
+// 정산: ✅ GET /payouts/me?from&to(최근 1년, 서버 최대 범위), /payouts/me/{id}, /payouts/me/{id}/items,
+//   정산 예정 금액 = GET /payouts/me/candidates?unsettledOnly=true 합계(최대 100건), 다음 정산일은 정책 상수.
+// 지갑: ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌 변경 → 출금 신청은 닫아 두고 내역은 비운다.
 
 /** /seller/payouts?page= 와 /seller/payouts/:payoutId 가 같이 쓴다. 상세는 목록 위 모달 */
 export function SellerPayoutsPage() {
   const { payoutId } = useParams()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const memberId = useMemberId()
   const page = Math.max(1, Number(params.get('page')) || 1)
-  const list = usePayouts(memberId, page - 1)
-  const month = useMonthPayouts(memberId)
+  const list = usePayouts(page - 1)
+  const month = useMonthPayouts()
+  // 후보 조회가 실패해도 목록은 보여 준다(요약 칸만 비움)
+  const outlook = usePayoutOutlook()
   const openId = payoutId === undefined ? null : Number(payoutId)
   const validId = openId !== null && Number.isInteger(openId) ? openId : null
   const detail = usePayout(validId)
@@ -41,7 +46,7 @@ export function SellerPayoutsPage() {
     <SellerPayoutsView
       status={list.isError || month.isError ? 'error' : list.isPending ? 'pending' : 'success'}
       payouts={list.data?.content ?? []}
-      outlook={null}
+      outlook={outlook.data ?? null}
       monthSummary={month.data ?? { month: new Date().toISOString(), amount: 0, count: 0 }}
       page={page}
       totalPages={list.data?.totalPages ?? 1}
@@ -49,6 +54,7 @@ export function SellerPayoutsPage() {
       onRetry={() => {
         void list.refetch()
         void month.refetch()
+        void outlook.refetch()
       }}
       errorMessage={(list.error ?? month.error)?.detail}
       detail={
@@ -73,41 +79,26 @@ export function SellerPayoutsPage() {
 }
 
 export function SellerWalletPage() {
-  const [wallet, setWallet] = useState(sellerWallet)
-  const [withdrawals, setWithdrawals] = useState(initialWithdrawals)
-  const [result, setResult] = useState<WithdrawResult | null>(null)
+  const balance = useSellerBalance()
+  const amount = balance.data?.balance ?? 0
 
   return (
     <SellerWalletView
-      status="success"
-      wallet={wallet}
-      withdrawals={withdrawals}
-      transactions={sellerWalletTxs}
-      withdrawResult={result}
-      onWithdraw={(amount) => {
-        if (amount > wallet.withdrawableAmount) {
-          setResult({ kind: 'insufficient' })
-          return
-        }
-        setWallet((w) => ({ ...w, withdrawableAmount: w.withdrawableAmount - amount }))
-        setWithdrawals((list) => [
-          {
-            withdrawalId: Date.now(),
-            amount,
-            state: WithdrawalState.REQUESTED,
-            requestedAt: new Date().toISOString(),
-            completedAt: null,
-            failReason: null,
-          },
-          ...list,
-        ])
-        setResult({ kind: 'success', amount })
-        showToast({ message: '출금을 신청했어요' })
+      status={balance.isError ? 'error' : balance.isPending ? 'pending' : 'success'}
+      wallet={{
+        ...sellerWallet,
+        balance: amount,
+        withdrawableAmount: amount,
+        accountNeedsCheck: false,
+        accountChangePending: false,
       }}
-      onRequestAccountChange={() => {
-        setWallet((w) => ({ ...w, accountChangePending: true }))
-        showToast({ message: '계좌 변경 요청을 보냈어요' })
-      }}
+      withdrawals={[]}
+      transactions={[]}
+      featureDisabledReason="출금 신청은 아직 열리지 않았어요"
+      onWithdraw={() => {}}
+      onRequestAccountChange={() => {}}
+      errorMessage={balance.error?.detail}
+      onRetry={() => void balance.refetch()}
     />
   )
 }

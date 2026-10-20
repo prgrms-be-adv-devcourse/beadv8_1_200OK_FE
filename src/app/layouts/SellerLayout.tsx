@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Outlet } from 'react-router'
+import { useMyProfile } from '@/features/seller'
 import { useRouteHandle } from '../routeHandle'
 import { type ConsoleNavItem, ConsoleShell } from './ConsoleShell'
 
@@ -102,9 +103,11 @@ export function SellerLayoutView({
 
 export function SellerLayout() {
   const handle = useRouteHandle()
-  // TODO(api): 상호·이름·대기 개수는 2단계에서 판매자 정보·주문 API로 채운다
+  // ✅ 상호는 GET /sellers/me/profile(아직 등록 전이면 null → 비움).
+  // TODO(api): 회원 이름(내 정보 API)·출고 대기·취소 요청 개수(판매자 주문 목록 API)는 없어 비워 둔다
+  const profile = useMyProfile()
   return (
-    <SellerLayoutView title={handle.title ?? '판매자 센터'}>
+    <SellerLayoutView title={handle.title ?? '판매자 센터'} storeName={profile.data?.storeName}>
       <Outlet />
     </SellerLayoutView>
   )

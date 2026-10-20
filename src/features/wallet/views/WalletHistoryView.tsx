@@ -1,6 +1,6 @@
-import { Badge, Button, Chip, Group, Skeleton, Stack, Table } from '@mantine/core'
+import { Anchor, Badge, Button, Chip, Group, Skeleton, Stack, Table } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
-import { BanknoteArrowDown, CreditCard, ReceiptText, RotateCcw, WalletCards } from 'lucide-react'
+import { CreditCard, ReceiptText, WalletCards } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { formatDate } from '@/shared/lib/format'
@@ -10,8 +10,8 @@ import { type WalletPeriod, type WalletTransaction, WalletTxType } from '../type
 import classes from './WalletHistoryView.module.css'
 
 // B-13 지갑 이용 내역 /me/wallet. 시안: b2c/Wallet, WalletMobile
-// 기간(1개월 · 3개월 · 직접 선택 + 날짜 검증) · 유형(전체 · 충전 · 결제 · 결제 취소 · 환불 입금). 데스크톱 표, 모바일 목록.
-// TODO(api): 📝 GET /wallets/me, GET /wallets/me/transactions (기간·유형 파라미터 미정)
+// 기간(1개월 · 3개월 · 직접 선택 + 날짜 검증) · 유형(전체 · 충전 · 결제). 데스크톱 표, 모바일 목록. 결제 줄은 주문 상세로 이어진다.
+// ✅ GET /wallets/me/balance · GET /wallets/me/ledgers. 시안의 결제 취소·환불 입금 유형은 서버에 없어 뺐다.
 
 export type WalletHistoryViewProps = {
   status: 'pending' | 'error' | 'success'
@@ -28,6 +28,7 @@ export type WalletHistoryViewProps = {
   loadingMore?: boolean
   onLoadMore?: () => void
   onRetry?: () => void
+  errorMessage?: string
 }
 
 const typeLook: Record<WalletTxType, { label: string; tone: StatusTone; icon: ReactNode }> = {
@@ -40,16 +41,6 @@ const typeLook: Record<WalletTxType, { label: string; tone: StatusTone; icon: Re
     label: '결제',
     tone: 'neutral',
     icon: <ReceiptText aria-hidden="true" />,
-  },
-  [WalletTxType.PAYMENT_CANCEL]: {
-    label: '결제 취소',
-    tone: 'info',
-    icon: <RotateCcw aria-hidden="true" />,
-  },
-  [WalletTxType.REFUND]: {
-    label: '환불 입금',
-    tone: 'success',
-    icon: <BanknoteArrowDown aria-hidden="true" />,
   },
 }
 
@@ -65,6 +56,16 @@ function TypeBadge({ type }: { type: WalletTxType }) {
     <Badge color={look.tone} leftSection={look.icon}>
       {look.label}
     </Badge>
+  )
+}
+
+function Description({ tx }: { tx: WalletTransaction }) {
+  return tx.orderId !== null ? (
+    <Anchor component={Link} to={`/orders/${tx.orderId}`} size="sm">
+      {tx.description}
+    </Anchor>
+  ) : (
+    <span>{tx.description}</span>
   )
 }
 
@@ -93,6 +94,7 @@ export function WalletHistoryView({
   loadingMore = false,
   onLoadMore,
   onRetry,
+  errorMessage,
 }: WalletHistoryViewProps) {
   const [from, to] = range
   const rangeError = from && to && from > to ? '시작일이 종료일보다 늦어요' : null
@@ -178,6 +180,7 @@ export function WalletHistoryView({
           </Stack>
         }
         loadingLabel="이용 내역을 불러오고 있어요"
+        errorMessage={errorMessage}
         onRetry={onRetry}
         empty={{
           icon: <WalletCards />,
@@ -201,14 +204,16 @@ export function WalletHistoryView({
             </Table.Thead>
             <Table.Tbody>
               {transactions.map((tx) => (
-                <Table.Tr key={tx.transactionId}>
+                <Table.Tr key={tx.key}>
                   <Table.Td className={`pd-num ${classes.muted}`}>
                     {formatDate(tx.occurredAt, 'dateTime')}
                   </Table.Td>
                   <Table.Td>
                     <TypeBadge type={tx.type} />
                   </Table.Td>
-                  <Table.Td>{tx.description}</Table.Td>
+                  <Table.Td>
+                    <Description tx={tx} />
+                  </Table.Td>
                   <Table.Td className={classes.right}>
                     <Amount value={tx.amount} />
                   </Table.Td>
@@ -224,7 +229,7 @@ export function WalletHistoryView({
         {/* 모바일: 목록 */}
         <ul className={classes.list} aria-label="이용 내역">
           {transactions.map((tx) => (
-            <li key={tx.transactionId} className={classes.item}>
+            <li key={tx.key} className={classes.item}>
               <div className={classes.itemTop}>
                 <TypeBadge type={tx.type} />
                 <span className={`pd-num ${classes.muted}`}>
@@ -232,7 +237,7 @@ export function WalletHistoryView({
                 </span>
               </div>
               <div className={classes.itemMain}>
-                <span>{tx.description}</span>
+                <Description tx={tx} />
                 <Amount value={tx.amount} />
               </div>
               <span className={`pd-num ${classes.muted} ${classes.itemBalance}`}>

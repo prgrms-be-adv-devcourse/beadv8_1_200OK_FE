@@ -21,6 +21,7 @@ const my = (props: Partial<MyPageViewProps> = {}) => (
     profile={myProfile}
     seller={{ status: 'none' }}
     balance={MY_BALANCE}
+    maxBalance={500_000}
     orderCounts={myOrderCounts}
     likedCount={likedProducts.length}
     followingCount={followedFarms.length}

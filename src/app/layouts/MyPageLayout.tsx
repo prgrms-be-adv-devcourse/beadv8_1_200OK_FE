@@ -3,17 +3,16 @@ import { ChevronRight, LogOut } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { logout } from '@/features/auth'
-import { MemberRole } from '@/shared/api/types'
+import { type SellerMenuStatus, useSellerMenuStatus } from '@/features/sellerApply'
 import { showToast } from '@/shared/ui'
-import { useSession } from '../session'
 import classes from './MyPageLayout.module.css'
 
-// 마이페이지 묶음(/me, /me/wallet, /me/likes, /me/account) 레이아웃. PublicLayout 안에 들어간다.
+// 마이페이지 묶음(/me, /me/wallet, /me/likes, /me/account, /orders, /seller/apply[/status]) 레이아웃. PublicLayout 안에 들어간다.
 // 데스크톱(≥ 1024): 왼쪽 메뉴 240 + 본문. 모바일: 본문만, 마이 홈(/me) 아래에 같은 메뉴를 목록으로.
 // 시안: b2c/MyPage·Wallet·Likes·Account(.mside), MyPageMobile(메뉴 목록)
 
-/** 판매자 메뉴 문구를 정하는 상태. TODO(api): ‘심사 중’은 📝 신청 현황 API가 생기면 채운다 */
-export type SellerMenuStatus = 'none' | 'applying' | 'approved'
+/** 판매자 메뉴 문구를 정하는 상태. ✅ 토큰 역할 + GET /sellers/me/applications(features/sellerApply의 useSellerMenuStatus) */
+export type { SellerMenuStatus }
 
 type MenuItem = { label: string; to: string }
 
@@ -131,20 +130,18 @@ export function MyPageLayoutView({
 
 /** 라우트용 */
 export function MyPageLayout() {
-  const session = useSession()
   const navigate = useNavigate()
-  const sellerStatus: SellerMenuStatus =
-    session.status === 'authenticated' && session.role === MemberRole.SELLER ? 'approved' : 'none'
+  const sellerStatus = useSellerMenuStatus()
 
   return (
     <MyPageLayoutView
       sellerStatus={sellerStatus}
       onLogout={() => {
-        // 홈으로 옮긴 뒤 토큰을 지운다(마이페이지 가드가 로그인 화면으로 보내지 않게)
-        void Promise.resolve(navigate('/', { replace: true })).then(() => {
-          logout()
-          showToast({ message: '로그아웃했어요' })
-        })
+        // 홈 화면을 먼저 그린 뒤 토큰을 지운다. 이동은 기본이 transition이라 늦게 그려지는데,
+        // 그 사이 토큰이 지워지면 마이페이지 가드가 로그인 화면으로 보낸다 → flushSync로 바로 그린다
+        navigate('/', { replace: true, flushSync: true })
+        logout()
+        showToast({ message: '로그아웃했어요' })
       }}
     >
       <Outlet />

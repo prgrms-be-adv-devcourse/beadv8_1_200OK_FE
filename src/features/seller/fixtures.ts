@@ -1,17 +1,21 @@
 import {
   OrderItemStatus,
-  type PayoutDetail,
   PayoutEventType,
-  type PayoutItem,
+  type PayoutSellerCandidate,
+  type PayoutSellerDetail,
+  type PayoutSellerItem,
   type PayoutSummary,
   ProductCategory,
   ProductRegion,
   ProductStatus,
   ProductVisibility,
+  type SellerProductSummary,
   type SellerProfile,
+  type SellerProfileResponse,
+  ShipmentCarrier,
 } from '@/shared/api/types'
 import { ClaimState } from '@/shared/lib/claimState'
-import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
+import { LOW_STOCK_THRESHOLD, PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { WithdrawalState } from '@/shared/lib/withdrawalState'
 import type { ProductFormValues } from './productSchema'
 import type {
@@ -32,14 +36,20 @@ import { SellerWalletTxType } from './types'
 // 1단계 샘플 데이터. 판매자 7 ‘청송 햇살농원’(김영수) 기준이다(products·farms·sellerApply fixtures와 같은 농가).
 // 오늘 = 2026-10-18. 주문 20261018-0184는 구매자 주문 내역의 그 주문이다.
 
-export const myStore: SellerProfile = {
-  sellerId: 7,
+/** ✅ GET /sellers/me/profile 응답 모양 */
+export const myProfile: SellerProfileResponse = {
   storeName: '청송 햇살농원',
   representativeName: '김영수',
-  region: ProductRegion.GYEONGBUK,
-  introduction: '3대째 사과만 키우는 청송 부남면 과수원이에요.',
   customerServicePhone: '054-873-2210',
+  introduction: '3대째 사과만 키우는 청송 부남면 과수원이에요.',
   profileImageUrl: null,
+}
+
+/** 구매자 쪽(농가 화면)에서 보는 모양. TODO(api): 팔로워 수 API 없음(❌) */
+export const myStore: SellerProfile = {
+  sellerId: 7,
+  ...myProfile,
+  region: ProductRegion.GYEONGBUK,
   followerCount: 1284,
   suspended: false,
 }
@@ -103,7 +113,7 @@ export const todos: SellerTodo[] = [
 
 export const sellerWalletBalance = 1086420
 
-export const productStats: SellerProductStats = { onSale: 2, ready: 1, lowStockOptions: 1 }
+export const productStats: SellerProductStats = { onSale: 2, ready: 1, lowStockProducts: 1 }
 
 export const followers: Follower[] = [
   '주말장보기',
@@ -119,53 +129,92 @@ export const followers: Follower[] = [
 ].map((nickname, i) => ({ memberId: 100 + i, nickname }))
 
 // ─── 상품 관리 (판매 중 2 · 판매 준비 1 · 판매 종료 1, 센터 홈 상품 현황과 같다) ───
+// ✅ GET /sellers/me/products 응답 모양. 101만 이 기기에서 등록한 상품(productCache)이라 수정할 수 있다.
 
-export const sellerProducts: SellerProductRow[] = [
-  {
+const summary = (
+  row: Pick<
+    SellerProductSummary,
+    'productId' | 'name' | 'minSalePrice' | 'status' | 'visibility' | 'availableStock' | 'updatedAt'
+  > &
+    Partial<SellerProductSummary>,
+): SellerProductSummary => ({
+  thumbnailUrl: '',
+  minPriceListPrice: row.minSalePrice,
+  discountRate: 0,
+  category: ProductCategory.FRUIT,
+  region: ProductRegion.GYEONGBUK,
+  soldOut: row.availableStock === 0,
+  reviewCount: 0,
+  averageRating: 0,
+  createdAt: row.updatedAt,
+  ...row,
+})
+
+export const mySellerProducts: SellerProductSummary[] = [
+  summary({
     productId: 101,
     name: '청송 꿀사과 부사',
-    thumbnailUrl: '',
-    optionCount: 3,
-    totalStock: 35,
+    minSalePrice: 12900,
+    minPriceListPrice: 14500,
+    discountRate: 11,
     status: ProductStatus.ON_SALE,
     visibility: ProductVisibility.VISIBLE,
+    availableStock: 4,
+    reviewCount: 128,
+    averageRating: 4.8,
+    createdAt: '2026-09-01T09:00:00',
     updatedAt: '2026-10-12T18:20:00',
-    hasLowStock: true,
-  },
-  {
+  }),
+  summary({
     productId: 106,
     name: '청송 사과즙 100% (30포)',
-    thumbnailUrl: '',
-    optionCount: 1,
-    totalStock: 120,
+    minSalePrice: 29900,
+    category: ProductCategory.PROCESSED_AGRI,
     status: ProductStatus.ON_SALE,
     visibility: ProductVisibility.VISIBLE,
+    availableStock: 120,
+    reviewCount: 41,
+    averageRating: 4.6,
     updatedAt: '2026-10-10T09:00:00',
-    hasLowStock: false,
-  },
-  {
+  }),
+  summary({
     productId: 109,
     name: '청송 꿀사과 부사 (흠과·가정용)',
-    thumbnailUrl: '',
-    optionCount: 2,
-    totalStock: 40,
+    minSalePrice: 9900,
     status: ProductStatus.READY,
     visibility: ProductVisibility.HIDDEN,
+    availableStock: 40,
     updatedAt: '2026-10-18T10:05:00',
-    hasLowStock: false,
-  },
-  {
+  }),
+  summary({
     productId: 110,
     name: '청송 홍로 사과',
-    thumbnailUrl: '',
-    optionCount: 2,
-    totalStock: 0,
+    minSalePrice: 15900,
     status: ProductStatus.ENDED,
     visibility: ProductVisibility.VISIBLE,
+    availableStock: 0,
+    reviewCount: 12,
+    averageRating: 4.4,
     updatedAt: '2026-09-28T09:12:00',
-    hasLowStock: false,
-  },
+  }),
 ]
+
+/** 이 기기에서 등록·수정한 상품(productCache) → 수정 가능 */
+export const editableProductIds = [101]
+
+export const sellerProducts: SellerProductRow[] = mySellerProducts.map((p) => ({
+  productId: p.productId,
+  name: p.name,
+  thumbnailUrl: p.thumbnailUrl,
+  minSalePrice: p.minSalePrice,
+  availableStock: p.availableStock,
+  soldOut: p.soldOut,
+  status: p.status,
+  visibility: p.visibility,
+  updatedAt: p.updatedAt,
+  hasLowStock: p.availableStock <= LOW_STOCK_THRESHOLD,
+  editable: editableProductIds.includes(p.productId),
+}))
 
 /** 상품 수정 처음 값 (101) — 판매자 본인 상품 상세 API가 없어 fixtures (bruno README ‘남은 이슈’: version을 받을 곳이 없음) */
 export const appleFormValues: ProductFormValues = {
@@ -270,7 +319,7 @@ export const sellerOrders: SellerOrderRow[] = [
     address: '대전 유성구 대학로 99',
     amount: 23900,
     status: OrderItemStatus.SHIPPING,
-    carrier: 'CJ대한통운',
+    carrier: ShipmentCarrier.CJ_LOGISTICS,
     trackingNumber: '684219375520',
   }),
   order({
@@ -283,7 +332,7 @@ export const sellerOrders: SellerOrderRow[] = [
     address: '광주 서구 상무중앙로 7',
     amount: 59800,
     status: OrderItemStatus.SHIPPING,
-    carrier: '우체국택배',
+    carrier: ShipmentCarrier.POST_OFFICE,
     trackingNumber: '6070123456789',
     note: '10.17 승인한 배송지로 보냈어요',
   }),
@@ -297,7 +346,7 @@ export const sellerOrders: SellerOrderRow[] = [
     address: '서울 중구 세종대로 110, 3층 301호',
     amount: 29900,
     status: OrderItemStatus.DELIVERED,
-    carrier: 'CJ대한통운',
+    carrier: ShipmentCarrier.CJ_LOGISTICS,
     trackingNumber: '684219371180',
   }),
   order({
@@ -309,7 +358,7 @@ export const sellerOrders: SellerOrderRow[] = [
     itemText: '1kg (5~6과) × 1',
     address: '인천 연수구 컨벤시아대로 165',
     amount: 12900,
-    status: OrderItemStatus.CANCELED,
+    status: OrderItemStatus.REFUNDED,
     note: '10.14 판매자 취소 · 품절',
   }),
 ]
@@ -369,9 +418,10 @@ export const cancelClaims: CancelClaim[] = [
 
 // ─── 정산 ────────────────────────────────────────────────
 // 매일 02:00 정산. 정산 금액 = 판매 대금 − 수수료 3% + 배송비. 아래 4건의 합이 지갑 입금 내역과 같다.
+// ✅ GET /payouts/me, /payouts/me/{id}, /payouts/me/{id}/items, /payouts/me/candidates 응답 모양.
 // TODO(api): SALE_FEE 금액의 부호(양수로 내려오는지)는 서버 응답으로 확인. 화면은 부호와 상관없이 차감으로 보여 준다.
 
-type SaleLine = { orderItemId: number; price: number; shipping: number }
+type SaleLine = { orderId: number; orderItemId: number; price: number; shipping: number }
 
 const feeOf = (price: number) => Math.round((price * PAYOUT_FEE_RATE) / 100)
 
@@ -386,10 +436,10 @@ const payoutSets: {
     createdAt: '2026-10-18T02:00:00',
     periodFrom: '2026-10-17T02:00:00',
     lines: [
-      { orderItemId: 1210, price: 23900, shipping: 3000 },
-      { orderItemId: 1227, price: 23900, shipping: 3000 },
-      { orderItemId: 1140, price: 33900, shipping: 3000 },
-      { orderItemId: 1118, price: 12900, shipping: 3000 },
+      { orderId: 121, orderItemId: 1210, price: 23900, shipping: 3000 },
+      { orderId: 122, orderItemId: 1227, price: 23900, shipping: 3000 },
+      { orderId: 114, orderItemId: 1140, price: 33900, shipping: 3000 },
+      { orderId: 111, orderItemId: 1118, price: 12900, shipping: 3000 },
     ],
   },
   {
@@ -397,9 +447,9 @@ const payoutSets: {
     createdAt: '2026-10-17T02:00:00',
     periodFrom: '2026-10-16T02:00:00',
     lines: [
-      { orderItemId: 1093, price: 23900, shipping: 3000 },
-      { orderItemId: 1051, price: 67800, shipping: 0 },
-      { orderItemId: 1002, price: 12900, shipping: 3000 },
+      { orderId: 109, orderItemId: 1093, price: 23900, shipping: 3000 },
+      { orderId: 105, orderItemId: 1051, price: 67800, shipping: 0 },
+      { orderId: 100, orderItemId: 1002, price: 12900, shipping: 3000 },
     ],
   },
   {
@@ -407,8 +457,8 @@ const payoutSets: {
     createdAt: '2026-10-16T02:00:00',
     periodFrom: '2026-10-15T02:00:00',
     lines: [
-      { orderItemId: 944, price: 25800, shipping: 3000 },
-      { orderItemId: 937, price: 23900, shipping: 3000 },
+      { orderId: 94, orderItemId: 944, price: 25800, shipping: 3000 },
+      { orderId: 93, orderItemId: 937, price: 23900, shipping: 3000 },
     ],
   },
   {
@@ -416,9 +466,9 @@ const payoutSets: {
     createdAt: '2026-10-15T02:00:00',
     periodFrom: null,
     lines: [
-      { orderItemId: 888, price: 33900, shipping: 3000 },
-      { orderItemId: 831, price: 23900, shipping: 3000 },
-      { orderItemId: 829, price: 23900, shipping: 3000 },
+      { orderId: 88, orderItemId: 888, price: 33900, shipping: 3000 },
+      { orderId: 83, orderItemId: 831, price: 23900, shipping: 3000 },
+      { orderId: 82, orderItemId: 829, price: 23900, shipping: 3000 },
     ],
   },
 ]
@@ -435,25 +485,29 @@ export const payouts: PayoutSummary[] = payoutSets.map((set) => ({
   createdAt: set.createdAt,
 }))
 
-export const payoutDetails: PayoutDetail[] = payoutSets.map((set, index) => ({
+export const payoutDetails: PayoutSellerDetail[] = payoutSets.map((set, index) => ({
   ...(payouts[index] as PayoutSummary),
   periodFrom: set.periodFrom,
   periodTo: set.createdAt,
   itemCount: set.lines.filter((l) => l.shipping > 0).length + set.lines.length * 2,
-  systemPayoutId: null,
   sellerFeeAmount: set.lines.reduce((sum, l) => sum + feeOf(l.price), 0),
   sellerFeeItemCount: set.lines.length,
 }))
 
-/** payoutId → 정산 항목. 배송비 0원은 항목이 없다 */
-export const payoutItems: Record<number, PayoutItem[]> = Object.fromEntries(
+/** payoutId → 정산 항목. 배송비 0원은 항목이 없다. 배송비 항목은 orderItemId가 null(주문 단위) */
+export const payoutItems: Record<number, PayoutSellerItem[]> = Object.fromEntries(
   payoutSets.map((set) => {
     let id = set.payoutId * 100
-    const item = (line: SaleLine, eventType: PayoutEventType, amount: number): PayoutItem => ({
+    const item = (
+      line: SaleLine,
+      eventType: PayoutEventType,
+      amount: number,
+    ): PayoutSellerItem => ({
       payoutItemId: ++id,
       candidateId: id + 30000,
       eventType,
-      orderItemId: line.orderItemId,
+      orderId: line.orderId,
+      orderItemId: eventType === PayoutEventType.SALE_SHIPPING_FEE ? null : line.orderItemId,
       sellerId: myStore.sellerId,
       amount,
       candidateCreatedAt: '2026-10-01T02:00:00',
@@ -473,38 +527,78 @@ export const payoutItems: Record<number, PayoutItem[]> = Object.fromEntries(
 )
 
 /** 관리자 정산 조정이 들어간 정산 (미리보기용): 1016에 −3,000원 */
-export const adjustedPayoutDetail: PayoutDetail = {
-  ...(payoutDetails[2] as PayoutDetail),
-  amount: (payoutDetails[2] as PayoutDetail).amount - 3000,
-  itemCount: (payoutDetails[2] as PayoutDetail).itemCount + 1,
+export const adjustedPayoutDetail: PayoutSellerDetail = {
+  ...(payoutDetails[2] as PayoutSellerDetail),
+  amount: (payoutDetails[2] as PayoutSellerDetail).amount - 3000,
+  itemCount: (payoutDetails[2] as PayoutSellerDetail).itemCount + 1,
 }
 
-export const adjustedPayoutItems: PayoutItem[] = [
+export const adjustedPayoutItems: PayoutSellerItem[] = [
   ...(payoutItems[1016] ?? []),
   {
     payoutItemId: 101699,
     candidateId: 39999,
     eventType: PayoutEventType.SALE_AMOUNT,
+    orderId: 93,
     orderItemId: 937,
     sellerId: myStore.sellerId,
     amount: -3000,
     candidateCreatedAt: '2026-10-15T10:20:00',
-    adjustment: {
-      adjustmentId: null,
-      adminId: null,
-      reason: '배송 중 파손으로 구매자에게 일부 환불한 금액이에요',
-    },
+    adjustment: { reason: '배송 중 파손으로 구매자에게 일부 환불한 금액이에요' },
   },
 ]
 
-// TODO(api): 정산 예정 금액·다음 정산 예정일 API 없음 → 센터 홈과 같은 값
+/** 아직 정산 전인 후보 3건(GET /payouts/me/candidates?unsettledOnly=true). 합계 = 센터 홈 정산 예정 금액 */
+export const payoutCandidates: PayoutSellerCandidate[] = [
+  {
+    candidateId: 40012,
+    eventType: PayoutEventType.SALE_AMOUNT,
+    orderId: 184,
+    orderItemId: 1841,
+    sellerId: myStore.sellerId,
+    amount: 23900,
+    candidateCreatedAt: '2026-10-18T14:30:00',
+    settled: false,
+    payoutId: null,
+    adjustment: null,
+  },
+  {
+    candidateId: 40011,
+    eventType: PayoutEventType.SALE_SHIPPING_FEE,
+    orderId: 184,
+    orderItemId: null,
+    sellerId: myStore.sellerId,
+    amount: 3000,
+    candidateCreatedAt: '2026-10-18T14:30:00',
+    settled: false,
+    payoutId: null,
+    adjustment: null,
+  },
+  {
+    candidateId: 40008,
+    eventType: PayoutEventType.SALE_AMOUNT,
+    orderId: 170,
+    orderItemId: 1701,
+    sellerId: myStore.sellerId,
+    amount: homeStats.expectedPayout - 23900 - 3000,
+    candidateCreatedAt: '2026-10-18T09:15:00',
+    settled: false,
+    payoutId: null,
+    adjustment: null,
+  },
+]
+
+/** ✅ 후보 합계 + 다음 정산일(정책 상수). 센터 홈과 같은 값 */
 export const payoutOutlook: PayoutOutlook = {
-  expectedAmount: homeStats.expectedPayout,
+  expectedAmount: payoutCandidates.reduce((sum, c) => sum + c.amount, 0),
+  pendingCount: payoutCandidates.length,
+  truncated: false,
   nextPayoutDate: '2026-10-19T02:00:00',
 }
 
 // ─── 지갑·출금 ───────────────────────────────────────────
-// 잔액 = 센터 홈의 sellerWalletBalance. 처리 중 출금 200,000원은 출금 가능 금액에서 뺀다.
+// 잔액 = 센터 홈의 sellerWalletBalance(✅ GET /wallets/sellers/me/balance). 처리 중 출금 200,000원은 출금 가능 금액에서 뺀다.
+// TODO(api): ❌ 출금·입출금 내역·계좌 API 없음 → 아래는 미리보기 전용
 
 export const sellerWallet: SellerWallet = {
   balance: sellerWalletBalance,
@@ -543,7 +637,7 @@ export const withdrawals: Withdrawal[] = [
 
 const payoutTx = (index: number, id: number): SellerWalletTx => {
   const payout = payouts[index] as PayoutSummary
-  const detail = payoutDetails[index] as PayoutDetail
+  const detail = payoutDetails[index] as PayoutSellerDetail
   return {
     transactionId: id,
     type: SellerWalletTxType.PAYOUT,

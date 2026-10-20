@@ -3,6 +3,9 @@ import {
   BALANCE_ENOUGH,
   BALANCE_SHORT,
   checkoutSample,
+  completedOrderSample,
+  feeQuoteSample,
+  remoteQuoteSample,
   SAMPLE_ORDER_ID,
   savedAddress,
   sellerNames,
@@ -47,6 +50,35 @@ export const checkoutPreviews: ScreenPreview[] = [
     path: '/checkout',
     states: [
       { id: 'enough', label: '잔액 충분', render: () => checkout() },
+      {
+        id: 'quoted',
+        label: '배송비 견적 (일반 지역)',
+        render: () => checkout({ feeQuote: feeQuoteSample, feeQuoteStatus: 'success' }),
+      },
+      {
+        id: 'remote',
+        label: '도서산간 추가 운임',
+        render: () =>
+          checkout({
+            defaultAddress: {
+              ...savedAddress,
+              zipCode: '63000',
+              address: '제주 제주시 첨단로 242',
+            },
+            feeQuote: remoteQuoteSample,
+            feeQuoteStatus: 'success',
+          }),
+      },
+      {
+        id: 'quote-pending',
+        label: '배송비 계산 중',
+        render: () => checkout({ feeQuoteStatus: 'pending' }),
+      },
+      {
+        id: 'quote-error',
+        label: '배송비 견적 실패',
+        render: () => checkout({ feeQuoteStatus: 'error' }),
+      },
       { id: 'short', label: '잔액 부족', render: () => checkout({ balance: BALANCE_SHORT }) },
       { id: 'no-address', label: '배송지 없음', render: () => checkout({ defaultAddress: null }) },
       {
@@ -82,15 +114,15 @@ export const checkoutPreviews: ScreenPreview[] = [
         render: () => (
           <CheckoutCompleteView
             orderId={SAMPLE_ORDER_ID}
-            checkout={checkoutSample}
+            order={completedOrderSample}
             sellerNames={sellerNames}
-            balanceAfter={BALANCE_ENOUGH - checkoutSample.totalAmount}
+            balance={BALANCE_ENOUGH - checkoutSample.totalAmount}
           />
         ),
       },
       {
         id: 'id-only',
-        label: '주문번호만 (새로고침 후)',
+        label: '주문번호만 (주문 상세를 못 받음)',
         render: () => <CheckoutCompleteView orderId={SAMPLE_ORDER_ID} />,
       },
     ],

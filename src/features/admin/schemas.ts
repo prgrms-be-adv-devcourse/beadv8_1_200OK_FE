@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { PayoutEventType } from '@/shared/api/types'
 
-// 관리자 화면 검증. TODO(api): 📝 반려·회수·정산 조정 요청 제약이 나오면 맞춘다.
+// 관리자 화면 검증. 제약은 Swagger 기준: 반려 사유 500자, 조정 사유 255자, 조정 금액 0 불가.
 
-// ─── 반려 · 권한 회수 사유 ───────────────────────────────
+// ─── 반려 사유 ───────────────────────────────────────────
 
-export const REVIEW_REASON_MAX = 200
+export const REVIEW_REASON_MAX = 500
 
 export const reviewReasonSchema = z
   .string()
@@ -14,7 +15,7 @@ export const reviewReasonSchema = z
 
 // ─── 정산 조정 ───────────────────────────────────────────
 
-export const ADJUST_REASON_MAX = 100
+export const ADJUST_REASON_MAX = 255
 const AMOUNT_MAX_DIGITS = 9
 
 /** ‘-10,000’ · ‘−10000’ · ‘3,000’ → 숫자. 비었으면 0 */
@@ -38,6 +39,7 @@ export const adjustmentSchema = z.object({
     .trim()
     .min(1, '주문 상품 번호를 입력해 주세요')
     .regex(/^\d+$/, '주문 상품 번호는 숫자로 입력해 주세요'),
+  eventType: z.nativeEnum(PayoutEventType),
   amount: z
     .string()
     .refine(

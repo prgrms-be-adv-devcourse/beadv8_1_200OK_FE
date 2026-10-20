@@ -1,6 +1,15 @@
+import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { MediaPurpose, type ProductReview, ReviewMediaType } from '@/shared/api/types'
+import { isApiError } from '@/shared/api/ApiError'
+import { orderDetailQueryOptions } from '@/shared/api/orderDetail'
+import {
+  MediaPurpose,
+  type OrderDetail,
+  OrderItemStatus,
+  type ProductReview,
+  ReviewMediaType,
+} from '@/shared/api/types'
 import { QueryState, showToast, useMediaUploads } from '@/shared/ui'
 import { reviewErrorMessage, toReviewSubmitErrors } from '../errors'
 import {
@@ -10,29 +19,92 @@ import {
   useReviewProduct,
   useUpdateReview,
 } from '../queries'
-import { orderItemFromQuery, targetFromReview, withProduct } from '../target'
+import { orderItemFromQuery, targetFromOrder, targetFromReview, withProduct } from '../target'
 import type { ReviewOrderItem } from '../types'
 import { ReviewWriteView } from '../views/ReviewWriteView'
 
-// B-10 리뷰 라우트. 새로 /reviews/new?orderItemId=, 수정 /reviews/:reviewId/edit.
+// B-10 리뷰 라우트. 새로 /reviews/new?orderId=&orderItemId=, 수정 /reviews/:reviewId/edit.
 // 작성 POST /products/{productId}/reviews, 수정 PUT /reviews/{reviewId}(첨부 전체 교체), 삭제 DELETE /reviews/{reviewId}.
+// 리뷰를 쓸 주문 상품은 ✅ 주문 상세(GET /orders/{orderId})에서 찾고, 구매확정(PURCHASE_CONFIRMED)한 상품만 쓸 수 있다.
 // 미디어는 ✅ POST /media/PRODUCT_REVIEW로 고르면 바로 올리고(useMediaUploads), 제출에는 다 올린 urls를 쓴다.
-// TODO(api): 주문 상품(orderId·orderItemId·판매자·수량)은 주문 조회 API가 없어 fixtures + 쿼리(target.ts).
 // TODO(api): 수정할 리뷰는 단건 조회가 없어 내 리뷰 목록 GET /reviews/me에서 찾는다(api.ts findMyReview).
+
+function NotFound({ title, description }: { title: string; description: string }) {
+  return (
+    <QueryState
+      status="notFound"
+      notFound={{
+        title,
+        description,
+        action: { label: '주문 내역', to: '/orders' },
+      }}
+    />
+  )
+}
 
 export function ReviewNewPage() {
   const [params] = useSearchParams()
-  const orderItem = useMemo(() => orderItemFromQuery(params), [params])
+  const target = useMemo(() => orderItemFromQuery(params), [params])
 
-  if (!orderItem) {
+  if (!target) {
+    return (
+      <NotFound
+        title="리뷰를 쓸 주문 상품을 찾지 못했어요"
+        description="주문 상세에서 ‘리뷰 쓰기’를 눌러 주세요."
+      />
+    )
+  }
+  return <ReviewFromOrder key={`${target.orderId}-${target.orderItemId}`} {...target} />
+}
+
+function ReviewFromOrder({ orderId, orderItemId }: { orderId: number; orderItemId: number }) {
+  const order = useQuery(orderDetailQueryOptions(orderId))
+
+  if (order.isPending) return <QueryState status="pending" loadingLabel="주문을 확인하고 있어요" />
+  if (order.isError) {
+    if (isApiError(order.error) && order.error.status === 404) {
+      return (
+        <NotFound
+          title="주문을 찾지 못했어요"
+          description="이미 지워졌거나 내 주문이 아니에요. 주문 내역에서 다시 골라 주세요."
+        />
+      )
+    }
     return (
       <QueryState
-        status="notFound"
-        notFound={{
-          title: '리뷰를 쓸 주문 상품을 찾지 못했어요',
-          description: '주문 상세에서 ‘리뷰 쓰기’를 눌러 주세요.',
-          action: { label: '주문 내역', to: '/orders' },
-        }}
+        status="error"
+        errorMessage={reviewErrorMessage(order.error, 'load')}
+        onRetry={() => void order.refetch()}
+      />
+    )
+  }
+  return <ReviewFromOrderDetail order={order.data} orderItemId={orderItemId} />
+}
+
+function ReviewFromOrderDetail({
+  order,
+  orderItemId,
+}: {
+  order: OrderDetail
+  orderItemId: number
+}) {
+  const orderItem = targetFromOrder(order, orderItemId)
+  if (!orderItem) {
+    return (
+      <NotFound
+        title="이 주문에서 리뷰를 쓸 상품을 찾지 못했어요"
+        description="주문 상세에서 ‘리뷰 쓰기’를 눌러 주세요."
+      />
+    )
+  }
+  const status = order.sellerGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.orderItemId === orderItemId)?.status
+  if (status !== OrderItemStatus.PURCHASE_CONFIRMED) {
+    return (
+      <NotFound
+        title="구매확정한 상품만 리뷰를 쓸 수 있어요"
+        description="상품을 받고 구매확정한 뒤 다시 와 주세요."
       />
     )
   }

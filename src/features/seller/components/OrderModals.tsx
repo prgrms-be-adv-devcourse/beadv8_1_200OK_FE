@@ -13,16 +13,21 @@ import {
 import { DatePickerInput } from '@mantine/dates'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
+import { ShipmentCarrier } from '@/shared/api/types'
 import { formatDate, formatPrice } from '@/shared/lib/format'
+import { carrierLabels } from '@/shared/lib/labels'
 import { DisabledReason } from '@/shared/ui'
-import { CARRIERS, delayReasonLabels, sellerCancelReasonLabels } from '../labels'
+import { CARRIER_ORDER, delayReasonLabels, sellerCancelReasonLabels } from '../labels'
 import { DelayReason, SellerCancelReason, type SellerOrderRow } from '../types'
 import classes from './OrderModals.module.css'
 
 // 주문·출고 화면의 모달 4개. 시안: seller/SellerOrders (송장 등록 · 배송지 변경 요청 · 판매자 취소 · 출고 지연)
-// TODO(api): 📝 송장 POST /shipments/seller/{id}/dispatch, 지연 .../delay, 판매자 취소 POST /claims/seller/cancel, 배송지 변경 승인(API 미정)
+// ✅ 출고 POST /seller/shipments/{shipmentId}/dispatch {carrier, trackingNumber 숫자 10~13자리} (같은 택배사 안에서 중복 불가),
+//    배송지 변경 승인·거절 PATCH /seller/shipments/{shipmentId}/address-change-requests/{requestId} {decision: APPROVE|REJECT}.
+// TODO(api): ❌ 판매자 주문 목록 API가 없어 shipmentId·requestId를 받을 곳이 없다 → 연결 보류(화면 안에서만 바뀐다).
+// TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 · 클레임 API 없음.
 
-export type InvoiceInput = { carrier: string; trackingNumber: string }
+export type InvoiceInput = { carrier: ShipmentCarrier; trackingNumber: string }
 export type DelayInput = { reason: DelayReason; reasonDetail?: string; newShipDate: string }
 export type SellerCancelInput = { reason: SellerCancelReason; reasonDetail?: string }
 
@@ -67,14 +72,17 @@ function InvoiceForm({
   onSubmit: (input: InvoiceInput) => void
   submitting?: boolean
 }) {
-  const [carrier, setCarrier] = useState<string>(CARRIERS[0])
+  const [carrier, setCarrier] = useState<ShipmentCarrier>(
+    CARRIER_ORDER[0] ?? ShipmentCarrier.CJ_LOGISTICS,
+  )
   const [trackingNumber, setTrackingNumber] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const submit = () => {
     const digits = trackingNumber.replace(/[\s-]/g, '')
     if (!digits) return setError('송장번호를 입력해 주세요')
-    if (!/^\d{9,14}$/.test(digits)) return setError('송장번호는 숫자 9~14자리로 입력해 주세요')
+    // 서버 규칙(ShipmentDispatchRequest): 숫자 10~13자리
+    if (!/^\d{10,13}$/.test(digits)) return setError('송장번호는 숫자 10~13자리로 입력해 주세요')
     onSubmit({ carrier, trackingNumber: digits })
   }
 
@@ -83,9 +91,9 @@ function InvoiceForm({
       <Summary order={order} />
       <NativeSelect
         label="택배사"
-        data={[...CARRIERS]}
+        data={CARRIER_ORDER.map((value) => ({ value, label: carrierLabels[value] }))}
         value={carrier}
-        onChange={(e) => setCarrier(e.currentTarget.value)}
+        onChange={(e) => setCarrier(e.currentTarget.value as ShipmentCarrier)}
       />
       <TextInput
         label="송장번호"

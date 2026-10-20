@@ -3,7 +3,7 @@ import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import type { MemberRole } from '@/shared/api/types'
 
 // 가드·헤더가 읽는 로그인 상태. 내 정보 API가 없어 로그인 토큰 payload(sub · role)로 판단한다(DECISIONS.md A-12).
-// 토큰은 메모리에만 있어 새로고침하면 guest가 된다. TODO(api): 내 정보 API가 생기면 닉네임을 채운다.
+// 토큰은 sessionStorage에도 두어 새로고침해도 유지되고, 탭을 닫으면 guest가 된다. TODO(api): 내 정보 API가 생기면 닉네임을 채운다.
 // 'unknown'은 내 정보 조회처럼 확인 중인 상태용으로 남겨 둔다(지금은 만들지 않는다). 가드는 통과시킨다.
 
 export type Session =

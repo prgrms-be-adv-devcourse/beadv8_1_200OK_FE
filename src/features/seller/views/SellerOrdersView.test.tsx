@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { OrderItemStatus } from '@/shared/api/types'
+import { OrderItemStatus, ShipmentCarrier } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { cancelClaims, sellerOrders } from '../fixtures'
 import { SellerOrderTab } from '../types'
@@ -43,20 +43,21 @@ describe('SellerOrdersView', () => {
     expect(within(list).getByText('취소 요청을 먼저 처리해 주세요')).toBeInTheDocument()
   })
 
-  it('송장번호는 숫자 9~14자리만 받는다', async () => {
+  it('송장번호는 숫자 10~13자리만 받고, 택배사는 서버 코드로 보낸다', async () => {
     const { user, onRegisterInvoice } = renderOrders({
       defaultModal: { type: 'invoice', shipmentId: 1 },
     })
     const input = await screen.findByLabelText('송장번호')
     await user.type(input, '1234')
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '송장 등록' }))
-    expect(screen.getByText('송장번호는 숫자 9~14자리로 입력해 주세요')).toBeInTheDocument()
+    expect(screen.getByText('송장번호는 숫자 10~13자리로 입력해 주세요')).toBeInTheDocument()
 
+    expect(screen.getByLabelText('택배사')).toHaveDisplayValue('CJ대한통운')
     await user.clear(input)
     await user.type(input, '6842 1937 5520')
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '송장 등록' }))
     expect(onRegisterInvoice).toHaveBeenCalledWith(1, {
-      carrier: 'CJ대한통운',
+      carrier: ShipmentCarrier.CJ_LOGISTICS,
       trackingNumber: '684219375520',
     })
   })

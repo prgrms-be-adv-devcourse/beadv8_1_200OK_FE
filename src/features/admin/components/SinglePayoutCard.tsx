@@ -5,8 +5,8 @@ import type { SinglePayoutResult } from '../types'
 import classes from './PayoutCards.module.css'
 
 // 주문 상품 번호로 1건 정산. 시안: admin/AdminSettlements ‘주문 상품 번호로 1건 정산’
-// 오류 2종(구매확정 전 · 이미 정산됨)은 서버 detail을 입력 아래에 보여 준다.
-// TODO(api): 📝 POST /payout/run/orderItems/{orderItemId}. 주문 상품 번호는 API의 orderItemId(숫자)
+// POST /api/v1/admin/payouts/run/order-items/{orderItemId} — 서버가 재처리 정책을 정하지 않아 지금은 501.
+// 오류 문구(501 안내 · 400 번호 형식 · 나중의 구매확정 전 · 이미 정산됨)는 입력 아래에 보여 준다.
 
 type MaybeAsync = unknown
 

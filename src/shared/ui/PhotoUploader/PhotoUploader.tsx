@@ -46,7 +46,7 @@ export type PhotoUploaderProps = {
   video?: { maxCount: number; maxSizeMb: number }
 }
 
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const IMAGE_TYPES = ['image/jpeg', 'image/png']
 
 export function PhotoUploader({
   label,

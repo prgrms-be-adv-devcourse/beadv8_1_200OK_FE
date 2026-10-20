@@ -12,9 +12,14 @@ import {
 import { CircleAlert, CircleX, Info, MapPin, RefreshCw, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import type { Checkout, CreateOrderRequest, ShippingAddress } from '@/shared/api/types'
+import type {
+  Checkout,
+  CreateOrderRequest,
+  ShippingAddress,
+  ShippingFeeQuote,
+} from '@/shared/api/types'
 import { MIN_CHARGE_AMOUNT } from '@/shared/lib/constants'
-import { formatAmount, formatPrice } from '@/shared/lib/format'
+import { formatAmount, formatDate, formatPrice } from '@/shared/lib/format'
 import {
   AddressModal,
   CtaBar,
@@ -24,25 +29,30 @@ import {
   PriceText,
   QueryState,
 } from '@/shared/ui'
-import type { PaymentState } from '../types'
+import type { FeeQuoteStatus, PaymentState } from '../types'
 import classes from './CheckoutView.module.css'
 
 // B-04 주문서. 시안: b2c/Checkout, CheckoutMobile
 // 결제는 예치금으로만 한다(B-1 확정). 잔액이 부족하면 결제를 막고 부족한 만큼 충전하러 보냈다가 주문서로 돌아온다.
 // API 기준으로 더한 것: 판매자 정보 제공 동의(필수), 409 ‘주문 금액이 바뀌었어요’ 안내(A-6).
-// 배송비는 API 값 그대로(지금은 0원, A-8). 상품 사진·농가 이름은 주문서 API에 없어 따로 받는다(TODO(api)).
+// 배송비는 주문서 API 값(판매자별 기본 배송비). 배송지 우편번호로 ✅ 배송비 견적(fee-quotes)을 받으면 도서산간 추가 운임·도착 예정일을
+// 더해 보여 주고, 최종 금액(expectedTotalAmount)에 추가 운임을 더한다. 견적을 받는 동안은 결제를 기다리게 한다.
+// TODO(api): 상품 사진·농가 이름은 주문서 API에 없어 따로 받는다(sellerNames).
 
 export type CheckoutViewProps = {
   status: 'pending' | 'error' | 'success'
   checkout?: Checkout
   /** TODO(api): 주문서 API는 sellerId만 준다 */
   sellerNames?: Record<number, string>
-  /** TODO(api): 📝 GET /wallets/me 잔액 */
+  /** GET /wallets/me/balance의 balance */
   balance: number
-  /** 처음 배송지: 충전에 다녀오기 전 적어 둔 초안. TODO(api): 📝 회원 배송지 GET /members/me/address. 없으면 null */
+  /** 처음 배송지: 충전에 다녀오기 전 적어 둔 초안. TODO(api): ❌ 회원 배송지 API 없음. 없으면 null */
   defaultAddress?: ShippingAddress | null
-  /** 배송지 모달에서 ‘이번 주문에 적용’을 눌렀을 때 (초안 저장) */
+  /** 배송지 모달에서 ‘이번 주문에 적용’을 눌렀을 때 (초안 저장 · 견적용 우편번호) */
   onAddressSave?: (address: ShippingAddress) => void
+  /** 배송지 우편번호로 받은 배송비 견적. 없으면 주문서 배송비만 보여 준다 */
+  feeQuote?: ShippingFeeQuote
+  feeQuoteStatus?: FeeQuoteStatus
   paymentState?: PaymentState
   /** 409로 주문서를 다시 불러왔을 때 이전 금액 */
   previousTotal?: number | null
@@ -91,6 +101,8 @@ export function CheckoutView({
   errorMessage,
   loadErrorMessage,
   onAddressSave,
+  feeQuote,
+  feeQuoteStatus = 'idle',
   onPay,
   onRetry,
 }: CheckoutViewProps) {
@@ -122,17 +134,21 @@ export function CheckoutView({
     )
   }
 
-  const total = checkout.totalAmount
+  const quoteOf = (sellerId: number) => feeQuote?.sellers.find((s) => s.sellerId === sellerId)
+  const surcharge = feeQuote?.sellers.reduce((sum, s) => sum + s.regionSurcharge, 0) ?? 0
+  const total = checkout.totalAmount + surcharge
   const shortfall = Math.max(0, total - balance)
   const itemCount = checkout.sellerGroups.reduce((sum, group) => sum + group.items.length, 0)
   const chargePath = `/wallet/charge?shortfall=${shortfall}&returnTo=${encodeURIComponent('/checkout')}`
   const payReason = !address
     ? '배송지를 입력해 주세요'
-    : shortfall > 0
-      ? '예치금이 부족해 결제할 수 없어요'
-      : !agreed
-        ? '판매자 정보 제공에 동의해 주세요'
-        : null
+    : feeQuoteStatus === 'pending'
+      ? '배송비를 계산하고 있어요'
+      : shortfall > 0
+        ? '예치금이 부족해 결제할 수 없어요'
+        : !agreed
+          ? '판매자 정보 제공에 동의해 주세요'
+          : null
 
   const pay = () => {
     if (!address || payReason) return
@@ -195,6 +211,11 @@ export function CheckoutView({
                 <Text className={classes.help}>
                   주문서에서 바꾼 배송지는 이번 주문에만 적용돼요
                 </Text>
+                {feeQuoteStatus === 'error' && (
+                  <Text className={classes.help} role="status">
+                    배송비 견적을 불러오지 못했어요. 결제 금액은 주문할 때 다시 계산돼요
+                  </Text>
+                )}
               </>
             ) : (
               <div className={classes.noAddress}>
@@ -222,6 +243,7 @@ export function CheckoutView({
             </div>
             {checkout.sellerGroups.map((group) => {
               const name = sellerNames[group.sellerId] ?? '판매자'
+              const quote = quoteOf(group.sellerId)
               return (
                 <div key={group.sellerId} className={classes.group}>
                   <div className={classes.groupHead}>
@@ -243,8 +265,23 @@ export function CheckoutView({
                   </ul>
                   <div className={classes.row}>
                     <span>배송비</span>
-                    <PriceText amount={group.shippingFee} size="S" />
+                    <PriceText amount={quote?.baseShippingFee ?? group.shippingFee} size="S" />
                   </div>
+                  {quote && quote.regionSurcharge > 0 && (
+                    <div className={classes.row} data-tone="warning">
+                      <span>도서산간 추가 운임</span>
+                      <span className="pd-num">+{formatPrice(quote.regionSurcharge)}</span>
+                    </div>
+                  )}
+                  {quote && (
+                    <div className={classes.row}>
+                      <span>도착 예정</span>
+                      <span className="pd-num">
+                        {formatDate(quote.arrivalStartDate, 'monthDay')}~
+                        {formatDate(quote.arrivalEndDate, 'monthDayWeek')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -338,9 +375,22 @@ export function CheckoutView({
             <div>
               <dt>배송비</dt>
               <dd>
-                <PriceText amount={checkout.totalShippingFee} size="S" />
+                <PriceText
+                  amount={
+                    feeQuote ? feeQuote.totalShippingFee - surcharge : checkout.totalShippingFee
+                  }
+                  size="S"
+                />
               </dd>
             </div>
+            {surcharge > 0 && (
+              <div>
+                <dt>도서산간 추가 운임</dt>
+                <dd>
+                  <PriceText amount={surcharge} size="S" />
+                </dd>
+              </div>
+            )}
             <div className={classes.totalRow}>
               <dt>총 결제 금액</dt>
               <dd>
