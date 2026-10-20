@@ -200,7 +200,6 @@ export function ChargeView({
       </div>
 
       <ul className={classes.notes}>
-        <li>본인 명의 결제 수단으로만 충전할 수 있어요</li>
         <li>토스페이먼츠 결제창에서 카드·간편결제로 결제해요</li>
         <li>
           한 번에 {formatPrice(MIN_CHARGE_AMOUNT)}부터 {formatPrice(CHARGE_AMOUNT_STEP)} 단위로,
