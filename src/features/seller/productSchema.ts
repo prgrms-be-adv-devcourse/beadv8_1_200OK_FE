@@ -8,8 +8,21 @@ import {
 
 // 상품 등록·수정 검증. 규칙은 Bruno ProductCreateRequest 그대로(✅ POST /products, PUT /products/{id}).
 // 사진(imageUrls 1~10장)은 업로드 상태라 폼 밖에서 검사한다.
+// 설명(description)은 에디터가 만든 HTML 그대로 descriptionHtml로 보낸다. 서버가 정제하고, 정제 뒤 10만 자까지 받는다.
 
 export const PRICE_MAX = 100_000_000
+/** 설명 HTML 최대 길이. 요청은 20만 자까지지만 정제 뒤 10만 자를 넘으면 422라 10만 자로 막는다 */
+export const DESCRIPTION_HTML_MAX = 100_000
+
+/** 에디터 HTML에 글자나 사진이 있는지 (빈 에디터도 <p></p>를 낼 수 있다) */
+export function hasDescriptionContent(html: string) {
+  if (/<img\s/i.test(html)) return true
+  const text = html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim()
+  return text.length > 0
+}
 export const OPTION_MAX = 50
 
 const option = z.object({
@@ -40,7 +53,13 @@ export const productSchema = z
       .min(1, '상품명을 입력해 주세요')
       .max(100, '상품명은 100자 이하로 입력해 주세요'),
     region: z.enum(ProductRegion),
-    description: z.string().trim().min(1, '상품 설명을 입력해 주세요'),
+    description: z
+      .string()
+      .refine(hasDescriptionContent, '상품 설명을 입력해 주세요')
+      .refine(
+        (html) => html.length <= DESCRIPTION_HTML_MAX,
+        '상품 설명이 너무 길어요. 서식이나 표를 줄여 주세요',
+      ),
     options: z
       .array(option)
       .min(1, '옵션은 1개 이상 있어야 해요')
@@ -72,26 +91,10 @@ export const productSchema = z
 
 export type ProductFormValues = z.infer<typeof productSchema>
 
-/** 설명 입력(줄바꿈 글) → 서버 descriptionHtml. 서버가 저장할 때 다시 정제한다 */
-export function textToHtml(text: string) {
-  const escapeHtml = (s: string) =>
-    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  return text
-    .trim()
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('')
-}
+/** 상세설명 에디터에 넣을 수 있는 사진 형식 (서버 업로드와 같음) */
+export const DESCRIPTION_IMAGE_TYPES = ['image/jpeg', 'image/png']
 
-/** 서버 descriptionHtml → 설명 입력 글 (수정 화면 처음 값) */
-export function htmlToText(html: string) {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*<p>/gi, '\n\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .trim()
+/** 우리 업로드(POST /media/PRODUCT)가 준 주소인지. 서버는 이 주소의 이미지만 남긴다 */
+export function isUploadedProductImage(src: string) {
+  return /^https:\/\/[^/]+\.amazonaws\.com\/product\/[A-Za-z0-9-]+\.[A-Za-z0-9]+$/.test(src)
 }

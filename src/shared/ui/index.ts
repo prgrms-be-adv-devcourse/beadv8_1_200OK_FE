@@ -55,6 +55,7 @@ export { ProgressSteps, type ProgressStepsProps } from './ProgressSteps/Progress
 export { QuantityStepper, type QuantityStepperProps } from './QuantityStepper/QuantityStepper'
 export { QueryState, type QueryStateProps, type QueryStatus } from './QueryState/QueryState'
 export { RatingStars, type RatingStarsProps } from './RatingStars/RatingStars'
+export { RichContent, type RichContentProps, richContentClassName } from './RichContent/RichContent'
 export {
   type BadgeStatus,
   getStatusBadgeSpec,

@@ -37,7 +37,8 @@ export default defineConfig(({ mode }) => ({
               name: 'react',
               test: /node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]/,
             },
-            { name: 'mantine', test: /node_modules[\\/]@mantine[\\/]/ },
+            // @mantine/tiptap은 상품 설명 에디터(판매자 등록·수정 화면)에서만 쓰여 공통 청크에서 뺀다
+            { name: 'mantine', test: /node_modules[\\/]@mantine[\\/](?!tiptap[\\/])/ },
             { name: 'query', test: /node_modules[\\/]@tanstack[\\/]/ },
           ],
         },

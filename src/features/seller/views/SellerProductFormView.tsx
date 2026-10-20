@@ -8,14 +8,14 @@ import {
   NativeSelect,
   NumberInput,
   SegmentedControl,
+  Skeleton,
   Stack,
   Switch,
   Text,
-  Textarea,
   TextInput,
 } from '@mantine/core'
 import { CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   Controller,
   type FieldErrors,
@@ -36,7 +36,7 @@ import { MAX_IMAGE_MB, PRODUCT_IMAGE_MAX } from '@/shared/lib/constants'
 import { categoryLabels, productStatusLabels, regionLabels } from '@/shared/lib/labels'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import { DisabledReason, PageHeader, type PhotoItem, PhotoUploader, ProductCard } from '@/shared/ui'
-import { OPTION_MAX, type ProductFormValues, productSchema, textToHtml } from '../productSchema'
+import { OPTION_MAX, type ProductFormValues, productSchema } from '../productSchema'
 import classes from './SellerProductFormView.module.css'
 
 // S-05 상품 등록 · 수정. 시안: seller/SellerProductForm, SellerProductFormMobile
@@ -44,6 +44,10 @@ import classes from './SellerProductFormView.module.css'
 // 생산자·상세 지역·수확일·기본 옵션·설명 사진은 API에 없어 두지 않는다(A-2).
 // 제출에 실패하면 위에 오류 요약(누르면 그 칸으로)을 보여 준다. 수정은 version이 다르면 409.
 // 사진은 다 올린 것(서버 url)만 넘기고, 올리는 중이면 저장을 막는다.
+// 상품 설명은 에디터(@mantine/tiptap)로 HTML을 쓴다. 에디터는 등록·수정 화면을 열 때만 불러온다(무거움).
+// 설명 사진은 onDescriptionImageUpload로 올리고, 올리는 중이면 저장을 막는다.
+
+const ProductDescriptionEditor = lazy(() => import('../components/ProductDescriptionEditor'))
 
 type MaybeAsync = unknown
 
@@ -61,6 +65,8 @@ export type SellerProductFormViewProps = {
   photoError?: string | null
   /** 사진을 올리는 중 → 저장을 막고 이유를 보여 준다 */
   uploading?: boolean
+  /** 설명 에디터에 넣은 사진 → 업로드한 서버 주소 (POST /media/PRODUCT) */
+  onDescriptionImageUpload: (file: File) => Promise<string>
   onSubmit: (values: ProductFormResult) => MaybeAsync
   submitting?: boolean
   /** 서버 오류 (서버 detail) */
@@ -137,6 +143,7 @@ export function SellerProductFormView({
   onMovePhoto,
   photoError,
   uploading = false,
+  onDescriptionImageUpload,
   onSubmit,
   submitting = false,
   errorMessage,
@@ -150,6 +157,8 @@ export function SellerProductFormView({
 }: SellerProductFormViewProps) {
   const [submitted, setSubmitted] = useState(defaultShowErrors)
   const [deleteOpen, setDeleteOpen] = useState(defaultDeleteOpen)
+  const [descriptionUploading, setDescriptionUploading] = useState(false)
+  const busy = uploading || descriptionUploading
   const {
     control,
     register,
@@ -179,10 +188,10 @@ export function SellerProductFormView({
   const submit = handleSubmit(
     (form) => {
       setSubmitted(true)
-      if (uploading || uploaded.length === 0) return
+      if (busy || uploaded.length === 0) return
       onSubmit({
         name: form.name,
-        descriptionHtml: textToHtml(form.description),
+        descriptionHtml: form.description,
         category: form.category,
         region: form.region,
         status: form.status,
@@ -348,14 +357,29 @@ export function SellerProductFormView({
             <h2 id="sec-desc" className={classes.sectionTitle}>
               <span className={classes.step}>3</span>상품 설명
             </h2>
-            <Textarea
-              id="product-description"
-              label="설명"
-              description="어떻게 키웠는지, 상자에 몇 개 들었는지, 보관법을 알려 주세요. 빈 줄로 문단을 나눠요."
-              autosize
-              minRows={6}
-              error={errors.description?.message}
-              {...register('description')}
+            <Controller
+              control={control}
+              name="description"
+              render={({ field }) => (
+                <Suspense
+                  fallback={
+                    <Skeleton h={320} radius="md" aria-label="설명 편집기를 불러오고 있어요" />
+                  }
+                >
+                  <ProductDescriptionEditor
+                    id="product-description"
+                    label="설명"
+                    description="어떻게 키웠는지, 상자에 몇 개 들었는지, 보관법을 알려 주세요. 사진은 jpg·png 10MB까지 넣을 수 있어요."
+                    placeholder="예) 해발 400m 과수원에서 키운 부사예요. 5kg 상자에 15~18과가 들어 있어요."
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.description?.message}
+                    onImageUpload={onDescriptionImageUpload}
+                    onUploadingChange={setDescriptionUploading}
+                  />
+                </Suspense>
+              )}
             />
           </section>
 
@@ -559,12 +583,10 @@ export function SellerProductFormView({
           </Button>
           <DisabledReason
             reason={
-              uploading
-                ? `사진을 다 올린 뒤 ${mode === 'edit' ? '저장' : '등록'}할 수 있어요`
-                : null
+              busy ? `사진을 다 올린 뒤 ${mode === 'edit' ? '저장' : '등록'}할 수 있어요` : null
             }
           >
-            <Button type="submit" disabled={uploading} loading={submitting}>
+            <Button type="submit" disabled={busy} loading={submitting}>
               {mode === 'edit' ? '저장' : '등록하기'}
             </Button>
           </DisabledReason>

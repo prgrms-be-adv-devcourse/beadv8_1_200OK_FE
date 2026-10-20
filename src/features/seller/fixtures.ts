@@ -224,7 +224,7 @@ export const appleFormValues: ProductFormValues = {
   name: '청송 꿀사과 부사',
   region: ProductRegion.GYEONGBUK,
   description:
-    '3대째 사과만 키우는 청송 부남면 과수원이에요. 10월 8일에 수확한 부사를 크기별로 골라 상자에 담아 보내 드려요.\n\n받으신 뒤 바로 냉장 보관하면 더 오래 아삭하게 드실 수 있어요.',
+    '<p>3대째 사과만 키우는 청송 부남면 과수원이에요. 10월 8일에 수확한 부사를 크기별로 골라 상자에 담아 보내 드려요.</p><h3>보관법</h3><ul><li><p>받으신 뒤 바로 냉장 보관하면 더 오래 아삭하게 드실 수 있어요.</p></li></ul>',
   options: [
     { id: 1011, name: '1kg (5~6과)', salePrice: 12900, listPrice: 14500, totalStock: 20 },
     { id: 1012, name: '2kg (11~13과)', salePrice: 23900, listPrice: 27000, totalStock: 11 },

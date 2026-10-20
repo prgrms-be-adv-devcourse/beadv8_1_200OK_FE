@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest'
 import { server } from '@/mocks/server'
 
+// 상품 설명 에디터(Tiptap)는 jsdom에서 돌지 않아 textarea로 바꿔 끼운다 (src/test/descriptionEditorStub.tsx)
+vi.mock(
+  '@/features/seller/components/ProductDescriptionEditor',
+  () => import('@/test/descriptionEditorStub'),
+)
+
 // API 요청은 MSW가 받는다. 핸들러가 없는 요청은 테스트 실패
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 afterEach(() => server.resetHandlers())

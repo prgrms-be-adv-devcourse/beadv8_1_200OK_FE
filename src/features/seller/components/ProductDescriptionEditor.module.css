@@ -1,0 +1,54 @@
+.root {
+  min-width: 0;
+  max-width: 100%;
+  border-color: var(--pd-color-border-input);
+
+  &[data-invalid] {
+    border-color: var(--pd-color-error);
+  }
+}
+
+.toolbar {
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-xs);
+
+  /* 좁은 화면: 여러 줄로 쌓이면 편집 칸을 가리므로 한 줄로 두고 툴바만 가로로 밀어 본다 */
+  @media (max-width: 47.99em) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+
+    & > * {
+      flex-shrink: 0;
+    }
+  }
+
+  /* 툴바 단추도 터치 영역 44px */
+  & button {
+    min-width: var(--pd-touch-min);
+    min-height: var(--pd-touch-min);
+  }
+}
+
+.content {
+  min-height: 15rem;
+
+  & :global(.ProseMirror) {
+    min-height: 15rem;
+    padding: var(--mantine-spacing-md);
+  }
+
+  & :global(.ProseMirror:focus-visible) {
+    outline: 2px solid var(--pd-color-focus);
+    outline-offset: -2px;
+  }
+}
+
+.swatch {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-xs);
+}

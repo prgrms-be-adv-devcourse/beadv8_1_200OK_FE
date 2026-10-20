@@ -26,6 +26,7 @@ import {
   PriceText,
   QueryState,
   RatingStars,
+  RichContent,
   StatusBadge,
 } from '@/shared/ui'
 import { ProductGallery } from '../components/ProductGallery'
@@ -421,11 +422,7 @@ export function ProductDetailView({
           <h2 id="product-info-title" className={classes.sectionTitle}>
             상품 정보
           </h2>
-          <div
-            className={classes.description}
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: 서버가 저장할 때 정제한 HTML(descriptionHtml)이다
-            dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
-          />
+          <RichContent html={product.descriptionHtml} />
         </section>
 
         <section id="product-farm" aria-labelledby="product-farm-title" className={classes.section}>

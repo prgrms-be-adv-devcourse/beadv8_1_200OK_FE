@@ -243,21 +243,6 @@
   }
 }
 
-.description {
-  font-size: var(--mantine-font-size-lg);
-  line-height: 1.75rem;
-
-  & p {
-    margin: 0 0 var(--mantine-spacing-md);
-  }
-
-  & img {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--mantine-radius-sm);
-  }
-}
-
 .facts {
   margin: 0;
   padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);

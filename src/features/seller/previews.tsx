@@ -257,6 +257,7 @@ const form = (props: Partial<SellerProductFormViewProps> = {}) => (
     onAddPhotos={noop}
     onRemovePhoto={noop}
     onMovePhoto={noop}
+    onDescriptionImageUpload={async (file) => URL.createObjectURL(file)}
     onSubmit={noop}
     {...props}
   />

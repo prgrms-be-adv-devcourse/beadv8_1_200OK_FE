@@ -9,7 +9,7 @@ import {
 } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { appleFormValues } from '../fixtures'
-import { htmlToText, textToHtml } from '../productSchema'
+import { hasDescriptionContent, isUploadedProductImage } from '../productSchema'
 import { SellerProductFormView, type SellerProductFormViewProps } from './SellerProductFormView'
 
 const photos = [{ id: 'a', url: 'https://cdn.example/a.jpg' }]
@@ -24,6 +24,7 @@ function renderForm(props: Partial<SellerProductFormViewProps> = {}) {
         onAddPhotos={() => {}}
         onRemovePhoto={() => {}}
         onMovePhoto={() => {}}
+        onDescriptionImageUpload={async () => ''}
         onSubmit={onSubmit}
         {...props}
       />
@@ -119,11 +120,29 @@ describe('SellerProductFormView', () => {
   })
 })
 
-describe('설명 변환', () => {
-  it('문단·줄바꿈을 HTML로, 특수문자는 이스케이프한다', () => {
-    expect(textToHtml('첫 줄\n둘째 줄\n\n<b>새</b> 문단')).toBe(
-      '<p>첫 줄<br>둘째 줄</p><p>&lt;b&gt;새&lt;/b&gt; 문단</p>',
-    )
-    expect(htmlToText('<p>첫 줄<br>둘째 줄</p><p>&lt;b&gt;새</p>')).toBe('첫 줄\n둘째 줄\n\n<b>새')
+describe('설명 HTML 검사', () => {
+  it('빈 에디터 HTML은 비었다고 보고, 글자나 사진이 있으면 입력한 것으로 본다', () => {
+    expect(hasDescriptionContent('')).toBe(false)
+    expect(hasDescriptionContent('<p></p>')).toBe(false)
+    expect(hasDescriptionContent('<p>&nbsp; </p><p><br></p>')).toBe(false)
+    expect(hasDescriptionContent('<p>아삭해요</p>')).toBe(true)
+    expect(
+      hasDescriptionContent(
+        '<p><img src="https://b.s3.ap-northeast-2.amazonaws.com/product/a.jpg"></p>',
+      ),
+    ).toBe(true)
+  })
+
+  it('우리 업로드 주소만 업로드한 사진으로 본다', () => {
+    expect(
+      isUploadedProductImage(
+        'https://bucket.s3.ap-northeast-2.amazonaws.com/product/3f2a-9b1c.jpg',
+      ),
+    ).toBe(true)
+    expect(isUploadedProductImage('data:image/png;base64,AAAA')).toBe(false)
+    expect(isUploadedProductImage('https://example.com/a.jpg')).toBe(false)
+    expect(
+      isUploadedProductImage('https://bucket.s3.ap-northeast-2.amazonaws.com/product_review/a.jpg'),
+    ).toBe(false)
   })
 })

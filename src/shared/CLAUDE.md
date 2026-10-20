@@ -12,7 +12,7 @@ feature에 속하지 않는 공통 코드. features·app을 import하지 않는�
   - `media.ts` 미디어 업로드 `uploadMedia(purpose, file)` — 화면에서는 `useMediaUploads`로 쓴다
   - `ApiError.ts` · `queryClient.ts` · `queryKeys.ts`(접두어만, 키 팩토리는 feature 소유) · `types.ts`(Bruno 타입)
 - `ui/` — Mantine으로 안 되는 공통·도메인 컴포넌트. `@/shared/ui`(index.ts)로 import한다 (AddressModal은 다음 우편번호 포함)
-  - PriceText · StatusBadge · OriginTag · LedgerBlock · ProductCard · ProductGrid · OptionCard · QuantityStepper · QueryState · EmptyView · PageHeader(PageBreadcrumbs) · DisabledReason · CtaBar · RatingStars · PhotoUploader(+ `useMediaUploads`: 고르면 바로 업로드 · 진행률 · 실패 문구 · 다 올린 `urls`) · FarmAvatar · FarmCard · FollowButton · LoginRequiredModal · AddressModal · PayoutDetailModal(판매자·관리자 정산 상세, 두 응답 모양을 구조적 타입으로 받음) · showToast
+  - PriceText · StatusBadge · OriginTag · LedgerBlock · ProductCard · ProductGrid · OptionCard · QuantityStepper · QueryState · EmptyView · PageHeader(PageBreadcrumbs) · DisabledReason · CtaBar · RatingStars · PhotoUploader(+ `useMediaUploads`: 고르면 바로 업로드 · 진행률 · 실패 문구 · 다 올린 `urls`) · FarmAvatar · FarmCard · FollowButton · LoginRequiredModal · AddressModal · RichContent(서버가 정제한 상세설명 HTML 본문, 판매자 에디터와 같은 태그 스타일) · NotConnected · PayoutDetailModal(판매자·관리자 정산 상세, 두 응답 모양을 구조적 타입으로 받음) · showToast
   - 상태값 → 배지 색·아이콘·문구는 StatusBadge 한 곳에서만 정한다
 - `lib/` — 순수 유틸(format·labels·dateRange(서버 기간 파라미터)·productState·shipmentState·claimState·withdrawalState·sellerApplicationState·rating·returnTo·daumPostcode·lazyWithRetry·env(API 오리진·PG 키)), 정책 상수 `constants.ts`(DECISIONS.md D), 화면 상태 갤러리 계약 `screenPreview.ts`
 - `styles/` — Mantine theme(토큰), 전역 CSS, CSS Modules 공통 변수

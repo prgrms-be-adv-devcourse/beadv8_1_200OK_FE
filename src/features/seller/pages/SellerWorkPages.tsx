@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { uploadMedia } from '@/shared/api/media'
 import {
   MediaPurpose,
   type ProductDetail,
@@ -11,7 +12,7 @@ import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { QueryState, showToast, useMediaUploads } from '@/shared/ui'
 import { type CachedProduct, readCachedProducts } from '../productCache'
 import { toProductFormFailure } from '../productErrors'
-import { htmlToText, type ProductFormValues } from '../productSchema'
+import type { ProductFormValues } from '../productSchema'
 import {
   PRODUCT_PAGE_SIZE,
   useChangeProductStatus,
@@ -139,6 +140,10 @@ export function SellerProductFormPage() {
   return <ProductEdit key={productId} productId={Number(productId)} />
 }
 
+/** 상세설명 에디터에 넣은 사진을 올리고 서버 주소를 돌려준다. 실패하면 ApiError(서버 detail)를 던진다 */
+const uploadDescriptionImage = async (file: File) =>
+  (await uploadMedia(MediaPurpose.PRODUCT, file)).url
+
 function ProductCreate() {
   const navigate = useNavigate()
   const memberId = useMemberId()
@@ -155,6 +160,7 @@ function ProductCreate() {
       onMovePhoto={photos.move}
       photoError={photos.error}
       uploading={photos.uploading}
+      onDescriptionImageUpload={uploadDescriptionImage}
       submitting={create.isPending}
       errorMessage={failure.message}
       fieldErrors={failure.fieldErrors}
@@ -177,7 +183,7 @@ function toFormValues(cached: CachedProduct, detail: ProductDetail | undefined):
       category: cached.category,
       name: cached.name,
       region: cached.region,
-      description: htmlToText(cached.descriptionHtml),
+      description: cached.descriptionHtml,
       options: cached.options,
       status: cached.status,
       visibility: cached.visibility,
@@ -188,7 +194,7 @@ function toFormValues(cached: CachedProduct, detail: ProductDetail | undefined):
     category: detail.category,
     name: detail.name,
     region: detail.region,
-    description: htmlToText(detail.descriptionHtml),
+    description: detail.descriptionHtml,
     options: detail.options.map((o) => ({
       id: o.optionId,
       name: o.name,
@@ -278,6 +284,7 @@ function ProductEditForm({
       onMovePhoto={photos.move}
       photoError={photos.error}
       uploading={photos.uploading}
+      onDescriptionImageUpload={uploadDescriptionImage}
       submitting={update.isPending}
       errorMessage={failure.message}
       fieldErrors={failure.fieldErrors}
