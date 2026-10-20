@@ -1,8 +1,6 @@
 name: Deploy to Vercel
 
 on:
-  push:
-    branches: [main, dev]
   workflow_dispatch:
     inputs:
       target:
@@ -23,9 +21,9 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # main push 또는 수동 실행에서 production을 고르면 프로덕션, 나머지는 preview
+    # 수동 실행에서 고른 브랜치를 체크아웃하고, production을 고르면 프로덕션에 배포해요
     env:
-      IS_PROD: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'production') }}
+      IS_PROD: ${{ inputs.target == 'production' }}
     steps:
       - uses: actions/checkout@v6
 
