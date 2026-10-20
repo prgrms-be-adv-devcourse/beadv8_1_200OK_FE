@@ -2,6 +2,7 @@ import { OrderItemStatus, ProductStatus } from '@/shared/api/types'
 import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
+import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import {
   adjustedPayoutDetail,
   adjustedPayoutItems,
@@ -26,9 +27,17 @@ import {
   withdrawals,
 } from './fixtures'
 import { SellerOrderTab } from './types'
-import { SellerClaimsView, type SellerClaimsViewProps } from './views/SellerClaimsView'
+import {
+  SellerClaimsNotConnectedView,
+  SellerClaimsView,
+  type SellerClaimsViewProps,
+} from './views/SellerClaimsView'
 import { SellerHomeView, type SellerHomeViewProps } from './views/SellerHomeView'
-import { SellerOrdersView, type SellerOrdersViewProps } from './views/SellerOrdersView'
+import {
+  SellerOrdersNotConnectedView,
+  SellerOrdersView,
+  type SellerOrdersViewProps,
+} from './views/SellerOrdersView'
 import { SellerPayoutsView, type SellerPayoutsViewProps } from './views/SellerPayoutsView'
 import {
   SellerProductFormView,
@@ -51,6 +60,7 @@ const home = (props: Partial<SellerHomeViewProps> = {}) => (
     status="success"
     asOf={homeAsOf}
     stats={homeStats}
+    expectedPayout={payoutOutlook.expectedAmount}
     todos={todos}
     walletBalance={sellerWalletBalance}
     products={productStats}
@@ -83,7 +93,18 @@ export const sellerCenterPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller',
     states: [
-      { id: 'default', label: '처리할 일 있음', session: 'seller', render: () => home() },
+      {
+        id: 'not-connected',
+        label: '지금 연결 모양 (주문 집계·처리할 일 연결 전)',
+        session: 'seller',
+        render: () => home({ asOf: undefined, stats: null, todos: null }),
+      },
+      {
+        id: 'default',
+        label: '처리할 일 있음 (시안 전체)',
+        session: 'seller',
+        render: () => home(),
+      },
       {
         id: 'profile-incomplete',
         label: '상점 프로필 미입력',
@@ -97,8 +118,22 @@ export const sellerCenterPreviews: ScreenPreview[] = [
         render: () =>
           home({
             todos: [],
-            stats: { newOrders: 0, waitingShipment: 0, cancelRequests: 0, expectedPayout: 0 },
+            stats: { newOrders: 0, waitingShipment: 0, cancelRequests: 0 },
+            expectedPayout: 0,
           }),
+      },
+      {
+        id: 'payout-loading',
+        label: '정산 예정 금액 불러오는 중',
+        session: 'seller',
+        render: () =>
+          home({ stats: null, todos: null, expectedPayout: null, expectedPayoutPending: true }),
+      },
+      {
+        id: 'payout-error',
+        label: '정산 예정 금액 불러오기 실패',
+        session: 'seller',
+        render: () => home({ stats: null, todos: null, expectedPayout: null }),
       },
       {
         id: 'loading',
@@ -122,6 +157,12 @@ export const sellerCenterPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/profile',
     states: [
+      {
+        id: 'not-connected',
+        label: '지금 연결 모양 (팔로워 연결 전)',
+        session: 'seller',
+        render: () => profile({ followerCount: null, followers: null, hasMoreFollowers: false }),
+      },
       {
         id: 'default',
         label: '기본 (사진 없음 → 첫 글자)',
@@ -422,6 +463,12 @@ export const sellerWorkPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/orders',
     states: [
+      {
+        id: 'not-connected',
+        label: '지금 연결 모양 (연결 전)',
+        session: 'seller',
+        render: () => <SellerOrdersNotConnectedView />,
+      },
       { id: 'waiting', label: '출고 대기', session: 'seller', render: () => orders() },
       {
         id: 'invoice',
@@ -485,6 +532,12 @@ export const sellerWorkPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/claims',
     states: [
+      {
+        id: 'not-connected',
+        label: '지금 연결 모양 (연결 전)',
+        session: 'seller',
+        render: () => <SellerClaimsNotConnectedView />,
+      },
       { id: 'pending', label: '처리 대기', session: 'seller', render: () => claims() },
       {
         id: 'approve',
@@ -666,21 +719,22 @@ export const sellerMoneyPreviews: ScreenPreview[] = [
     path: '/seller/wallet',
     states: [
       {
-        id: 'api-only',
-        label: '지금 연결 모양 (잔액만 · 출금 닫힘)',
+        id: 'not-connected',
+        label: '지금 연결 모양 (잔액만 · 계좌·내역 연결 전 · 출금 닫힘)',
         session: 'seller',
         render: () =>
           walletView({
             wallet: {
-              ...sellerWallet,
+              balance: sellerWallet.balance,
               withdrawableAmount: sellerWallet.balance,
+              account: null,
               accountNeedsCheck: false,
               accountChangePending: false,
             },
-            withdrawals: [],
-            transactions: [],
+            withdrawals: null,
+            transactions: null,
             hasMoreTransactions: false,
-            featureDisabledReason: '출금 신청은 아직 열리지 않았어요',
+            featureDisabledReason: NOT_CONNECTED_REASON,
           }),
       },
       { id: 'default', label: '기본 (시안 전체)', session: 'seller', render: () => walletView() },

@@ -7,6 +7,8 @@ import { render } from '@/test/render'
 import { orderSummaries } from '../fixtures'
 import { OrderDetailPage } from './OrderDetailPage'
 import { OrderListPage } from './OrderListPage'
+import { ShipmentPage } from './ShipmentPage'
+import { SupportPage } from './SupportPage'
 
 // 주문 목록·상세 라우트. 기본 응답(mocks/handlers/orders.ts): 목록 5건(10건씩), 상세는 fixtures, 없는 주문 404
 
@@ -21,6 +23,8 @@ function renderAt(path: string) {
     [
       { path: '/orders', Component: OrderListPage },
       { path: '/orders/:orderId', Component: OrderDetailPage },
+      { path: '/orders/:orderId/shipments/:shipmentId', Component: ShipmentPage },
+      { path: '/orders/:orderId/inquiry', Component: SupportPage },
     ],
     { initialEntries: [path] },
   )
@@ -131,5 +135,24 @@ describe('OrderDetailPage', () => {
     renderAt('/orders/abc')
     expect(await screen.findByText('주문을 찾을 수 없어요')).toBeInTheDocument()
     expect(called).toBe(false)
+  })
+})
+
+describe('배송 조회·고객센터 문의 (연결 전)', () => {
+  it('배송 조회는 가짜 배송 정보 대신 연결 전 안내와 주문 상세 링크를 보여 준다', async () => {
+    renderAt('/orders/151/shipments/3')
+    expect(await screen.findByRole('heading', { level: 1, name: '배송 조회' })).toBeInTheDocument()
+    expect(screen.getByText('배송 조회는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '주문 상세로' })).toHaveAttribute('href', '/orders/151')
+  })
+
+  it('고객센터 문의는 폼 대신 연결 전 안내를 보여 준다', async () => {
+    renderAt('/orders/93/inquiry')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '고객센터 문의' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('고객센터 문의는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '주문 상세로' })).toHaveAttribute('href', '/orders/93')
   })
 })

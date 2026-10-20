@@ -27,6 +27,11 @@ export const farmPreviews: ScreenPreview[] = [
     path: '/farms/7',
     mobileHeader: true,
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        render: () => <FarmStoreView status="notConnected" />,
+      },
       { id: 'default', label: '기본', render: () => store() },
       { id: 'following', label: '팔로잉', render: () => store({ following: true }) },
       {

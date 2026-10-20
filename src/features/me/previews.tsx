@@ -7,7 +7,7 @@ import {
   myOrderCounts,
   myProfile,
 } from './fixtures'
-import { AccountView, type AccountViewProps } from './views/AccountView'
+import { AccountNotConnectedView, AccountView, type AccountViewProps } from './views/AccountView'
 import { LikesView, type LikesViewProps } from './views/LikesView'
 import { MyPageView, type MyPageViewProps } from './views/MyPageView'
 
@@ -67,6 +67,18 @@ export const mePreviews: ScreenPreview[] = [
     path: '/me',
     tabBar: true,
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면: 프로필·개수·배송지)',
+        render: () =>
+          my({
+            profile: undefined,
+            orderCounts: undefined,
+            likedCount: undefined,
+            followingCount: undefined,
+            addressSummary: undefined,
+          }),
+      },
       { id: 'buyer', label: '구매자', render: () => my() },
       {
         id: 'applying',
@@ -92,6 +104,18 @@ export const mePreviews: ScreenPreview[] = [
     path: '/me/likes?tab=products',
     tabBar: true,
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        render: () => likes({ status: 'notConnected', products: undefined, farms: undefined }),
+      },
+      {
+        id: 'not-connected-farms',
+        label: '연결 전 · 팔로우 탭',
+        path: '/me/likes?tab=farms',
+        render: () =>
+          likes({ status: 'notConnected', tab: 'farms', products: undefined, farms: undefined }),
+      },
       { id: 'products', label: '관심 상품 (품절·판매 종료)', render: () => likes() },
       {
         id: 'farms',
@@ -120,6 +144,17 @@ export const mePreviews: ScreenPreview[] = [
     layout: 'mypage',
     path: '/me/account?tab=info',
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        render: () => <AccountNotConnectedView tab="info" onTabChange={noop} />,
+      },
+      {
+        id: 'not-connected-address',
+        label: '연결 전 · 배송지 탭',
+        path: '/me/account?tab=address',
+        render: () => <AccountNotConnectedView tab="address" onTabChange={noop} />,
+      },
       { id: 'info', label: '내 정보', render: () => account() },
       {
         id: 'password',

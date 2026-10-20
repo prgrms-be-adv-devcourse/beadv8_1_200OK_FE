@@ -3,16 +3,20 @@ import { FileText } from 'lucide-react'
 import { Link } from 'react-router'
 import { type TermsItem, TermsType } from '@/shared/api/types'
 import { termsTypeLabels } from '@/shared/lib/labels'
-import { PageHeader, QueryState } from '@/shared/ui'
+import { NotConnected, PageHeader, QueryState } from '@/shared/ui'
 import classes from './TermsView.module.css'
 
 // 약관 보기 /terms/:type. 시안: b2c/Terms, TermsMobile
 // 데스크톱: 왼쪽 약관 목록 | 오른쪽 본문. 모바일: 목록 → 본문. 제목·버전·필수·본문은 GET /wallets/me/terms 응답.
 // 시행일은 API에 없어 두지 않는다. ‘동의 받는 때’는 정책(회원가입·첫 충전) 기준 표.
+// TODO(api): 📝 공개 약관 조회 API가 없다(GET /wallets/me/terms는 로그인 필요). 비회원은 status 'loginRequired'로 본문 대신 로그인 안내.
 
 export type TermsViewProps = {
-  status: 'pending' | 'error' | 'success'
+  /** loginRequired: 비회원. 공개 약관 API가 없어 본문 대신 로그인 안내 */
+  status: 'pending' | 'error' | 'success' | 'loginRequired'
   terms: TermsItem[]
+  /** loginRequired일 때 로그인 버튼 경로 (returnTo 포함) */
+  loginTo?: string
   selectedType: TermsType
   onRetry?: () => void
   onBack?: () => void
@@ -29,6 +33,7 @@ export function TermsView({
   status,
   terms,
   selectedType,
+  loginTo = '/login',
   onRetry,
   onBack,
   errorMessage,
@@ -73,45 +78,54 @@ export function TermsView({
         </nav>
 
         <article className={classes.article} aria-labelledby="terms-title">
-          <QueryState
-            status={status === 'success' && !selected ? 'notFound' : status}
-            loadingLabel="약관을 불러오고 있어요"
-            errorMessage={errorMessage}
-            onRetry={onRetry}
-            notFound={{
-              icon: <FileText />,
-              title: '찾는 약관이 없어요',
-              description: '왼쪽 목록에서 약관을 골라 주세요.',
-              action: undefined,
-              layout: 'stack',
-            }}
-          >
-            {selected && (
-              <>
-                <div className={classes.titleRow}>
-                  {selected.required && (
-                    <Badge color="primary" variant="light">
-                      필수
-                    </Badge>
-                  )}
-                  <h2 id="terms-title" className={classes.title}>
-                    {selected.title}
-                  </h2>
-                </div>
-                <dl className={classes.facts}>
-                  <div>
-                    <dt>버전</dt>
-                    <dd className="pd-num">v{selected.version}</dd>
+          {status === 'loginRequired' ? (
+            <NotConnected
+              title="로그인하면 약관을 볼 수 있어요"
+              description="비회원이 볼 수 있는 약관 조회는 아직 연결되지 않았어요."
+              api="📝 공개 약관 조회 (GET /wallets/me/terms는 로그인 필요)"
+              action={{ label: '로그인', to: loginTo }}
+            />
+          ) : (
+            <QueryState
+              status={status === 'success' && !selected ? 'notFound' : status}
+              loadingLabel="약관을 불러오고 있어요"
+              errorMessage={errorMessage}
+              onRetry={onRetry}
+              notFound={{
+                icon: <FileText />,
+                title: '찾는 약관이 없어요',
+                description: '왼쪽 목록에서 약관을 골라 주세요.',
+                action: undefined,
+                layout: 'stack',
+              }}
+            >
+              {selected && (
+                <>
+                  <div className={classes.titleRow}>
+                    {selected.required && (
+                      <Badge color="primary" variant="light">
+                        필수
+                      </Badge>
+                    )}
+                    <h2 id="terms-title" className={classes.title}>
+                      {selected.title}
+                    </h2>
                   </div>
-                  <div>
-                    <dt>동의 받는 때</dt>
-                    <dd>{agreedWhen[selected.type]}</dd>
-                  </div>
-                </dl>
-                <div className={classes.content}>{selected.content}</div>
-              </>
-            )}
-          </QueryState>
+                  <dl className={classes.facts}>
+                    <div>
+                      <dt>버전</dt>
+                      <dd className="pd-num">v{selected.version}</dd>
+                    </div>
+                    <div>
+                      <dt>동의 받는 때</dt>
+                      <dd>{agreedWhen[selected.type]}</dd>
+                    </div>
+                  </dl>
+                  <div className={classes.content}>{selected.content}</div>
+                </>
+              )}
+            </QueryState>
+          )}
         </article>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { render } from '@/test/render'
@@ -8,6 +8,7 @@ import {
   homeStats,
   myProfile,
   myStore,
+  payoutOutlook,
   productStats,
   sellerWalletBalance,
   todos,
@@ -89,6 +90,14 @@ describe('SellerProfileView', () => {
     renderProfile({ followers: [] })
     expect(screen.getByText('아직 팔로워가 없어요')).toBeInTheDocument()
   })
+
+  it('팔로워가 연결 전(null)이면 수는 ‘–’, 목록은 연결 전 안내 (빈 상태 문구를 쓰지 않는다)', () => {
+    renderProfile({ followerCount: null, followers: null })
+    expect(screen.getByText('팔로워는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.getByText('연결 전')).toBeInTheDocument()
+    expect(screen.queryByText('아직 팔로워가 없어요')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '팔로워 더 보기' })).not.toBeInTheDocument()
+  })
 })
 
 describe('SellerHomeView', () => {
@@ -99,6 +108,7 @@ describe('SellerHomeView', () => {
           status="success"
           asOf={homeAsOf}
           stats={homeStats}
+          expectedPayout={payoutOutlook.expectedAmount}
           todos={todos}
           walletBalance={sellerWalletBalance}
           products={productStats}
@@ -108,5 +118,27 @@ describe('SellerHomeView', () => {
     expect(screen.getAllByRole('link', { name: '취소 요청 처리' })).toHaveLength(2)
     expect(screen.getAllByRole('link', { name: '송장 등록' })).toHaveLength(3)
     expect(screen.getByText('확인 필요')).toBeInTheDocument()
+  })
+
+  it('주문 집계·처리할 일이 연결 전(null)이면 건수는 ‘–’, 처리할 일은 연결 전 안내', () => {
+    render(
+      <MemoryRouter>
+        <SellerHomeView
+          status="success"
+          stats={null}
+          expectedPayout={null}
+          todos={null}
+          walletBalance={sellerWalletBalance}
+          products={productStats}
+        />
+      </MemoryRouter>,
+    )
+    const summary = screen.getByRole('region', { name: '오늘 요약' })
+    expect(within(summary).getAllByText('연결 전')).toHaveLength(3)
+    expect(within(summary).getByText('불러오지 못했어요')).toBeInTheDocument()
+    expect(screen.getByText('처리할 일은 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByText('오늘 처리할 일이 없어요')).not.toBeInTheDocument()
+    expect(screen.queryByText('확인 필요')).not.toBeInTheDocument()
+    expect(screen.queryByText(/기준$/)).not.toBeInTheDocument()
   })
 })

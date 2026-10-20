@@ -21,6 +21,7 @@ import { formatAmount, formatDate } from '@/shared/lib/format'
 import {
   DisabledReason,
   EmptyView,
+  NotConnected,
   PageHeader,
   type PhotoItem,
   PhotoUploader,
@@ -34,7 +35,8 @@ import classes from './SupportView.module.css'
 
 // 고객센터 문의 (배송 후 문제) /orders/:orderId/inquiry. 시안: b2c/Support, SupportMobile
 // 유형 4종 · 내용 10~1,000자 · 사진 3장(장당 10MB). 답변은 영업일 1~2일, 이메일 알림(C-8).
-// TODO(api): ❌ 문의 접수·내역 API 없음 (주문 상세에서 링크하지 않는 fixtures 전용 화면)
+// TODO(api): 📝 문의 접수·내역 API 없음 (주문 상세에서 링크하지 않는다).
+//   지금 라우트는 SupportNotConnectedView(‘연결 전’)만 그린다. SupportView는 /__design 시안용으로 남겨 둔다.
 
 export type InquiryDone = {
   inquiryNumber: string
@@ -393,6 +395,29 @@ export function SupportView({
           </p>
         </aside>
       </div>
+    </div>
+  )
+}
+
+/** API가 없어 지금 라우트가 그리는 ‘연결 전’ 화면 */
+export function SupportNotConnectedView({ orderId }: { orderId: number }) {
+  const orderPath = `/orders/${orderId}`
+  return (
+    <div className={classes.root}>
+      <PageHeader
+        title="고객센터 문의"
+        backTo={orderPath}
+        breadcrumbs={[
+          { label: '주문 내역', to: '/orders' },
+          { label: '주문 상세', to: orderPath },
+          { label: '고객센터 문의' },
+        ]}
+      />
+      <NotConnected
+        title="고객센터 문의는 아직 연결되지 않았어요"
+        api="📝 문의 접수·내역"
+        action={{ label: '주문 상세로', to: orderPath }}
+      />
     </div>
   )
 }

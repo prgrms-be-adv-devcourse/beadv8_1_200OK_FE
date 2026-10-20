@@ -2,11 +2,11 @@ import { useMemo } from 'react'
 import { MediaPurpose, ProductStatus, type SellerProfileResponse } from '@/shared/api/types'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { showToast, useMediaUploads } from '@/shared/ui'
-import { followers, homeAsOf, homeStats, myStore, todos } from '../fixtures'
 import {
   useMemberId,
   useMyProducts,
   useMyProfile,
+  usePayoutOutlook,
   useSaveMyProfile,
   useSellerBalance,
 } from '../queries'
@@ -18,7 +18,9 @@ import { type ProfileFieldErrors, SellerProfileView } from '../views/SellerProfi
 // S-03 센터 홈 · S-09 상점 프로필 라우트 (판매자 센터 청크).
 // ✅ 지갑 잔액 GET /wallets/sellers/me/balance, 프로필 GET/POST/PUT /sellers/me/profile, 사진 POST /media/SELLER_PROFILE,
 //    상품 현황은 GET /sellers/me/products(최대 100개)에서 센다.
-// TODO(api): 판매자 주문 목록·집계 API 없음(❌) → 오늘 요약·처리할 일은 fixtures. ❌ 팔로워 목록·수 → fixtures.
+//    정산 예정 금액은 GET /payouts/me/candidates?unsettledOnly=true 합계(정산 내역 화면과 같은 쿼리).
+// TODO(api): ❌ 판매자 주문 목록·집계 API 없음 → 오늘 요약 건수는 ‘–’, 처리할 일은 연결 전(NotConnected).
+// TODO(api): ❌ 팔로워 목록·수 API 없음 → 팔로워 수는 ‘–’, 목록은 연결 전(NotConnected).
 
 const EMPTY_STATS: SellerProductStats = { onSale: 0, ready: 0, lowStockProducts: 0 }
 
@@ -26,6 +28,8 @@ export function SellerHomePage() {
   const profile = useMyProfile()
   const balance = useSellerBalance()
   const products = useMyProducts({ page: 0, size: 100 })
+  // 후보 조회가 실패해도 홈은 보여 준다(정산 예정 칸만 ‘–’)
+  const outlook = usePayoutOutlook()
 
   const productStats = useMemo<SellerProductStats>(() => {
     const list = products.data?.content
@@ -47,9 +51,10 @@ export function SellerHomePage() {
       status={
         balance.isError ? 'error' : balance.isPending || profile.isPending ? 'pending' : 'success'
       }
-      asOf={homeAsOf}
-      stats={homeStats}
-      todos={todos}
+      stats={null}
+      expectedPayout={outlook.data?.expectedAmount ?? null}
+      expectedPayoutPending={outlook.isPending}
+      todos={null}
       walletBalance={balance.data?.balance ?? 0}
       products={productStats}
       profileIncomplete={profileIncomplete}
@@ -58,6 +63,7 @@ export function SellerHomePage() {
         void balance.refetch()
         void profile.refetch()
         void products.refetch()
+        void outlook.refetch()
       }}
     />
   )
@@ -70,12 +76,12 @@ export function SellerProfilePage() {
     return (
       <SellerProfileView
         status={profile.isError ? 'error' : 'pending'}
-        followerCount={0}
+        followerCount={null}
         photoUrl={null}
         onSave={() => {}}
         onPhotoChange={() => {}}
         onPhotoRemove={() => {}}
-        followers={[]}
+        followers={null}
         onRetry={() => void profile.refetch()}
       />
     )
@@ -117,7 +123,8 @@ function ProfileEditor({ profile }: { profile: SellerProfileResponse | null }) {
       status="success"
       profile={profile}
       sellerId={sellerId ?? undefined}
-      followerCount={registering ? 0 : myStore.followerCount}
+      // TODO(api): ❌ 팔로워 수·목록 API 없음 → null(연결 전)
+      followerCount={null}
       photoUrl={photos.items[0]?.url ?? null}
       onPhotoChange={(file) => {
         removeAll()
@@ -145,9 +152,7 @@ function ProfileEditor({ profile }: { profile: SellerProfileResponse | null }) {
           },
         )
       }
-      followers={registering ? [] : followers}
-      hasMoreFollowers={!registering}
-      onLoadMoreFollowers={() => {}}
+      followers={null}
     />
   )
 }

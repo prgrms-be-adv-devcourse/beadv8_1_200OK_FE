@@ -19,7 +19,14 @@ import type { ShippingAddress } from '@/shared/api/types'
 import { WITHDRAWAL_GRACE_DAYS } from '@/shared/lib/constants'
 import { formatDate, formatPrice } from '@/shared/lib/format'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
-import { AddressModal, DisabledReason, EmptyView, PageHeader, PasswordRules } from '@/shared/ui'
+import {
+  AddressModal,
+  DisabledReason,
+  EmptyView,
+  NotConnected,
+  PageHeader,
+  PasswordRules,
+} from '@/shared/ui'
 import { withdrawReasonLabels } from '../labels'
 import {
   type InfoFormValues,
@@ -32,7 +39,8 @@ import classes from './AccountView.module.css'
 
 // B-15 계정 관리 /me/account?tab=info|password|address|withdraw. 시안: b2c/Account, AccountMobile
 // 탈퇴 차단: 예치금 잔액 · 진행 중 요청 · 판매자 (C-13), 신청 뒤 7일 유예.
-// TODO(api): ❌ PATCH /members/me, POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal 없음
+// TODO(api): ❌ GET·PATCH /members/me, POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal 없음
+//   지금 라우트는 AccountNotConnectedView(탭마다 ‘연결 전’)만 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
 
 export type AccountTab = 'info' | 'password' | 'address' | 'withdraw'
 
@@ -439,6 +447,48 @@ export function AccountView({
           </Button>
         </Group>
       </Modal>
+    </div>
+  )
+}
+
+const notConnectedTabs: Record<AccountTab, { title: string; api: string }> = {
+  info: { title: '내 정보는 아직 연결되지 않았어요', api: '❌ GET·PATCH /members/me' },
+  password: {
+    title: '비밀번호 변경은 아직 연결되지 않았어요',
+    api: '❌ POST /members/me/password',
+  },
+  address: { title: '배송지 관리는 아직 연결되지 않았어요', api: '❌ 배송지 GET/PUT/DELETE' },
+  withdraw: {
+    title: '회원 탈퇴는 아직 연결되지 않았어요',
+    api: '❌ POST /members/me/withdrawal',
+  },
+}
+
+/** API가 없어 지금 라우트가 그리는 계정 관리: 탭은 그대로, 내용은 탭마다 ‘연결 전’ */
+export function AccountNotConnectedView({
+  tab,
+  onTabChange,
+}: Pick<AccountViewProps, 'tab' | 'onTabChange'>) {
+  return (
+    <div className={classes.root}>
+      <PageHeader title="계정 관리" backTo="/me" />
+      <Tabs value={tab} onChange={(value) => onTabChange((value ?? 'info') as AccountTab)}>
+        <Tabs.List aria-label="계정 메뉴">
+          {tabs.map((t) => (
+            <Tabs.Tab key={t.value} value={t.value}>
+              {t.label}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+        {tabs.map((t) => (
+          <Tabs.Panel key={t.value} value={t.value} pt="lg">
+            <NotConnected
+              title={notConnectedTabs[t.value].title}
+              api={notConnectedTabs[t.value].api}
+            />
+          </Tabs.Panel>
+        ))}
+      </Tabs>
     </div>
   )
 }

@@ -1,9 +1,13 @@
 import { passwordMessage } from '@/shared/lib/password'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { foundId, loginFailedMessage, maskedEmail } from './fixtures'
-import { FindAccountView, type FindAccountViewProps } from './views/FindAccountView'
+import {
+  FindAccountNotConnectedView,
+  FindAccountView,
+  type FindAccountViewProps,
+} from './views/FindAccountView'
 import { LoginView } from './views/LoginView'
-import { ResetPasswordView } from './views/ResetPasswordView'
+import { ResetPasswordNotConnectedView, ResetPasswordView } from './views/ResetPasswordView'
 import { SignupCompleteView } from './views/SignupCompleteView'
 import { SignupView, type SignupViewProps } from './views/SignupView'
 
@@ -145,6 +149,12 @@ export const authPreviews: ScreenPreview[] = [
     layout: 'auth',
     path: '/find-account',
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        session: 'guest',
+        render: () => <FindAccountNotConnectedView />,
+      },
       { id: 'id', label: '아이디 찾기', session: 'guest', render: () => find() },
       {
         id: 'id-found',
@@ -194,6 +204,12 @@ export const authPreviews: ScreenPreview[] = [
     layout: 'auth',
     path: '/find-account/reset',
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        session: 'guest',
+        render: () => <ResetPasswordNotConnectedView />,
+      },
       {
         id: 'form',
         label: '재설정',

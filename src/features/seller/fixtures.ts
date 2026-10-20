@@ -60,8 +60,10 @@ export const homeStats: SellerHomeStats = {
   newOrders: 3,
   waitingShipment: 5,
   cancelRequests: 2,
-  expectedPayout: 412560,
 }
+
+/** 센터 홈 정산 예정 금액 = 미정산 후보 합계(payoutOutlook.expectedAmount) */
+const expectedPayout = 412560
 
 export const todos: SellerTodo[] = [
   {
@@ -580,7 +582,7 @@ export const payoutCandidates: PayoutSellerCandidate[] = [
     orderId: 170,
     orderItemId: 1701,
     sellerId: myStore.sellerId,
-    amount: homeStats.expectedPayout - 23900 - 3000,
+    amount: expectedPayout - 23900 - 3000,
     candidateCreatedAt: '2026-10-18T09:15:00',
     settled: false,
     payoutId: null,

@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import { OrderItemStatus } from '@/shared/api/types'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import { carrierLabels } from '@/shared/lib/labels'
-import { PageHeader, PriceText, QueryState, StatusBadge } from '@/shared/ui'
+import { NotConnected, PageHeader, PriceText, QueryState, StatusBadge } from '@/shared/ui'
 import {
   AddressRequestModal,
   type DelayInput,
@@ -23,7 +23,8 @@ import classes from './SellerOrdersView.module.css'
 // 한 줄 = 한 주문에서 이 농가로 온 배송 묶음. 출고 대기에서 송장 등록 · 출고 지연 알리기 · 판매자 취소 · 배송지 변경 요청 승인.
 // 처리 안 한 취소 요청이 있으면 송장 등록·지연을 막는다(C-10).
 // ✅ 출고(송장) POST /seller/shipments/{id}/dispatch · 배송지 변경 승인·거절 PATCH — 모달 쪽(components/OrderModals) 참고.
-// TODO(api): ❌ 판매자 주문 목록 API가 없어 shipmentId를 받을 곳이 없다 → fixtures. 지연·판매자 취소도 ❌
+// TODO(api): 📝 판매자 주문 목록 API가 없어 shipmentId를 받을 곳이 없다. 지연·판매자 취소도 ❌
+//   → 라우트(/seller/orders)는 SellerOrdersNotConnectedView(연결 전)를 그리고, SellerOrdersView는 /__design 미리보기에서만 쓴다.
 
 type MaybeAsync = unknown
 type ModalType = 'invoice' | 'delay' | 'cancel' | 'address'
@@ -47,6 +48,16 @@ export type SellerOrdersViewProps = {
 }
 
 const BLOCKED = '취소 요청을 먼저 처리해 주세요'
+
+/** 라우트가 지금 그리는 모양. 제목 줄은 두고 본문만 연결 전으로 바꾼다 */
+export function SellerOrdersNotConnectedView() {
+  return (
+    <div className={classes.root}>
+      <PageHeader title="주문·출고 관리" hideOnMobile />
+      <NotConnected api="📝 판매자 주문 목록 (출고 POST /seller/shipments/{shipmentId}/dispatch는 있으나 shipmentId를 받을 곳이 없음)" />
+    </div>
+  )
+}
 
 export function SellerOrdersView({
   status,

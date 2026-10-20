@@ -6,6 +6,7 @@ import {
   FollowButton,
   type LoginReason,
   LoginRequiredModal,
+  NotConnected,
   ProductCard,
   type ProductCardItem,
   ProductGrid,
@@ -17,14 +18,18 @@ import classes from './HomeView.module.css'
 
 // B-01 홈. 시안: b2c/Home, HomeMobile
 // 이번 주 상품(GET /products 첫 페이지) + 단골이 많은 농가. 헤더 검색·정렬은 API가 없어 두지 않는다(A-9).
+// TODO(api): ❌ 인기 농가 API, 📝 관심·팔로우 API. farms가 없으면 농가 섹션에 ‘연결 전’ 안내,
+//   onToggleLike·onToggleFollow가 없으면 카드의 하트·팔로우 버튼을 그리지 않는다.
 
 export type HomeViewProps = {
   status: ListStatus
   items: ProductCardItem[]
-  /** TODO(api): 인기 농가 API 없음. 빈 배열이면 섹션을 그리지 않는다 */
-  farms: FarmItem[]
-  onToggleLike: (productId: number) => void
-  onToggleFollow: (sellerId: number) => void
+  /** TODO(api): ❌ 인기 농가 API 없음. undefined면 ‘연결 전’ 안내, 빈 배열이면 섹션을 그리지 않는다 */
+  farms?: FarmItem[]
+  /** TODO(api): 📝 관심 상품. 없으면 카드에 하트를 그리지 않는다 */
+  onToggleLike?: (productId: number) => void
+  /** TODO(api): 📝 팔로우. 없으면 농가 카드에 팔로우 버튼을 그리지 않는다 */
+  onToggleFollow?: (sellerId: number) => void
   onRetry?: () => void
   errorMessage?: string
   /** 비회원이 누른 동작 (로그인 안내 모달) */
@@ -78,36 +83,46 @@ export function HomeView({
               <ProductCard
                 key={item.product.productId}
                 {...item}
-                onToggleLike={() => onToggleLike(item.product.productId)}
+                onToggleLike={onToggleLike && (() => onToggleLike(item.product.productId))}
               />
             ))}
           </ProductGrid>
         </QueryState>
       </section>
 
-      {status !== 'pending' && farms.length > 0 && (
+      {status !== 'pending' && (farms === undefined || farms.length > 0) && (
         <section aria-labelledby="home-farms" className={classes.section}>
           <h2 id="home-farms" className={`pd-serif ${classes.title}`}>
             단골이 많은 농가
           </h2>
-          <div className={classes.farms}>
-            {farms.map(({ seller, following }) => (
-              <FarmCard
-                key={seller.sellerId}
-                name={seller.storeName}
-                to={`/farms/${seller.sellerId}`}
-                imageUrl={seller.profileImageUrl}
-                region={seller.region}
-                followerCount={seller.followerCount}
-                action={
-                  <FollowButton
-                    following={following}
-                    onClick={() => onToggleFollow(seller.sellerId)}
-                  />
-                }
-              />
-            ))}
-          </div>
+          {farms === undefined ? (
+            <NotConnected
+              layout="inline"
+              title="인기 농가는 아직 연결되지 않았어요"
+              api="❌ 인기 농가 목록"
+            />
+          ) : (
+            <div className={classes.farms}>
+              {farms.map(({ seller, following }) => (
+                <FarmCard
+                  key={seller.sellerId}
+                  name={seller.storeName}
+                  to={`/farms/${seller.sellerId}`}
+                  imageUrl={seller.profileImageUrl}
+                  region={seller.region}
+                  followerCount={seller.followerCount}
+                  action={
+                    onToggleFollow && (
+                      <FollowButton
+                        following={following}
+                        onClick={() => onToggleFollow(seller.sellerId)}
+                      />
+                    )
+                  }
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 

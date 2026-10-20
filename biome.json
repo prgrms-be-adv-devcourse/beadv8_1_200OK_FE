@@ -114,6 +114,52 @@
       }
     },
     {
+      "includes": [
+        "src/features/*/pages/**",
+        "src/features/*/views/**",
+        "src/features/*/components/**",
+        "src/app/layouts/**",
+        "src/app/pages/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/app/**"],
+                    "message": "features는 app을 import할 수 없습니다 (ADR-0003)."
+                  },
+                  {
+                    "group": [
+                      "@/features/*/api",
+                      "@/features/*/api/**",
+                      "@/features/*/queries",
+                      "@/features/*/schemas",
+                      "@/features/*/store",
+                      "@/features/*/components/**"
+                    ],
+                    "message": "다른 feature의 내부 모듈은 비공개입니다 (ADR-0003)."
+                  },
+                  {
+                    "group": [
+                      "../fixtures",
+                      "./fixtures",
+                      "../../fixtures",
+                      "@/features/*/fixtures"
+                    ],
+                    "message": "화면(pages·views·components·layouts)은 fixtures를 import하지 않습니다. API가 없으면 NotConnected·NOT_CONNECTED_REASON으로 ‘연결 전’을 보여 주세요. fixtures는 테스트·previews 전용입니다."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/**/*.test.{ts,tsx}", "src/test/**"],
       "linter": {
         "rules": {

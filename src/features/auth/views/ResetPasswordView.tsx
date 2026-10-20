@@ -5,12 +5,13 @@ import { useId } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { PASSWORD_RESET_LINK_MINUTES } from '@/shared/lib/constants'
-import { PageHeader, PasswordRules } from '@/shared/ui'
+import { NotConnected, PageHeader, PasswordRules } from '@/shared/ui'
 import { type ResetPasswordFormValues, resetPasswordSchema } from '../schemas'
 import classes from './AuthView.module.css'
 
 // 새 비밀번호 정하기 (메일 링크로 연다). 시안: b2c/FindAccount (reset · done · expired)
-// TODO(api): 비밀번호 재설정 API가 없다(C-5)
+// TODO(api): ❌ 비밀번호 재설정 API가 없다(C-5)
+// 지금 라우트는 ResetPasswordNotConnectedView만 그린다. 폼·완료·만료는 /__design 시안용으로 남겨 둔다.
 
 export type ResetPasswordStatus = 'form' | 'done' | 'expired'
 
@@ -119,6 +120,21 @@ export function ResetPasswordView({
           </Button>
         </Stack>
       </form>
+    </>
+  )
+}
+
+/** API가 없어 지금 라우트가 그리는 ‘연결 전’ 화면 */
+export function ResetPasswordNotConnectedView() {
+  return (
+    <>
+      <PageHeader title="새 비밀번호 정하기" backTo="/login" />
+      <NotConnected
+        title="비밀번호 재설정은 아직 연결되지 않았어요"
+        description="서버 기능이 준비되면 여기서 새 비밀번호를 정할 수 있어요."
+        api="❌ 재설정 토큰 확인·비밀번호 변경 (C-5)"
+        action={{ label: '로그인으로', to: '/login' }}
+      />
     </>
   )
 }

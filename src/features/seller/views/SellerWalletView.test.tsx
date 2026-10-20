@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
+import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import { render } from '@/test/render'
 import { sellerWallet, sellerWalletTxs, withdrawals } from '../fixtures'
 import { SellerWalletView, type SellerWalletViewProps } from './SellerWalletView'
@@ -60,6 +61,31 @@ describe('SellerWalletView', () => {
     expect(screen.getByLabelText('출금할 금액')).toBeDisabled()
     expect(requestButton()).toHaveAccessibleDescription('등록 계좌를 확인한 뒤 출금할 수 있어요')
     expect(screen.getByRole('button', { name: '계좌 변경 요청하기' })).toBeInTheDocument()
+  })
+
+  it('계좌·내역이 연결 전(null)이면 그 칸을 연결 전으로 보여 주고 출금·계좌 변경을 막는다', () => {
+    renderWallet({
+      wallet: { ...sellerWallet, account: null, withdrawableAmount: sellerWallet.balance },
+      withdrawals: null,
+      transactions: null,
+      featureDisabledReason: NOT_CONNECTED_REASON,
+    })
+    expect(screen.getByText('정산 계좌는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.getByText('출금 내역은 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.getByText('입출금 내역은 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByText('아직 출금한 내역이 없어요')).not.toBeInTheDocument()
+    expect(screen.queryByText('아직 입출금 내역이 없어요')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('출금할 금액')).toBeDisabled()
+    expect(requestButton()).toBeDisabled()
+    expect(requestButton()).toHaveAccessibleDescription(NOT_CONNECTED_REASON)
+    expect(screen.queryByRole('button', { name: '계좌 변경 요청' })).not.toBeInTheDocument()
+  })
+
+  it('기능이 막혀 있으면 계좌 변경 요청도 이유와 함께 막는다', () => {
+    renderWallet({ featureDisabledReason: NOT_CONNECTED_REASON })
+    const change = screen.getByRole('button', { name: '계좌 변경 요청' })
+    expect(change).toBeDisabled()
+    expect(change).toHaveAccessibleDescription(NOT_CONNECTED_REASON)
   })
 
   it('계좌 변경 요청은 은행·계좌번호·예금주가 있어야 보낸다', async () => {

@@ -7,10 +7,10 @@ import { showToast } from '@/shared/ui'
 import { errorMessageOf, useCategories, useProductPages } from '../queries'
 import type { CategoryOption } from '../types'
 import { ProductListView } from '../views/ProductListView'
-import { useLocalLikes } from './useLocalLikes'
 
 // 상품 목록 라우트 /products?category&region&page. 필터·페이지는 URL searchParams가 기준이다.
 // page는 ‘더 보기’로 불러온 마지막 페이지(0부터)라 새로 고쳐도 본 데까지 다시 그린다. 검색어·정렬 API는 없다(A-9).
+// TODO(api): 📝 관심 상품 API가 없어 onToggleLike를 넘기지 않는다(카드에 하트를 그리지 않는다).
 
 const asEnum = <T extends string>(values: Record<string, T>, value: string | null): T | null =>
   value && (Object.values(values) as string[]).includes(value) ? (value as T) : null
@@ -33,7 +33,6 @@ export function ProductListPage() {
   const page = asPage(params.get('page'))
   const [hideSoldOut, setHideSoldOut] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  const { isLiked, toggleLike } = useLocalLikes()
   const queryClient = useQueryClient()
   const categories = useCategories()
 
@@ -74,7 +73,7 @@ export function ProductListPage() {
   return (
     <ProductListView
       status={list.status}
-      items={visible.map((product) => ({ product, liked: isLiked(product.productId) }))}
+      items={visible.map((product) => ({ product }))}
       totalCount={list.totalCount - hiddenSoldOutCount}
       categories={categories.data ?? fallbackCategories}
       category={category}
@@ -86,7 +85,6 @@ export function ProductListPage() {
       hasMore={list.hasMore}
       loadingMore={loadingMore}
       onLoadMore={loadMore}
-      onToggleLike={toggleLike}
       onRetry={list.retry}
       errorMessage={errorMessageOf(list.error)}
     />

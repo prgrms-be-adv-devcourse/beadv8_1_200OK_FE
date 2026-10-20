@@ -19,6 +19,8 @@ import {
   LedgerBlock,
   type LoginReason,
   LoginRequiredModal,
+  NOT_CONNECTED_REASON,
+  NotConnected,
   OriginTag,
   PageBreadcrumbs,
   PriceText,
@@ -36,13 +38,15 @@ import classes from './ProductDetailView.module.css'
 // 데스크톱: 사진 | 정보 + 옵션 + 수량 + 담기. 모바일: 하단 CTA 바(관심 + 담기) → 옵션 시트.
 // 판매자 정보·수확일은 상세 API에 없어 따로 받는다(A-2). 재고 임박은 표시하지 않는다(A-7).
 // 배송비는 상품 API에 없고 정책도 미정이라(A-8, C-1) 주문서에서 안내한다고만 쓴다.
+// TODO(api): 📝 GET /sellers/{sellerId}(상세에 sellerId 없음), 📝 관심·팔로우 API.
+//   seller가 없으면 생산 정보에 ‘연결 전’ 안내, onToggleLike·onToggleFollow가 없으면 버튼을 막고 이유(NOT_CONNECTED_REASON)를 보인다.
 
 export type DetailStatus = 'pending' | 'error' | 'notFound' | 'success'
 
 export type ProductDetailViewProps = {
   status: DetailStatus
   product?: ProductDetail
-  /** TODO(api): 상세 API에 판매자가 없다. 📝 GET /sellers/{sellerId} */
+  /** TODO(api): 상세 API에 판매자가 없다. 📝 GET /sellers/{sellerId}. 없으면 ‘연결 전’ */
   seller?: SellerProfile
   /** TODO(api): 수확일 필드 없음(A-2) */
   harvestDate?: string
@@ -65,8 +69,10 @@ export type ProductDetailViewProps = {
   defaultQuantity?: number
   adding?: boolean
   onAddToCart: (selection: CartSelection) => void
-  onToggleLike: () => void
-  onToggleFollow: () => void
+  /** TODO(api): 📝 관심 상품. 없으면 관심 버튼을 막고 이유를 보인다(연결 전) */
+  onToggleLike?: () => void
+  /** TODO(api): 📝 팔로우. 없으면 팔로우 버튼을 막고 이유를 보인다(연결 전) */
+  onToggleFollow?: () => void
   onDeleteReview?: (reviewId: number) => void
   onRetry?: () => void
   errorMessage?: string
@@ -218,7 +224,7 @@ export function ProductDetailView({
     />
   )
 
-  const likeButton = (
+  const likeButton = onToggleLike && (
     <ActionIcon
       variant="default"
       size={52}
@@ -230,6 +236,23 @@ export function ProductDetailView({
     >
       <Heart size={22} aria-hidden="true" />
     </ActionIcon>
+  )
+  // 관심 API가 없을 때: 버튼은 보이되 막고 이유를 붙인다
+  const likeNotConnected = !onToggleLike && !isOwner && (
+    <DisabledReason reason={NOT_CONNECTED_REASON}>
+      <Button variant="default" leftSection={<Heart size={18} aria-hidden="true" />} disabled>
+        관심 상품
+      </Button>
+    </DisabledReason>
+  )
+  const followControl = isOwner ? null : onToggleFollow ? (
+    <FollowButton following={following} onClick={onToggleFollow} />
+  ) : (
+    <DisabledReason reason={NOT_CONNECTED_REASON}>
+      <Button variant="outline" disabled>
+        팔로우
+      </Button>
+    </DisabledReason>
   )
 
   return (
@@ -282,7 +305,7 @@ export function ProductDetailView({
                   <FarmAvatar name={seller.storeName} imageUrl={seller.profileImageUrl} size={32} />
                   {seller.storeName}
                 </Link>
-                {!isOwner && <FollowButton following={following} onClick={onToggleFollow} />}
+                {followControl}
               </div>
             )}
             <h1 className={classes.name}>{product.name}</h1>
@@ -345,26 +368,32 @@ export function ProductDetailView({
                   </Text>
                 </Stack>
               ) : (
-                <div className={classes.actions}>
-                  {likeButton}
-                  <DisabledReason reason={blockedReason} fullWidth>
-                    <Button
-                      size="lg"
-                      fullWidth
-                      disabled={blockedReason !== null}
-                      loading={adding}
-                      onClick={addToCart}
-                    >
-                      장바구니 담기
-                    </Button>
-                  </DisabledReason>
-                </div>
+                <>
+                  <div className={classes.actions}>
+                    {likeButton}
+                    <DisabledReason reason={blockedReason} fullWidth>
+                      <Button
+                        size="lg"
+                        fullWidth
+                        disabled={blockedReason !== null}
+                        loading={adding}
+                        onClick={addToCart}
+                      >
+                        장바구니 담기
+                      </Button>
+                    </DisabledReason>
+                  </div>
+                  {likeNotConnected}
+                </>
               )}
             </Stack>
           </Box>
 
           <Box hiddenFrom="md">
-            <ShippingSummary />
+            <Stack gap="md">
+              <ShippingSummary />
+              {likeNotConnected}
+            </Stack>
           </Box>
         </div>
       </div>
@@ -432,7 +461,14 @@ export function ProductDetailView({
               </dl>
             </>
           ) : (
-            <p className={classes.help}>농가 정보를 불러오지 못했어요.</p>
+            <Stack gap="sm" align="flex-start">
+              <NotConnected
+                layout="inline"
+                title="판매자 정보는 아직 연결되지 않았어요"
+                api="📝 GET /sellers/{sellerId} (상세에 sellerId 없음)"
+              />
+              {followControl}
+            </Stack>
           )}
         </section>
 

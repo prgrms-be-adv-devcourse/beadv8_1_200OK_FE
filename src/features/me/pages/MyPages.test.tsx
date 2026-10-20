@@ -6,7 +6,7 @@ import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { MyPage } from './MyPages'
+import { AccountPage, LikesPage, MyPage } from './MyPages'
 
 // 마이페이지 예치금: GET /wallets/me/balance(기본 128,000 / 한도 500,000)
 
@@ -28,6 +28,17 @@ describe('MyPage', () => {
       'href',
       '/orders',
     )
+  })
+
+  it('내 정보·주문 현황·관심·팔로우·배송지는 연결 전으로 보여 준다(0이나 가짜 값을 그리지 않는다)', async () => {
+    renderMy()
+    expect(await screen.findByText('128,000')).toBeInTheDocument()
+    expect(screen.getByText('내 정보는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByText('등록 전이에요')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /연결 전\s*상품 준비 중/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /관심 상품.*연결 전/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /팔로우한 농가.*연결 전/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /배송지.*연결 전/ })).toBeInTheDocument()
   })
 
   it('잔액을 못 받으면 다시 시도를 보여 준다', async () => {
@@ -77,5 +88,42 @@ describe('MyPage', () => {
       'href',
       '/seller',
     )
+  })
+})
+
+function renderAt(path: string) {
+  const router = createMemoryRouter(
+    [
+      { path: '/me/likes', Component: LikesPage },
+      { path: '/me/account', Component: AccountPage },
+    ],
+    { initialEntries: [path] },
+  )
+  render(<RouterProvider router={router} />)
+}
+
+describe('LikesPage (연결 전)', () => {
+  it.each([
+    ['/me/likes?tab=products', '관심 상품은 아직 연결되지 않았어요'],
+    ['/me/likes?tab=farms', '팔로우한 농가는 아직 연결되지 않았어요'],
+  ])('%s는 목록 대신 연결 전 안내를 보여 준다', async (path, title) => {
+    renderAt(path)
+    expect(await screen.findByText(title)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /팔로잉 취소|관심 상품$/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('AccountPage (연결 전)', () => {
+  it.each([
+    ['info', '내 정보는 아직 연결되지 않았어요'],
+    ['password', '비밀번호 변경은 아직 연결되지 않았어요'],
+    ['address', '배송지 관리는 아직 연결되지 않았어요'],
+    ['withdraw', '회원 탈퇴는 아직 연결되지 않았어요'],
+  ])('%s 탭은 폼 대신 연결 전 안내를 보여 준다', async (tab, title) => {
+    renderAt(`/me/account?tab=${tab}`)
+    expect(await screen.findByText(title)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /저장|비밀번호 변경|탈퇴 신청/ }),
+    ).not.toBeInTheDocument()
   })
 })

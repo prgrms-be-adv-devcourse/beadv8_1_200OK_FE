@@ -2,16 +2,13 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import {
   MediaPurpose,
-  OrderItemStatus,
   type ProductDetail,
   ProductStatus,
   ProductVisibility,
   type SellerProductSummary,
 } from '@/shared/api/types'
-import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { QueryState, showToast, useMediaUploads } from '@/shared/ui'
-import { cancelClaims, sellerOrders } from '../fixtures'
 import { type CachedProduct, readCachedProducts } from '../productCache'
 import { toProductFormFailure } from '../productErrors'
 import { htmlToText, type ProductFormValues } from '../productSchema'
@@ -26,14 +23,9 @@ import {
   useSellerProductDetail,
   useUpdateProduct,
 } from '../queries'
-import {
-  type CancelClaim,
-  type SellerOrderRow,
-  SellerOrderTab,
-  type SellerProductRow,
-} from '../types'
-import { type ClaimTab, SellerClaimsView } from '../views/SellerClaimsView'
-import { SellerOrdersView } from '../views/SellerOrdersView'
+import type { SellerProductRow } from '../types'
+import { SellerClaimsNotConnectedView } from '../views/SellerClaimsView'
+import { SellerOrdersNotConnectedView } from '../views/SellerOrdersView'
 import { SellerProductFormView } from '../views/SellerProductFormView'
 import { type ProductTab, SellerProductsView } from '../views/SellerProductsView'
 
@@ -42,7 +34,7 @@ import { type ProductTab, SellerProductsView } from '../views/SellerProductsView
 //   상태·노출 PATCH /products/{id}/status · /visibility(목록에서 바로), 삭제 DELETE, 사진 POST /media/PRODUCT.
 // TODO(api): 판매자 상품 상세(version · 옵션 재고 · 옵션 id) API 없음(❌) → 이 브라우저에서 등록·수정한 상품을
 //   productCache(localStorage)에 두고 수정 처음 값으로 쓴다. 캐시에 없는 상품은 수정을 막는다. 공개 상품은 구매자 상세로 옵션 id를 맞춘다.
-// TODO(api): 판매자 주문 목록 API 없음(❌), 지연·판매자 취소·클레임은 ❌ → 주문·취소는 fixtures를 화면 안에서만 바꾼다.
+// TODO(api): 📝 판매자 주문 목록·클레임(취소 요청) API 없음 → 주문·출고와 취소 요청 처리는 화면 전체를 연결 전(NotConnected)으로 둔다.
 
 const productTabs: ProductTab[] = ['ALL', ...Object.values(ProductStatus)]
 
@@ -325,90 +317,13 @@ function ProductEditForm({
   )
 }
 
-const tabOf = (row: SellerOrderRow): SellerOrderTab => {
-  switch (row.status) {
-    case OrderItemStatus.SHIPPING:
-      return SellerOrderTab.SHIPPING
-    case OrderItemStatus.DELIVERED:
-    case OrderItemStatus.PURCHASE_CONFIRMED:
-      return SellerOrderTab.DELIVERED
-    case OrderItemStatus.REFUNDED:
-      return SellerOrderTab.CANCELED
-    default:
-      return SellerOrderTab.WAITING
-  }
-}
-
+// TODO(api): 📝 판매자 주문 목록 API 없음. 출고 POST /seller/shipments/{shipmentId}/dispatch는 있지만
+//   shipmentId를 받을 곳이 없어 화면 전체를 연결 전으로 둔다. 출고 지연·판매자 취소·배송지 변경 응답도 그 뒤에 붙인다.
 export function SellerOrdersPage() {
-  const [tab, setTab] = useState(SellerOrderTab.WAITING)
-  const [orders, setOrders] = useState(sellerOrders)
-  const counts = Object.fromEntries(
-    Object.values(SellerOrderTab).map((value) => [
-      value,
-      orders.filter((o) => tabOf(o) === value).length,
-    ]),
-  ) as Record<SellerOrderTab, number>
-  const update = (id: number, patch: Partial<SellerOrderRow>) =>
-    setOrders((current) => current.map((o) => (o.shipmentId === id ? { ...o, ...patch } : o)))
-
-  return (
-    <SellerOrdersView
-      status="success"
-      orders={orders.filter((o) => tabOf(o) === tab)}
-      tab={tab}
-      onTabChange={setTab}
-      counts={counts}
-      onRegisterInvoice={(id, input) => {
-        update(id, { status: OrderItemStatus.SHIPPING, ...input })
-        showToast({ message: '송장을 등록했어요' })
-      }}
-      onNotifyDelay={(id, input) => {
-        update(id, {
-          delay: { reason: input.reasonDetail ?? '출고 지연', newShipDate: input.newShipDate },
-        })
-        showToast({ message: '출고 지연을 알렸어요' })
-      }}
-      onSellerCancel={(id) => {
-        update(id, { status: OrderItemStatus.REFUNDED, note: '판매자 취소 · 환불 완료' })
-        showToast({ message: '주문을 취소하고 환불했어요' })
-      }}
-      onAnswerAddressChange={(id, approve) => {
-        const row = orders.find((o) => o.shipmentId === id)
-        update(id, {
-          addressChange: null,
-          ...(approve && row?.addressChange ? { address: row.addressChange.after } : {}),
-        })
-        showToast({ message: approve ? '배송지 변경을 승인했어요' : '배송지 변경을 거절했어요' })
-      }}
-    />
-  )
+  return <SellerOrdersNotConnectedView />
 }
 
+// TODO(api): 📝 판매자 취소 요청(클레임) 목록·승인·거절 API 없음 → 화면 전체를 연결 전으로 둔다.
 export function SellerClaimsPage() {
-  const [tab, setTab] = useState<ClaimTab>('PENDING')
-  const [claims, setClaims] = useState(cancelClaims)
-  const isPending = (c: CancelClaim) => c.state === ClaimState.CLAIM_PENDING
-  const update = (id: number, patch: Partial<CancelClaim>) =>
-    setClaims((current) => current.map((c) => (c.claimId === id ? { ...c, ...patch } : c)))
-
-  return (
-    <SellerClaimsView
-      status="success"
-      claims={claims.filter((c) => (tab === 'PENDING' ? isPending(c) : !isPending(c)))}
-      tab={tab}
-      onTabChange={setTab}
-      counts={{
-        PENDING: claims.filter(isPending).length,
-        DONE: claims.filter((c) => !isPending(c)).length,
-      }}
-      onApprove={(id) => {
-        update(id, { state: ClaimState.CLAIM_APPROVED })
-        showToast({ message: '취소를 승인하고 환불했어요' })
-      }}
-      onReject={(id, reason) => {
-        update(id, { state: ClaimState.CLAIM_REJECTED, rejectReason: reason })
-        showToast({ message: '취소 요청을 거절했어요' })
-      }}
-    />
-  )
+  return <SellerClaimsNotConnectedView />
 }

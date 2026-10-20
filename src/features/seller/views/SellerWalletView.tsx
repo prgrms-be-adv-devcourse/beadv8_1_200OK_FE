@@ -28,6 +28,8 @@ import type { StatusTone } from '@/shared/styles/variantColorResolver'
 import {
   DisabledReason,
   EmptyView,
+  NotConnected,
+  NotConnectedValue,
   PageHeader,
   PriceText,
   QueryState,
@@ -46,16 +48,19 @@ import classes from './SellerWalletView.module.css'
 // 판매자 지갑·출금 /seller/wallet. 시안: seller/SellerWallet, SellerWalletMobile
 // 요약(지갑 잔액 · 출금 가능 금액 · 등록 계좌) → 출금 신청(최소 10,000원 · 전액 · 확인 모달) → 출금 내역 · 입출금 내역.
 // 출금 결과: 성공 · 잔액 부족 · 계좌 확인 필요. 계좌는 바로 바꾸지 않고 관리자에게 변경 요청(C-6). 출금 규칙은 C-7.
-// ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌 변경 API 없음 →
-//   featureDisabledReason으로 출금 신청·계좌 변경을 닫아 두고(이유 문구), 내역은 빈 상태로 보여 준다.
+// ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌 조회·변경 API 없음 →
+//   featureDisabledReason(NOT_CONNECTED_REASON)으로 출금 신청·계좌 변경을 닫고, wallet.account·withdrawals·transactions가
+//   null이면 그 칸을 연결 전(NotConnected)으로 보여 준다. 빈 목록 문구(‘아직 … 없어요’)는 실제로 비었을 때만 쓴다.
 
 export type WithdrawResult = { kind: 'success'; amount: number } | { kind: 'insufficient' }
 
 export type SellerWalletViewProps = {
   status: 'pending' | 'error' | 'success'
   wallet: SellerWallet
-  withdrawals: Withdrawal[]
-  transactions: SellerWalletTx[]
+  /** null = 연결 전 */
+  withdrawals: Withdrawal[] | null
+  /** null = 연결 전 */
+  transactions: SellerWalletTx[] | null
   hasMoreTransactions?: boolean
   loadingMoreTransactions?: boolean
   onLoadMoreTransactions?: () => void
@@ -67,7 +72,7 @@ export type SellerWalletViewProps = {
   onRequestAccountChange: (values: AccountChangeValues) => unknown
   requestingAccountChange?: boolean
   accountChangeError?: string | null
-  /** 출금·계좌 기능이 아직 없을 때 이유. 있으면 출금 신청과 계좌 변경 요청을 막고 이 문구를 보여 준다 */
+  /** 출금·계좌 기능을 막는 이유(API가 없으면 NOT_CONNECTED_REASON). 있으면 출금 신청과 계좌 변경 요청을 막고 이 문구를 보여 준다 */
   featureDisabledReason?: string | null
   /** 미리보기용 */
   defaultAmount?: number
@@ -165,7 +170,11 @@ export function SellerWalletView({
   }
 
   const { account } = wallet
-  const accountText = `${account.bankName} ${account.accountNumberMasked} · ${account.holder}`
+  const accountText = account ? (
+    `${account.bankName} ${account.accountNumberMasked} · ${account.holder}`
+  ) : (
+    <NotConnectedValue />
+  )
   const available = wallet.withdrawableAmount
   const held = wallet.balance - available
   const featureOff = featureDisabledReason !== null
@@ -241,7 +250,7 @@ export function SellerWalletView({
           </div>
           <div className={classes.stat}>
             <span className={classes.statLabel}>
-              {featureOff ? '정산 받을 계좌 (등록 기능 준비 중)' : '등록 계좌'}
+              등록 계좌
               {wallet.accountNeedsCheck && (
                 <Badge color="warning" leftSection={<CircleAlert aria-hidden="true" />}>
                   확인 필요
@@ -253,30 +262,37 @@ export function SellerWalletView({
                 </Badge>
               )}
             </span>
-            {featureOff ? (
-              <span className={classes.help}>계좌 등록 기능은 준비 중이에요</span>
+            {account === null ? (
+              <NotConnected
+                layout="inline"
+                title="정산 계좌는 아직 연결되지 않았어요"
+                api="❌ 정산 계좌 조회·변경 요청"
+              />
             ) : (
               <>
                 <strong className={`pd-num ${classes.account}`}>
                   {account.bankName} {account.accountNumberMasked}
                 </strong>
                 <span className={classes.help}>예금주 {account.holder}</span>
+                {wallet.accountChangePending ? (
+                  <span className={classes.help}>
+                    관리자가 확인하면 새 계좌로 바뀌어요. 그 전까지는 이 계좌로 출금돼요.
+                  </span>
+                ) : (
+                  <DisabledReason reason={featureDisabledReason}>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      className={classes.inlineAction}
+                      aria-haspopup="dialog"
+                      disabled={featureOff}
+                      onClick={openAccount}
+                    >
+                      계좌 변경 요청
+                    </Button>
+                  </DisabledReason>
+                )}
               </>
-            )}
-            {featureOff ? null : wallet.accountChangePending ? (
-              <span className={classes.help}>
-                관리자가 확인하면 새 계좌로 바뀌어요. 그 전까지는 이 계좌로 출금돼요.
-              </span>
-            ) : (
-              <Button
-                variant="subtle"
-                size="sm"
-                className={classes.inlineAction}
-                aria-haspopup="dialog"
-                onClick={openAccount}
-              >
-                계좌 변경 요청
-              </Button>
             )}
           </div>
         </section>
@@ -294,8 +310,8 @@ export function SellerWalletView({
                 role="status"
                 title={`${formatPrice(withdrawResult.amount)} 출금을 신청했어요`}
               >
-                다음 영업일까지 {account.bankName} 계좌로 들어가요. 진행 상황은 출금 내역에서 볼 수
-                있어요.
+                다음 영업일까지 {account ? `${account.bankName} 계좌` : '등록 계좌'}로 들어가요.
+                진행 상황은 출금 내역에서 볼 수 있어요.
               </Alert>
             )}
             {withdrawResult?.kind === 'insufficient' && (
@@ -323,15 +339,18 @@ export function SellerWalletView({
                   {wallet.accountChangePending ? (
                     <strong>계좌 변경을 요청했어요. 관리자가 확인하고 있어요.</strong>
                   ) : (
-                    <Button
-                      variant="outline"
-                      color="warning"
-                      size="sm"
-                      aria-haspopup="dialog"
-                      onClick={openAccount}
-                    >
-                      계좌 변경 요청하기
-                    </Button>
+                    <DisabledReason reason={featureDisabledReason}>
+                      <Button
+                        variant="outline"
+                        color="warning"
+                        size="sm"
+                        aria-haspopup="dialog"
+                        disabled={featureOff}
+                        onClick={openAccount}
+                      >
+                        계좌 변경 요청하기
+                      </Button>
+                    </DisabledReason>
                   )}
                 </Stack>
               </Alert>
@@ -376,7 +395,7 @@ export function SellerWalletView({
             <dl className={classes.ledger}>
               <div>
                 <dt>받는 계좌</dt>
-                <dd className="pd-num">{featureOff ? '계좌 등록 기능 준비 중' : accountText}</dd>
+                <dd className="pd-num">{accountText}</dd>
               </div>
               <div>
                 <dt>출금 수수료</dt>
@@ -418,9 +437,19 @@ export function SellerWalletView({
               <h2 id="withdrawals-title" className={classes.cardTitle}>
                 출금 내역
               </h2>
-              <span className={`pd-num ${classes.help}`}>{formatAmount(withdrawals.length)}건</span>
+              {withdrawals && (
+                <span className={`pd-num ${classes.help}`}>
+                  {formatAmount(withdrawals.length)}건
+                </span>
+              )}
             </div>
-            {withdrawals.length === 0 ? (
+            {withdrawals === null ? (
+              <NotConnected
+                layout="inline"
+                title="출금 내역은 아직 연결되지 않았어요"
+                api="❌ 판매자 출금 신청·내역"
+              />
+            ) : withdrawals.length === 0 ? (
               <EmptyView
                 icon={<BanknoteArrowUp />}
                 title="아직 출금한 내역이 없어요"
@@ -457,7 +486,13 @@ export function SellerWalletView({
               정산 내역에서 상세 보기
             </Anchor>
           </div>
-          {transactions.length === 0 ? (
+          {transactions === null ? (
+            <NotConnected
+              layout="inline"
+              title="입출금 내역은 아직 연결되지 않았어요"
+              api="❌ 판매자 지갑 입출금 내역"
+            />
+          ) : transactions.length === 0 ? (
             <EmptyView
               icon={<Wallet />}
               title="아직 입출금 내역이 없어요"
@@ -582,14 +617,16 @@ export function SellerWalletView({
         </Stack>
       </Modal>
 
-      <AccountChangeModal
-        opened={modal === 'account'}
-        onClose={() => setModal(null)}
-        account={account}
-        onSubmit={submitAccountChange}
-        submitting={requestingAccountChange}
-        errorMessage={accountChangeError}
-      />
+      {account && (
+        <AccountChangeModal
+          opened={modal === 'account'}
+          onClose={() => setModal(null)}
+          account={account}
+          onSubmit={submitAccountChange}
+          submitting={requestingAccountChange}
+          errorMessage={accountChangeError}
+        />
+      )}
     </div>
   )
 }

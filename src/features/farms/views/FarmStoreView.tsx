@@ -5,12 +5,16 @@ import type { SellerProfile } from '@/shared/api/types'
 import { formatAmount } from '@/shared/lib/format'
 import { ProductSaleState } from '@/shared/lib/productState'
 import {
+  DisabledReason,
   EmptyView,
   FarmAvatar,
   FollowButton,
   type LoginReason,
   LoginRequiredModal,
+  NOT_CONNECTED_REASON,
+  NotConnected,
   OriginTag,
+  PageHeader,
   ProductCard,
   type ProductCardItem,
   ProductGrid,
@@ -23,18 +27,20 @@ import classes from './FarmStoreView.module.css'
 // B-11 판매자 상점. 시안: b2c/Store, StoreMobile
 // 상점 머리(사진 96 · 상호 명조 · 지역 · 소개 · 대표자 · 고객센터 · 팔로워) + 판매 중인 상품.
 // 정지된 판매자는 경고 + 배지, 내 상점은 팔로우 대신 프로필 수정(C-9).
+// API가 없어 지금 라우트는 status 'notConnected'(제목 + ‘연결 전’)만 그린다. 나머지 상태는 /__design 시안용.
 
 export type FarmStoreViewProps = {
-  status: 'pending' | 'error' | 'notFound' | 'success'
+  /** notConnected: 상점 API가 없어 ‘연결 전’만 그린다 */
+  status: 'pending' | 'error' | 'notFound' | 'success' | 'notConnected'
   /** TODO(api): 📝 GET /sellers/{sellerId} */
   seller?: SellerProfile
   following?: boolean
   /** 내 상점. TODO(api): 내 판매자 ID를 줄 API가 없다(A-12) */
   isOwner?: boolean
-  /** TODO(api): 판매자별 상품 목록 API 없음 */
-  products: ProductCardItem[]
-  onToggleFollow: () => void
-  onToggleLike: (productId: number) => void
+  /** TODO(api): ❌ 판매자별 상품 목록 API 없음 */
+  products?: ProductCardItem[]
+  onToggleFollow?: () => void
+  onToggleLike?: (productId: number) => void
   onRetry?: () => void
   errorMessage?: string
   loginPrompt?: LoginReason | null
@@ -62,7 +68,7 @@ export function FarmStoreView({
   seller,
   following = false,
   isOwner = false,
-  products,
+  products = [],
   onToggleFollow,
   onToggleLike,
   onRetry,
@@ -70,6 +76,23 @@ export function FarmStoreView({
   loginPrompt = null,
   onLoginPromptClose = () => {},
 }: FarmStoreViewProps) {
+  if (status === 'notConnected') {
+    return (
+      <>
+        <PageHeader
+          title="농가 상점"
+          breadcrumbs={[{ label: '홈', to: '/' }, { label: '농가 상점' }]}
+          backTo="/"
+        />
+        <NotConnected
+          title="농가 상점은 아직 연결되지 않았어요"
+          api="📝 GET /sellers/{sellerId}, 판매자별 상품 목록"
+          action={{ label: '상품 둘러보기', to: '/products' }}
+        />
+      </>
+    )
+  }
+
   const resolvedStatus = status === 'success' && !seller ? 'notFound' : status
 
   if (resolvedStatus !== 'success' || !seller) {
@@ -135,8 +158,14 @@ export function FarmStoreView({
               </Button>
               <Text className={classes.help}>내 상점은 팔로우할 수 없어요</Text>
             </>
-          ) : (
+          ) : onToggleFollow ? (
             <FollowButton following={following} onClick={onToggleFollow} />
+          ) : (
+            <DisabledReason reason={NOT_CONNECTED_REASON}>
+              <Button variant="outline" disabled>
+                팔로우
+              </Button>
+            </DisabledReason>
           )}
         </div>
       </section>
@@ -161,7 +190,7 @@ export function FarmStoreView({
                 key={item.product.productId}
                 {...item}
                 sellerSuspended={seller.suspended}
-                onToggleLike={() => onToggleLike(item.product.productId)}
+                onToggleLike={onToggleLike && (() => onToggleLike(item.product.productId))}
               />
             ))}
           </ProductGrid>

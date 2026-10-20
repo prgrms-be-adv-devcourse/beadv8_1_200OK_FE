@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { sellerWallet } from '../fixtures'
+import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import {
   useMonthPayouts,
   usePayout,
@@ -14,7 +14,9 @@ import { SellerWalletView } from '../views/SellerWalletView'
 // S-08 정산 내역 · 지갑·출금 라우트 (판매자 센터 청크).
 // 정산: ✅ GET /payouts/me?from&to(최근 1년, 서버 최대 범위), /payouts/me/{id}, /payouts/me/{id}/items,
 //   정산 예정 금액 = GET /payouts/me/candidates?unsettledOnly=true 합계(최대 100건), 다음 정산일은 정책 상수.
-// 지갑: ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌 변경 → 출금 신청은 닫아 두고 내역은 비운다.
+// 지갑: ✅ 잔액 GET /wallets/sellers/me/balance.
+// TODO(api): ❌ 출금 신청·출금 내역·입출금 내역·정산 계좌 조회·변경 API 없음 → 출금·계좌 변경은 NOT_CONNECTED_REASON으로 막고,
+//   계좌·출금 내역·입출금 내역 칸은 null(연결 전)로 넘긴다. 처리 중 출금이 생길 수 없으니 출금 가능 금액 = 잔액.
 
 /** /seller/payouts?page= 와 /seller/payouts/:payoutId 가 같이 쓴다. 상세는 목록 위 모달 */
 export function SellerPayoutsPage() {
@@ -86,15 +88,15 @@ export function SellerWalletPage() {
     <SellerWalletView
       status={balance.isError ? 'error' : balance.isPending ? 'pending' : 'success'}
       wallet={{
-        ...sellerWallet,
         balance: amount,
         withdrawableAmount: amount,
+        account: null,
         accountNeedsCheck: false,
         accountChangePending: false,
       }}
-      withdrawals={[]}
-      transactions={[]}
-      featureDisabledReason="출금 신청은 아직 열리지 않았어요"
+      withdrawals={null}
+      transactions={null}
+      featureDisabledReason={NOT_CONNECTED_REASON}
       onWithdraw={() => {}}
       onRequestAccountChange={() => {}}
       errorMessage={balance.error?.detail}

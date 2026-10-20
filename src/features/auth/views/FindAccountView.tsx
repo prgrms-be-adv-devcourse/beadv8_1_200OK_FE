@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { PASSWORD_RESET_LINK_MINUTES } from '@/shared/lib/constants'
 import { formatDate } from '@/shared/lib/format'
-import { PageHeader } from '@/shared/ui'
+import { NotConnected, PageHeader } from '@/shared/ui'
 import {
   type FindIdFormValues,
   type FindPasswordFormValues,
@@ -16,7 +16,8 @@ import {
 import classes from './AuthView.module.css'
 
 // 아이디·비밀번호 찾기. 시안: b2c/FindAccount, FindAccountMobile
-// TODO(api): API가 없다(C-5). 아이디는 일부를 가려(a**bc**) 보여 주고, 비밀번호는 재설정 링크(30분)를 메일로 보낸다.
+// TODO(api): ❌ API가 없다(C-5). 아이디는 일부를 가려(a**bc**) 보여 주고, 비밀번호는 재설정 링크(30분)를 메일로 보낸다.
+// 지금 라우트는 FindAccountNotConnectedView만 그린다. 폼·결과는 /__design 시안용으로 남겨 둔다.
 
 export type FindAccountTab = 'id' | 'password'
 
@@ -282,6 +283,21 @@ export function FindAccountView({
           로그인으로
         </Anchor>
       </nav>
+    </>
+  )
+}
+
+/** API가 없어 지금 라우트가 그리는 ‘연결 전’ 화면 */
+export function FindAccountNotConnectedView() {
+  return (
+    <>
+      <PageHeader title="아이디·비밀번호 찾기" backTo="/login" />
+      <NotConnected
+        title="아이디·비밀번호 찾기는 아직 연결되지 않았어요"
+        description="서버 기능이 준비되면 여기서 찾을 수 있어요."
+        api="❌ 아이디 찾기·비밀번호 재설정 링크 (C-5)"
+        action={{ label: '로그인으로', to: '/login' }}
+      />
     </>
   )
 }

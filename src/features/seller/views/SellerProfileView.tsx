@@ -19,7 +19,15 @@ import type { SellerProfileResponse } from '@/shared/api/types'
 import { MAX_IMAGE_MB, STORE_INTRO_MAX } from '@/shared/lib/constants'
 import { formatAmount } from '@/shared/lib/format'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
-import { DisabledReason, EmptyView, FarmAvatar, PageHeader, QueryState } from '@/shared/ui'
+import {
+  DisabledReason,
+  EmptyView,
+  FarmAvatar,
+  NotConnected,
+  NotConnectedValue,
+  PageHeader,
+  QueryState,
+} from '@/shared/ui'
 import { type ProfileFormValues, profileSchema } from '../schemas'
 import type { Follower } from '../types'
 import classes from './SellerProfileView.module.css'
@@ -27,7 +35,8 @@ import classes from './SellerProfileView.module.css'
 // S-09 상점 프로필 · 팔로워 /seller/profile. 시안: seller/SellerProfile, SellerProfileMobile
 // 사진(없으면 상호 첫 글자) · 상호명 · 대표자 · 고객센터 · 소개 200자 · 팔로워 목록(닉네임만) · 빈 상태
 // profile이 null이면 아직 등록 전 → 빈 폼으로 ‘등록’, 있으면 ‘저장’(전체 수정).
-// ✅ GET/POST/PUT /sellers/me/profile, 사진 POST /media/SELLER_PROFILE. TODO(api): ❌ 팔로워 API → fixtures
+// ✅ GET/POST/PUT /sellers/me/profile, 사진 POST /media/SELLER_PROFILE.
+// TODO(api): ❌ 팔로워 수·목록 API 없음 → followerCount·followers가 null이면 수는 ‘–’, 목록은 연결 전(NotConnected).
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png']
 
@@ -41,8 +50,8 @@ export type SellerProfileViewProps = {
   profile?: SellerProfileResponse | null
   /** 구매자에게 보이는 상점(/farms/:id) 링크. 등록 모드에서는 숨긴다 */
   sellerId?: number
-  /** TODO(api): 팔로워 수 API 없음 → fixtures */
-  followerCount: number
+  /** null = 연결 전. TODO(api): ❌ 팔로워 수 API 없음 */
+  followerCount: number | null
   /** 지금 보여 줄 프로필 사진(업로드 중·완료 포함). null이면 상호 첫 글자 */
   photoUrl: string | null
   onSave: (values: ProfileFormValues) => MaybeAsync
@@ -57,7 +66,8 @@ export type SellerProfileViewProps = {
   serverErrors?: ProfileFieldErrors
   /** 칸에 붙일 수 없는 저장 오류 (서버 detail) */
   errorMessage?: string | null
-  followers: Follower[]
+  /** null = 연결 전. TODO(api): ❌ 팔로워 목록 API 없음 */
+  followers: Follower[] | null
   hasMoreFollowers?: boolean
   loadingMoreFollowers?: boolean
   onLoadMoreFollowers?: () => void
@@ -277,9 +287,19 @@ export function SellerProfileView({
                   <h2 id="seller-followers" className={classes.cardTitle}>
                     팔로워
                   </h2>
-                  <span className="pd-num">{formatAmount(followerCount)}명</span>
+                  {followerCount === null ? (
+                    <NotConnectedValue />
+                  ) : (
+                    <span className="pd-num">{formatAmount(followerCount)}명</span>
+                  )}
                 </div>
-                {followers.length === 0 ? (
+                {followers === null ? (
+                  <NotConnected
+                    layout="inline"
+                    title="팔로워는 아직 연결되지 않았어요"
+                    api="❌ 판매자 팔로워 수·목록"
+                  />
+                ) : followers.length === 0 ? (
                   <EmptyView
                     icon={<Users />}
                     title="아직 팔로워가 없어요"

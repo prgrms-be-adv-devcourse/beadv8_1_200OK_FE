@@ -41,7 +41,8 @@ export type ProductListViewProps = {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
-  onToggleLike: (productId: number) => void
+  /** TODO(api): 📝 관심 상품. 없으면 카드에 하트를 그리지 않는다 */
+  onToggleLike?: (productId: number) => void
   onRetry?: () => void
   errorMessage?: string
   loginPrompt?: LoginReason | null
@@ -203,7 +204,7 @@ export function ProductListView({
               <ProductCard
                 key={item.product.productId}
                 {...item}
-                onToggleLike={() => onToggleLike(item.product.productId)}
+                onToggleLike={onToggleLike && (() => onToggleLike(item.product.productId))}
               />
             ))}
           </ProductGrid>

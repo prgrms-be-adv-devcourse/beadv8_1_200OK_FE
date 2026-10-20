@@ -24,7 +24,8 @@ import classes from './OrderModals.module.css'
 // 주문·출고 화면의 모달 4개. 시안: seller/SellerOrders (송장 등록 · 배송지 변경 요청 · 판매자 취소 · 출고 지연)
 // ✅ 출고 POST /seller/shipments/{shipmentId}/dispatch {carrier, trackingNumber 숫자 10~13자리} (같은 택배사 안에서 중복 불가),
 //    배송지 변경 승인·거절 PATCH /seller/shipments/{shipmentId}/address-change-requests/{requestId} {decision: APPROVE|REJECT}.
-// TODO(api): ❌ 판매자 주문 목록 API가 없어 shipmentId·requestId를 받을 곳이 없다 → 연결 보류(화면 안에서만 바뀐다).
+// TODO(api): ❌ 판매자 주문 목록 API가 없어 shipmentId·requestId를 받을 곳이 없다 → 연결 보류. 주문·출고 라우트는 연결 전이라
+//   지금은 /__design 미리보기에서만 열린다.
 // TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 · 클레임 API 없음.
 
 export type InvoiceInput = { carrier: ShipmentCarrier; trackingNumber: string }

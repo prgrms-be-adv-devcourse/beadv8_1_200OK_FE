@@ -31,7 +31,7 @@ src/test/      Vitest setup, render 래퍼, fakeToken
   - `api.ts` 요청 함수, `queries.ts` 쿼리 키·훅
   - `pages/` 라우트 컴포넌트: 쿼리·mutation·라우터를 연결해 View에 props로 넘김
   - `views/` 표시 전용: props만 받아 그리고 API·쿼리·스토어를 import하지 않음
-  - `fixtures.ts` 샘플 데이터, `previews.tsx` `/__design` 상태 갤러리(View를 fixtures로 그림)
+  - `fixtures.ts` 샘플 데이터, `previews.tsx` `/__design` 상태 갤러리(View를 fixtures로 그림). fixtures는 테스트·previews 전용이에요(아래 'API가 없는 곳')
 - 판매자·관리자 화면은 각각 지연 로딩 청크(`app/chunks/`)로 묶여요. 새 화면은 청크 모듈에서 내보내고 `routes.tsx`에 이름으로 연결해요.
 
 ## 서버 연결
@@ -54,7 +54,9 @@ src/test/      Vitest setup, render 래퍼, fakeToken
 ## API가 없는 곳
 
 - API로 연결된 feature: auth(재발급 포함) · products · cart · checkout(배송비 견적) · wallet(약관·잔액·충전(토스)·이용 내역) · reviews · orders(목록·상세) · seller(내 상품·프로필·잔액·정산 `/payouts/me`) · sellerApply · admin(판매자 심사·정산 조회·실행).
-- 아직 `fixtures`로 그리는 곳: me(프로필·관심·팔로우·배송지·계정), farms, orders의 배송 조회·문의, seller의 주문·클레임·출금·팔로워, admin의 수취인 이름·조정 내역·1건 정산·조정(서버 501).
+- 아직 연결 전(`NotConnected`)인 곳: me(프로필·관심·팔로우·배송지·계정), farms, 아이디·비밀번호 찾기, orders의 배송 조회·문의, products의 인기 농가·판매자 정보·관심·팔로우, 비회원 약관, seller의 주문·클레임·출금·팔로워·홈 주문 집계, admin의 수취인 이름·조정 내역·1건 정산·조정(서버 501).
+- **실제 화면은 fixtures를 그리지 않아요.** API가 없는 화면·섹션은 `NotConnected`(`shared/ui`, "아직 연결되지 않은 화면이에요", 개발 서버에선 필요한 API 이름도 표시), 모르는 숫자는 `NotConnectedValue`(–), 서버를 부르지 못하는 버튼은 막고 `DisabledReason reason={NOT_CONNECTED_REASON}`으로 보여 줘요. 토스트만 띄우는 가짜 동작은 만들지 않아요. 비어 보이는 이유가 '데이터 없음'인지 '연결 전'인지 구분되게 하려는 규칙이에요.
+  - Biome이 pages·views·components·`app/layouts`에서 fixtures import를 막아요. 화면 상태를 보려면 `previews.tsx`에서 fixtures로 그려요.
 - API가 없어 임시로 처리한 곳에는 `TODO(api)` 주석이 있어요(`grep -rn "TODO(api)" src`). API가 생기면 이 주석을 따라 걷어내요.
 - 브라우저 저장소에 둔 임시 데이터:
   - `features/seller/productCache.ts`(localStorage): 수정 화면용 version·옵션 재고·옵션 id만. 상품 목록은 API지만 판매자 상품 상세 API가 없어서 써요. 이 기기에서 등록·수정한 상품만 수정할 수 있어요.

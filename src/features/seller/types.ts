@@ -7,8 +7,9 @@ import type {
 import type { ClaimState } from '@/shared/lib/claimState'
 import type { WithdrawalState } from '@/shared/lib/withdrawalState'
 
-// 판매자 센터 화면 전용 타입. TODO(api): 센터 홈 주문 집계 API는 없다(❌). 주문 쪽 필드는 시안 기준 임시.
+// 판매자 센터 화면 전용 타입. TODO(api): ❌ 센터 홈 주문 집계 API 없음 → 화면엔 연결 전(–). 주문 쪽 필드는 시안 기준 임시.
 
+/** 오늘 요약 주문 집계. 정산 예정 금액은 ✅ 정산 후보 합계(PayoutOutlook)로 따로 받는다 */
 export type SellerHomeStats = {
   /** 오늘 들어온 주문 */
   newOrders: number
@@ -16,8 +17,6 @@ export type SellerHomeStats = {
   waitingShipment: number
   /** 처리 안 한 취소 요청 */
   cancelRequests: number
-  /** 구매확정된 주문 기준 정산 예정 금액 */
-  expectedPayout: number
 }
 
 /** 오늘 처리할 일 한 줄 (출고 대기 주문 상품) */
@@ -34,7 +33,7 @@ export type SellerTodo = {
 /** ✅ 내 상품 목록에서 센다. lowStockProducts = 판매 가능 수량이 LOW_STOCK_THRESHOLD 이하인 상품 수 */
 export type SellerProductStats = { onSale: number; ready: number; lowStockProducts: number }
 
-/** TODO(api): ❌ 팔로워 API 없음 → fixtures. 팔로워는 닉네임만 보여 준다 */
+/** TODO(api): ❌ 팔로워 API 없음 → 화면엔 연결 전. 팔로워는 닉네임만 보여 준다 */
 export type Follower = { memberId: number; nickname: string }
 
 // ─── 상품 관리 ───────────────────────────────────────────
@@ -102,7 +101,7 @@ export enum SellerCancelReason {
 }
 
 // ─── 취소 요청 ───────────────────────────────────────────
-// TODO(api): ❌ 판매자 클레임(취소 요청) 목록·승인·거절 API 없음 → fixtures
+// TODO(api): ❌ 판매자 클레임(취소 요청) 목록·승인·거절 API 없음 → 화면은 연결 전, 이 타입은 미리보기용
 
 export type CancelClaim = {
   claimId: number
@@ -133,7 +132,7 @@ export type PayoutOutlook = {
 }
 
 // ─── 지갑·출금 ───────────────────────────────────────────
-// ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌(등록·변경) API 없음 → 그 부분은 시안 기준 임시.
+// ✅ 잔액 GET /wallets/sellers/me/balance. TODO(api): ❌ 출금·입출금 내역·계좌(등록·변경) API 없음 → 화면엔 연결 전, 타입은 시안 기준 임시.
 
 export type PayoutAccount = {
   bankName: string
@@ -146,7 +145,8 @@ export type SellerWallet = {
   balance: number
   /** 잔액 − 처리 중인 출금 */
   withdrawableAmount: number
-  account: PayoutAccount
+  /** null = 연결 전. TODO(api): ❌ 정산 계좌 조회 API 없음 */
+  account: PayoutAccount | null
   /** 은행이 예금주·계좌번호가 맞지 않다고 알려 옴 → 출금 막음 */
   accountNeedsCheck: boolean
   /** 계좌 변경 요청을 보냈고 관리자가 아직 확인 안 함 (C-6) */

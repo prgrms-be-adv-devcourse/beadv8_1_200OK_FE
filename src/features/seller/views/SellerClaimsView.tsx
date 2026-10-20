@@ -3,13 +3,14 @@ import { Info, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { ClaimState } from '@/shared/lib/claimState'
 import { formatAmount, formatDate, formatPrice } from '@/shared/lib/format'
-import { PageHeader, PriceText, QueryState, StatusBadge } from '@/shared/ui'
+import { NotConnected, PageHeader, PriceText, QueryState, StatusBadge } from '@/shared/ui'
 import type { CancelClaim } from '../types'
 import classes from './SellerClaimsView.module.css'
 
 // S-07 취소 요청 처리 /seller/claims. 시안: seller/SellerCancels, SellerCancelsMobile
 // 탭: 처리 대기 · 처리 완료. 승인(확인 모달) → 바로 환불, 거절(사유 필수) → 구매자 주문 상세에 사유가 보인다.
-// TODO(api): ❌ 판매자 클레임(취소 요청) 목록·상세·승인·거절 API 없음 → fixtures를 화면 안에서만 바꾼다
+// TODO(api): 📝 판매자 클레임(취소 요청) 목록·상세·승인·거절 API 없음
+//   → 라우트(/seller/claims)는 SellerClaimsNotConnectedView(연결 전)를 그리고, SellerClaimsView는 /__design 미리보기에서만 쓴다.
 
 type MaybeAsync = unknown
 
@@ -26,6 +27,16 @@ export type SellerClaimsViewProps = {
   submitting?: boolean
   defaultModal?: { type: 'approve' | 'reject'; claimId: number } | null
   onRetry?: () => void
+}
+
+/** 라우트가 지금 그리는 모양. 제목 줄은 두고 본문만 연결 전으로 바꾼다 */
+export function SellerClaimsNotConnectedView() {
+  return (
+    <div className={classes.root}>
+      <PageHeader title="취소 요청 처리" hideOnMobile />
+      <NotConnected api="📝 판매자 취소 요청 목록·승인·거절" />
+    </div>
+  )
 }
 
 export function SellerClaimsView({

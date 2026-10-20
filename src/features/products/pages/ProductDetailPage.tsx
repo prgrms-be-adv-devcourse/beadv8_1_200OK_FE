@@ -2,8 +2,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { useParams } from 'react-router'
 import { useAddToCart } from '@/features/cart'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
-import { type LoginReason, showToast } from '@/shared/ui'
-import { sellerOfProduct } from '../fixtures'
+import type { LoginReason } from '@/shared/ui'
 import {
   errorMessageOf,
   isNotFound,
@@ -16,7 +15,8 @@ import { type DetailStatus, ProductDetailView } from '../views/ProductDetailView
 // B-02 상품 상세 라우트 /products/:productId. 상세 + 리뷰 목록(최신순, 더 보기).
 // 로그인했으면 이 상품의 내 리뷰(GET /products/{productId}/reviews/me)를 목록 맨 위에 둔다. ‘내 리뷰’ 표시는 리뷰의 memberId와 토큰의 회원 번호로 판단한다.
 // 담기는 features/cart 공개 hook(products → cart 예외). 비회원이면 로그인 안내 모달을 띄운다.
-// TODO(api): 판매자 정보·관심·팔로우는 API가 없어 fixtures·화면 안 상태 유지.
+// TODO(api): 📝 판매자 정보(GET /sellers/{sellerId}, 상세에 sellerId 없음)·관심·팔로우 API가 없다.
+//   판매자는 넘기지 않고(‘연결 전’ 안내), 관심·팔로우 핸들러도 넘기지 않아 버튼을 막고 이유를 보인다.
 
 const asProductId = (value: string | undefined) => {
   const id = Number(value)
@@ -34,12 +34,8 @@ export function ProductDetailPage() {
     id ?? 0,
     id !== null && reviewCount > 0 ? auth?.memberId : undefined,
   )
-  // TODO(api): 상세 API에 판매자가 없다(📝 GET /sellers/{sellerId}). fixtures 상품만 판매자가 보인다
-  const seller = id === null ? undefined : sellerOfProduct(id)
   const { addToCart, adding } = useAddToCart()
   const [loginPrompt, setLoginPrompt] = useState<LoginReason | null>(null)
-  const [liked, setLiked] = useState(false)
-  const [following, setFollowing] = useState(false)
 
   // 내 리뷰는 몇 번째 페이지에 있든 수정·삭제할 수 있게 맨 위에 둔다. 못 불러오면 목록만 그린다
   const mine = myReviews.data ?? []
@@ -64,9 +60,6 @@ export function ProductDetailPage() {
       key={`${id}-${product.data ? 'loaded' : 'loading'}`}
       status={status}
       product={product.data}
-      seller={seller}
-      liked={liked}
-      following={following}
       reviews={reviewList}
       reviewsStatus={
         reviewCount === 0 || reviews.data ? 'success' : reviews.isError ? 'error' : 'pending'
@@ -91,16 +84,6 @@ export function ProductDetailPage() {
       }}
       loginPrompt={loginPrompt}
       onLoginPromptClose={() => setLoginPrompt(null)}
-      onToggleLike={() => {
-        setLiked(!liked)
-        showToast({ message: liked ? '관심 상품에서 뺐어요' : '관심 상품에 담았어요' })
-      }}
-      onToggleFollow={() => {
-        setFollowing(!following)
-        showToast({
-          message: following ? '팔로우를 취소했어요' : `${seller?.storeName}을 팔로우했어요`,
-        })
-      }}
     />
   )
 }

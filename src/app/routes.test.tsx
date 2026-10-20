@@ -19,7 +19,7 @@ const screens: [path: string, title: string][] = [
   ['/', '이번 주 산지에서 막 수확했어요'],
   ['/products?category=FRUIT', '과일'],
   ['/products/101', '청송 꿀사과 부사'],
-  ['/farms/7', '청송 햇살농원'],
+  ['/farms/7', '농가 상점'], // 상점 API 연결 전
   ['/terms/PREPAID_PAYMENT_INSTRUMENT', '약관 보기'],
   ['/login?returnTo=%2Fcart', '로그인'],
   ['/signup', '회원가입'],

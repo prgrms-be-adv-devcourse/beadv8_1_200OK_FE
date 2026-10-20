@@ -6,9 +6,11 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole, type ProductPage, type ProductSummary } from '@/shared/api/types'
+import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
 import { appleReviews, MY_MEMBER_ID, productDetailOf, productSummaries } from '../fixtures'
+import { HomePage } from './HomePage'
 import { ProductDetailPage } from './ProductDetailPage'
 import { ProductListPage } from './ProductListPage'
 
@@ -41,6 +43,7 @@ function renderAt(path: string) {
     [
       { path: '/products', Component: ProductListPage },
       { path: '/products/:productId', Component: ProductDetailPage },
+      { path: '/', Component: HomePage },
     ],
     { initialEntries: [path] },
   )
@@ -239,5 +242,39 @@ describe('ProductDetailPage 장바구니 담기', () => {
     await user.click(await addButton())
     expect(await screen.findByText('판매 중인 상품이 아닙니다.')).toBeInTheDocument()
     expect(patched).toHaveLength(1)
+  })
+})
+
+describe('관심·팔로우·판매자 정보 (연결 전)', () => {
+  it('홈은 상품 카드에 하트를 그리지 않고 인기 농가 자리에 연결 전 안내를 보여 준다', async () => {
+    renderAt('/')
+    expect(await screen.findByText(productSummaries[0]?.name ?? '')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /관심 상품/ })).not.toBeInTheDocument()
+    expect(screen.getByText('인기 농가는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /팔로우/ })).not.toBeInTheDocument()
+  })
+
+  it('상품 목록은 카드에 하트를 그리지 않는다', async () => {
+    server.use(categoriesHandler)
+    renderAt('/products')
+    expect(await screen.findByText(productSummaries[0]?.name ?? '')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /관심 상품/ })).not.toBeInTheDocument()
+  })
+
+  it('상품 상세는 판매자 정보 대신 연결 전 안내를, 관심·팔로우는 막고 이유를 보여 준다', async () => {
+    server.use(
+      http.get('*/api/v1/products/:productId', () => HttpResponse.json(productDetailOf(101))),
+    )
+    renderAt('/products/101')
+
+    expect(await screen.findByText('판매자 정보는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /햇살농원/ })).not.toBeInTheDocument()
+    for (const like of screen.getAllByRole('button', { name: '관심 상품' })) {
+      expect(like).toBeDisabled()
+      expect(like).toHaveAccessibleDescription(NOT_CONNECTED_REASON)
+    }
+    const follow = screen.getByRole('button', { name: '팔로우' })
+    expect(follow).toBeDisabled()
+    expect(follow).toHaveAccessibleDescription(NOT_CONNECTED_REASON)
   })
 })

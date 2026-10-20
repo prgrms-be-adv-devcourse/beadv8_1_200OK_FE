@@ -13,6 +13,12 @@ export {
   type LoginRequiredModalProps,
 } from './LoginRequiredModal/LoginRequiredModal'
 export { Logo, type LogoProps } from './Logo/Logo'
+export {
+  NOT_CONNECTED_REASON,
+  NotConnected,
+  type NotConnectedProps,
+  NotConnectedValue,
+} from './NotConnected/NotConnected'
 export { OptionCard, type OptionCardProps } from './OptionCard/OptionCard'
 export { OriginTag, type OriginTagProps } from './OriginTag/OriginTag'
 export {

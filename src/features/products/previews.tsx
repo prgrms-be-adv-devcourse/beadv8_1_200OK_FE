@@ -85,6 +85,12 @@ export const productPreviews: ScreenPreview[] = [
     mobileHeader: true,
     tabBar: true,
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면: 농가·하트·팔로우)',
+        render: () =>
+          home({ farms: undefined, onToggleLike: undefined, onToggleFollow: undefined }),
+      },
       { id: 'default', label: '기본', render: () => home() },
       {
         id: 'guest',
@@ -117,6 +123,11 @@ export const productPreviews: ScreenPreview[] = [
           list({ category: ProductCategory.FRUIT, items: fruits, totalCount: fruits.length }),
       },
       { id: 'all', label: '전체', render: () => list() },
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면: 하트 없음)',
+        render: () => list({ onToggleLike: undefined }),
+      },
       {
         id: 'empty-category',
         label: '빈 카테고리',
@@ -167,6 +178,12 @@ export const productPreviews: ScreenPreview[] = [
     path: '/products/101',
     mobileHeader: true,
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면: 판매자·관심·팔로우)',
+        render: () =>
+          detail({ seller: undefined, onToggleLike: undefined, onToggleFollow: undefined }),
+      },
       { id: 'on-sale', label: '판매 중', render: () => detail() },
       {
         id: 'option-sold-out',

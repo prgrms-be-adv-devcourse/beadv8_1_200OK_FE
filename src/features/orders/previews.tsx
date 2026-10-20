@@ -16,7 +16,7 @@ import { InquiryType } from './types'
 import { OrderDetailView, type OrderDetailViewProps } from './views/OrderDetailView'
 import { OrderListView, type OrderListViewProps } from './views/OrderListView'
 import { ShipmentView, type ShipmentViewProps } from './views/ShipmentView'
-import { SupportView, type SupportViewProps } from './views/SupportView'
+import { SupportNotConnectedView, SupportView, type SupportViewProps } from './views/SupportView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다)
 
@@ -111,6 +111,11 @@ export const orderPreviews: ScreenPreview[] = [
     layout: 'public',
     path: '/orders/151/shipments/3',
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        render: () => <ShipmentView status="notConnected" orderId={151} />,
+      },
       { id: 'shipping', label: '배송 중', render: () => shipment() },
       {
         id: 'delivered',
@@ -133,6 +138,11 @@ export const orderPreviews: ScreenPreview[] = [
     layout: 'public',
     path: '/orders/93/inquiry',
     states: [
+      {
+        id: 'not-connected',
+        label: '연결 전 (지금 화면)',
+        render: () => <SupportNotConnectedView orderId={93} />,
+      },
       { id: 'form', label: '작성', render: () => support() },
       {
         id: 'photos',

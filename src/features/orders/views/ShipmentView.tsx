@@ -8,6 +8,7 @@ import { ShipmentState } from '@/shared/lib/shipmentState'
 import {
   type BadgeStatus,
   FarmAvatar,
+  NotConnected,
   PageHeader,
   ProgressSteps,
   QueryState,
@@ -20,11 +21,15 @@ import classes from './ShipmentView.module.css'
 
 // 배송 조회 /orders/:orderId/shipments/:shipmentId. 시안: b2c/ShipmentDetail, ShipmentDetailMobile
 // 상태: 배송 중 · 배송 완료(자동 구매확정 안내) · 송장 등록 전 · 출고 지연(사유·새 출고 예정일) · 택배사 조회 실패
-// TODO(api): ❌ 배송 조회 API 없음(주문 상세에 shipmentId·송장도 없음). 택배사 이력 연동 방식은 백엔드와 정해야 한다. 주문 상세에서 링크하지 않는 fixtures 전용 화면
+// TODO(api): 📝 GET /shipments/{shipmentId} 없음(주문 상세에 shipmentId·송장도 없음). 택배사 이력 연동 방식은 백엔드와 정해야 한다.
+//   지금 라우트는 status 'notConnected'(‘연결 전’)만 그린다. 나머지 상태는 /__design 시안용.
 
 export type ShipmentViewProps = {
-  status: 'pending' | 'error' | 'notFound' | 'success'
+  /** notConnected: 배송 조회 API가 없어 ‘연결 전’만 그린다 */
+  status: 'pending' | 'error' | 'notFound' | 'success' | 'notConnected'
   shipment?: ShipmentTracking
+  /** notConnected일 때 뒤로·경로에 쓰는 주문 번호 */
+  orderId?: number
   /** 택배사 조회만 실패 (주문·송장 정보는 있음) */
   trackingFailed?: boolean
   onRetry?: () => void
@@ -99,10 +104,33 @@ async function copyTracking(value: string) {
 export function ShipmentView({
   status,
   shipment,
+  orderId,
   trackingFailed = false,
   onRetry,
   errorMessage,
 }: ShipmentViewProps) {
+  if (status === 'notConnected') {
+    const orderPath = orderId ? `/orders/${orderId}` : '/orders'
+    return (
+      <div className={classes.root}>
+        <PageHeader
+          title="배송 조회"
+          backTo={orderPath}
+          breadcrumbs={[
+            { label: '주문 내역', to: '/orders' },
+            ...(orderId ? [{ label: '주문 상세', to: orderPath }] : []),
+            { label: '배송 조회' },
+          ]}
+        />
+        <NotConnected
+          title="배송 조회는 아직 연결되지 않았어요"
+          api="📝 GET /shipments/{shipmentId}"
+          action={{ label: orderId ? '주문 상세로' : '주문 내역으로', to: orderPath }}
+        />
+      </div>
+    )
+  }
+
   const resolvedStatus = status === 'success' && !shipment ? 'notFound' : status
 
   if (resolvedStatus !== 'success' || !shipment) {

@@ -24,6 +24,8 @@ import {
   LedgerBlock,
   type LoginReason,
   LoginRequiredModal,
+  NotConnected,
+  NotConnectedValue,
   OptionCard,
   OriginTag,
   PageHeader,
@@ -436,6 +438,13 @@ export function StateViewSection() {
       </Panel>
       <Panel title="EmptyView 단독 (QueryState 없이)">
         <EmptyView icon={<Heart />} title="아직 관심 상품이 없어요" />
+      </Panel>
+      <Panel title="NotConnected · 연결 전 (API 없음, 개발 서버에선 API 이름 표시)">
+        <NotConnected api="📝 GET /sellers/me/orders" />
+        <NotConnected layout="inline" title="팔로워는 아직 연결되지 않았어요" api="❌ 팔로워 API" />
+        <p>
+          신규 주문 <NotConnectedValue />건
+        </p>
       </Panel>
     </GallerySection>
   )

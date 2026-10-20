@@ -65,6 +65,8 @@ describe('SellerProfilePage', () => {
     })
     expect(await screen.findByRole('button', { name: '저장' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '팔로워' })).toBeInTheDocument()
+    expect(screen.getByText('팔로워는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByText('아직 팔로워가 없어요')).not.toBeInTheDocument()
   })
 
   it('등록된 프로필은 PUT으로 저장하고, 사진을 삭제하면 profileImageUrl null을 보낸다', async () => {

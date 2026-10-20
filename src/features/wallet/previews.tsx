@@ -154,6 +154,17 @@ export const walletPreviews: ScreenPreview[] = [
     states: [
       { id: 'efin', label: '전자금융거래', render: () => terms() },
       {
+        id: 'guest',
+        label: '비회원 (로그인 안내)',
+        session: 'guest',
+        render: () =>
+          terms({
+            status: 'loginRequired',
+            terms: [],
+            loginTo: '/login?returnTo=%2Fterms%2FELECTRONIC_FINANCIAL_TRANSACTION',
+          }),
+      },
+      {
         id: 'prepaid',
         label: '선불전자지급수단',
         render: () => terms({ selectedType: TermsType.PREPAID_PAYMENT_INSTRUMENT }),
