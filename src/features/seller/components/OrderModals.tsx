@@ -4,38 +4,38 @@ import {
   Group,
   Modal,
   NativeSelect,
-  Radio,
+  Skeleton,
   Stack,
   Text,
-  Textarea,
   TextInput,
 } from '@mantine/core'
-import { DatePickerInput } from '@mantine/dates'
-import { CircleAlert, TriangleAlert } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
-import { ShipmentCarrier } from '@/shared/api/types'
-import { formatDate, formatPrice } from '@/shared/lib/format'
+import {
+  type SellerShipmentSummary,
+  type ShipmentAddress,
+  ShipmentCarrier,
+  type ShipmentDetail,
+  type ShipmentDispatchRequest,
+} from '@/shared/api/types'
+import { formatAmount, formatDate } from '@/shared/lib/format'
 import { carrierLabels } from '@/shared/lib/labels'
-import { DisabledReason } from '@/shared/ui'
-import { CARRIER_ORDER, delayReasonLabels, sellerCancelReasonLabels } from '../labels'
-import { DelayReason, SellerCancelReason, type SellerOrderRow } from '../types'
+import { CARRIER_ORDER } from '../labels'
 import classes from './OrderModals.module.css'
 
-// 주문·출고 화면의 모달 4개. 시안: seller/SellerOrders (송장 등록 · 배송지 변경 요청 · 판매자 취소 · 출고 지연)
+// 주문·출고 화면의 모달 2개. 시안: seller/SellerOrders (송장 등록 · 배송지 변경 요청)
 // ✅ 출고 POST /seller/shipments/{shipmentId}/dispatch {carrier, trackingNumber 숫자 10~13자리} (같은 택배사 안에서 중복 불가),
 //    배송지 변경 승인·거절 PATCH /seller/shipments/{shipmentId}/address-change-requests/{requestId} {decision: APPROVE|REJECT}.
-// TODO(api): ❌ 판매자 주문 목록 API가 없어 shipmentId·requestId를 받을 곳이 없다 → 연결 보류. 주문·출고 라우트는 연결 전이라
-//   지금은 /__design 미리보기에서만 열린다.
-// TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 · 클레임 API 없음.
+// 서버가 거절한 이유(409 중복 송장·상태 변경·이미 처리, 422)는 error로 받아 모달 안에 그대로 보여 준다.
+// TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 API 없음 → 모달을 두지 않는다(화면에 연결 전 안내).
 
-export type InvoiceInput = { carrier: ShipmentCarrier; trackingNumber: string }
-export type DelayInput = { reason: DelayReason; reasonDetail?: string; newShipDate: string }
-export type SellerCancelInput = { reason: SellerCancelReason; reasonDetail?: string }
+export type InvoiceInput = ShipmentDispatchRequest
 
-function Summary({ order }: { order: SellerOrderRow }) {
+function Summary({ shipment }: { shipment: SellerShipmentSummary }) {
   return (
     <Text className={`pd-num ${classes.summary}`}>
-      {order.orderNumber} · {order.buyerNickname} · {order.productName} {order.itemText}
+      주문 {shipment.orderId} · {shipment.recipientName} · {shipment.representativeProductName}
+      {shipment.otherItemCount > 0 ? ` 외 ${shipment.otherItemCount}건` : ''}
     </Text>
   )
 }
@@ -43,35 +43,46 @@ function Summary({ order }: { order: SellerOrderRow }) {
 // ─── 송장 등록 ───────────────────────────────────────────
 
 export function InvoiceModal({
-  order,
+  shipment,
   onClose,
   onSubmit,
   submitting,
+  error,
 }: {
-  order: SellerOrderRow | null
+  shipment: SellerShipmentSummary | null
   onClose: () => void
   onSubmit: (input: InvoiceInput) => void
   submitting?: boolean
+  /** 서버가 거절한 이유 */
+  error?: string | null
 }) {
   return (
-    <Modal opened={order !== null} onClose={onClose} title="송장 등록">
-      {order && (
-        <InvoiceForm order={order} onClose={onClose} onSubmit={onSubmit} submitting={submitting} />
+    <Modal opened={shipment !== null} onClose={onClose} title="송장 등록">
+      {shipment && (
+        <InvoiceForm
+          shipment={shipment}
+          onClose={onClose}
+          onSubmit={onSubmit}
+          submitting={submitting}
+          error={error}
+        />
       )}
     </Modal>
   )
 }
 
 function InvoiceForm({
-  order,
+  shipment,
   onClose,
   onSubmit,
   submitting,
+  error: serverError,
 }: {
-  order: SellerOrderRow
+  shipment: SellerShipmentSummary
   onClose: () => void
   onSubmit: (input: InvoiceInput) => void
   submitting?: boolean
+  error?: string | null
 }) {
   const [carrier, setCarrier] = useState<ShipmentCarrier>(
     CARRIER_ORDER[0] ?? ShipmentCarrier.CJ_LOGISTICS,
@@ -89,7 +100,7 @@ function InvoiceForm({
 
   return (
     <Stack gap="md">
-      <Summary order={order} />
+      <Summary shipment={shipment} />
       <NativeSelect
         label="택배사"
         data={CARRIER_ORDER.map((value) => ({ value, label: carrierLabels[value] }))}
@@ -111,7 +122,14 @@ function InvoiceForm({
       />
       <Alert color="warning" icon={<TriangleAlert />}>
         송장을 등록하면 구매자가 더 이상 취소할 수 없어요
+        {shipment.addressChangePending &&
+          '. 대기 중인 배송지 변경 요청은 자동으로 거절돼요. 바꿔 보내려면 먼저 요청을 승인해 주세요'}
       </Alert>
+      {serverError && (
+        <Alert color="error" role="alert">
+          {serverError}
+        </Alert>
+      )}
       <Group justify="flex-end" gap="xs">
         <Button variant="outline" onClick={onClose}>
           닫기
@@ -126,311 +144,106 @@ function InvoiceForm({
 
 // ─── 배송지 변경 요청 ────────────────────────────────────
 
+const addressLine = (address: ShipmentAddress) =>
+  `(${address.postalCode}) ${address.address}${address.addressDetail ? `, ${address.addressDetail}` : ''}`
+
+export type AddressRequestModalProps = {
+  /** 열 출고. null이면 닫혀 있다 */
+  shipment: SellerShipmentSummary | null
+  /** 출고 상세 조회 상태. 대기 중인 요청(latestAddressChange)은 상세에만 있다 */
+  detailStatus: 'pending' | 'error' | 'success'
+  detail?: ShipmentDetail
+  onRetry?: () => void
+  onClose: () => void
+  onAnswer: (requestId: number, approve: boolean) => void
+  submitting?: boolean
+  /** 서버가 거절한 이유 (이미 처리됐거나 출고 전이 아님) */
+  error?: string | null
+}
+
 export function AddressRequestModal({
-  order,
+  shipment,
+  detailStatus,
+  detail,
+  onRetry,
   onClose,
   onAnswer,
   submitting,
-}: {
-  order: SellerOrderRow | null
-  onClose: () => void
-  onAnswer: (approve: boolean) => void
-  submitting?: boolean
-}) {
-  const change = order?.addressChange
+  error,
+}: AddressRequestModalProps) {
+  const change = detail?.latestAddressChange
+  const pending = change?.status === 'PENDING' ? change : null
   return (
-    <Modal opened={order !== null} onClose={onClose} title="배송지 변경 요청">
-      {order && change && (
+    <Modal opened={shipment !== null} onClose={onClose} title="배송지 변경 요청">
+      {shipment && (
         <Stack gap="md">
-          <Text className={`pd-num ${classes.summary}`}>
-            {order.orderNumber} · {order.buyerNickname} ·{' '}
-            {formatDate(change.requestedAt, 'dateTime')} 요청
-          </Text>
-          <dl className={classes.compare}>
-            <div>
-              <dt>변경 전</dt>
-              <dd>{order.address}</dd>
-            </div>
-            <div data-after>
-              <dt>변경 후</dt>
-              <dd>{change.after}</dd>
-            </div>
-          </dl>
-          <Text className={classes.help}>
-            받는 분·연락처는 같아요. 승인하면 바뀐 주소로 보내야 해요. 거절하면 원래 주소로 보내요.
-          </Text>
+          <Summary shipment={shipment} />
+          {detailStatus === 'pending' && <Skeleton h={120} />}
+          {detailStatus === 'error' && (
+            <Alert color="error" role="alert">
+              요청 내용을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.
+              {onRetry && (
+                <Button variant="outline" size="sm" mt="xs" onClick={onRetry}>
+                  다시 시도
+                </Button>
+              )}
+            </Alert>
+          )}
+          {detailStatus === 'success' && detail && !pending && (
+            <Alert color="info">이미 처리된 요청이에요. 목록을 새로 불러왔어요.</Alert>
+          )}
+          {detail && pending && (
+            <>
+              <Text className={`pd-num ${classes.summary}`}>
+                {formatDate(pending.requestedAt, 'dateTime')} 요청
+              </Text>
+              <dl className={classes.compare}>
+                <div>
+                  <dt>변경 전</dt>
+                  <dd>{addressLine(detail.address)}</dd>
+                </div>
+                <div data-after>
+                  <dt>변경 후</dt>
+                  <dd>{addressLine(pending.requestedAddress)}</dd>
+                </div>
+              </dl>
+              {pending.additionalFeeNotice > 0 && (
+                <Text className={classes.help}>
+                  바뀐 주소로 보내면 추가 운임 {formatAmount(pending.additionalFeeNotice)}원이
+                  늘어요. 앱에서 결제하지 않으니 구매자에게 직접 받아 주세요.
+                </Text>
+              )}
+              <Text className={classes.help}>
+                승인하면 바뀐 주소로 보내야 해요. 거절하면 원래 주소로 보내요.
+              </Text>
+            </>
+          )}
+          {error && (
+            <Alert color="error" role="alert">
+              {error}
+            </Alert>
+          )}
           <Group justify="flex-end" gap="xs">
-            <Button variant="outline" onClick={() => onAnswer(false)} disabled={submitting}>
-              거절
+            <Button variant="outline" onClick={onClose}>
+              닫기
             </Button>
-            <Button onClick={() => onAnswer(true)} loading={submitting}>
-              승인
-            </Button>
+            {pending && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => onAnswer(pending.requestId, false)}
+                  disabled={submitting}
+                >
+                  거절
+                </Button>
+                <Button onClick={() => onAnswer(pending.requestId, true)} loading={submitting}>
+                  승인
+                </Button>
+              </>
+            )}
           </Group>
         </Stack>
       )}
     </Modal>
-  )
-}
-
-// ─── 판매자 취소 ─────────────────────────────────────────
-
-export function SellerCancelModal({
-  order,
-  onClose,
-  onSubmit,
-  submitting,
-}: {
-  order: SellerOrderRow | null
-  onClose: () => void
-  onSubmit: (input: SellerCancelInput) => void
-  submitting?: boolean
-}) {
-  return (
-    <Modal opened={order !== null} onClose={onClose} title="판매자 취소">
-      {order && (
-        <SellerCancelForm
-          order={order}
-          onClose={onClose}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
-      )}
-    </Modal>
-  )
-}
-
-function SellerCancelForm({
-  order,
-  onClose,
-  onSubmit,
-  submitting,
-}: {
-  order: SellerOrderRow
-  onClose: () => void
-  onSubmit: (input: SellerCancelInput) => void
-  submitting?: boolean
-}) {
-  const [reason, setReason] = useState<SellerCancelReason | null>(null)
-  const [detail, setDetail] = useState('')
-  const disabledReason = !reason
-    ? '취소 사유를 골라 주세요'
-    : reason === SellerCancelReason.ETC && !detail.trim()
-      ? '구매자에게 보여 줄 사유를 적어 주세요'
-      : null
-
-  return (
-    <Stack gap="md">
-      <Summary order={order} />
-      <Radio.Group
-        label="취소 사유"
-        value={reason}
-        onChange={(v) => setReason(v as SellerCancelReason)}
-      >
-        <Stack gap="xs" mt="xs">
-          {Object.values(SellerCancelReason).map((value) => (
-            <Radio key={value} value={value} label={sellerCancelReasonLabels[value]} />
-          ))}
-        </Stack>
-      </Radio.Group>
-      {reason === SellerCancelReason.ETC && (
-        <Textarea
-          aria-label="기타 취소 사유"
-          placeholder="구매자에게 보여 줄 사유를 적어 주세요"
-          autosize
-          minRows={2}
-          maxLength={200}
-          value={detail}
-          onChange={(e) => setDetail(e.currentTarget.value)}
-        />
-      )}
-      <Alert color="info" icon={<CircleAlert />}>
-        <span className="pd-num">
-          판매자가 취소하면 바로 환불돼요. 구매자에게 <strong>{formatPrice(order.amount)}</strong>이
-          예치금으로 돌아가요.
-        </span>
-      </Alert>
-      <Group justify="flex-end" gap="xs" align="flex-start">
-        <Button variant="outline" onClick={onClose}>
-          닫기
-        </Button>
-        <DisabledReason reason={disabledReason}>
-          <Button
-            color="red"
-            disabled={disabledReason !== null}
-            loading={submitting}
-            onClick={() =>
-              reason &&
-              onSubmit({
-                reason,
-                ...(reason === SellerCancelReason.ETC ? { reasonDetail: detail.trim() } : {}),
-              })
-            }
-          >
-            판매자 취소
-          </Button>
-        </DisabledReason>
-      </Group>
-    </Stack>
-  )
-}
-
-// ─── 출고 지연 알리기 ────────────────────────────────────
-
-export function DelayModal({
-  order,
-  today,
-  onClose,
-  onSubmit,
-  submitting,
-}: {
-  order: SellerOrderRow | null
-  today: Date
-  onClose: () => void
-  onSubmit: (input: DelayInput) => void
-  submitting?: boolean
-}) {
-  return (
-    <Modal opened={order !== null} onClose={onClose} title="출고 지연 알리기">
-      {order && (
-        <DelayForm
-          order={order}
-          today={today}
-          onClose={onClose}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
-      )}
-    </Modal>
-  )
-}
-
-/** 로컬 날짜 그대로 YYYY-MM-DD (toISOString은 UTC라 하루 밀릴 수 있다) */
-function toDateParam(date: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-function reasonOf(label: string | undefined): DelayReason | null {
-  if (!label) return null
-  return Object.values(DelayReason).find((r) => delayReasonLabels[r] === label) ?? DelayReason.ETC
-}
-
-function startOfDay(date: Date) {
-  const copy = new Date(date)
-  copy.setHours(0, 0, 0, 0)
-  return copy
-}
-
-function DelayForm({
-  order,
-  today,
-  onClose,
-  onSubmit,
-  submitting,
-}: {
-  order: SellerOrderRow
-  today: Date
-  onClose: () => void
-  onSubmit: (input: DelayInput) => void
-  submitting?: boolean
-}) {
-  const [reason, setReason] = useState<DelayReason | null>(reasonOf(order.delay?.reason))
-  const [detail, setDetail] = useState('')
-  const [date, setDate] = useState<Date | null>(
-    order.delay ? new Date(order.delay.newShipDate) : null,
-  )
-  const past = date !== null && startOfDay(date) < startOfDay(today)
-  const disabledReason = !reason
-    ? '지연 사유를 골라 주세요'
-    : reason === DelayReason.ETC && !detail.trim()
-      ? '구매자에게 보여 줄 사유를 적어 주세요'
-      : !date
-        ? '새 출고 예정일을 골라 주세요'
-        : past
-          ? '오늘이나 그 뒤 날짜를 골라 주세요'
-          : null
-  const reasonText =
-    reason === DelayReason.ETC ? detail.trim() || '기타' : reason ? delayReasonLabels[reason] : '—'
-
-  return (
-    <Stack gap="md">
-      <Summary order={order} />
-      {order.delay && (
-        <Text className={classes.help}>
-          이미 알린 지연이 있어요. 다시 알리면 새 내용으로 바뀌어요.
-        </Text>
-      )}
-      <Radio.Group label="지연 사유" value={reason} onChange={(v) => setReason(v as DelayReason)}>
-        <Stack gap="xs" mt="xs">
-          {Object.values(DelayReason).map((value) => (
-            <Radio key={value} value={value} label={delayReasonLabels[value]} />
-          ))}
-        </Stack>
-      </Radio.Group>
-      {reason === DelayReason.ETC && (
-        <Textarea
-          aria-label="기타 지연 사유"
-          placeholder="구매자에게 보여 줄 사유를 적어 주세요"
-          autosize
-          minRows={2}
-          maxLength={200}
-          value={detail}
-          onChange={(e) => setDetail(e.currentTarget.value)}
-        />
-      )}
-      <DatePickerInput
-        label="새 출고 예정일"
-        valueFormat="YYYY.MM.DD(ddd)"
-        minDate={startOfDay(today)}
-        value={date}
-        onChange={(v) => setDate(v ? new Date(v) : null)}
-        error={
-          past
-            ? `오늘(${formatDate(today, 'monthDay')})보다 이전 날짜는 고를 수 없어요. 오늘이나 그 뒤 날짜를 골라 주세요`
-            : undefined
-        }
-      />
-      <div className={classes.previewBox}>
-        <span className={classes.previewLabel}>구매자에게 이렇게 보여요</span>
-        <Alert color="warning" icon={<CircleAlert />} title="판매자가 출고 지연을 알렸어요">
-          <dl className={classes.delayPreview}>
-            <div>
-              <dt>지연 사유</dt>
-              <dd>{reasonText}</dd>
-            </div>
-            <div>
-              <dt>새 출고 예정일</dt>
-              <dd className="pd-num">{date ? formatDate(date, 'monthDayWeek') : '—'}</dd>
-            </div>
-          </dl>
-        </Alert>
-        <Text className={classes.help}>
-          구매자의 배송 조회 화면에 보여요. 구매자는 송장 등록 전까지 취소를 요청할 수 있어요.
-        </Text>
-      </div>
-      <Group justify="flex-end" gap="xs" align="flex-start">
-        <Button variant="outline" onClick={onClose}>
-          닫기
-        </Button>
-        <DisabledReason reason={disabledReason}>
-          <Button
-            disabled={disabledReason !== null}
-            loading={submitting}
-            onClick={() =>
-              reason &&
-              date &&
-              onSubmit({
-                reason,
-                ...(reason === DelayReason.ETC ? { reasonDetail: detail.trim() } : {}),
-                newShipDate: toDateParam(date),
-              })
-            }
-          >
-            지연 알리기
-          </Button>
-        </DisabledReason>
-      </Group>
-    </Stack>
   )
 }

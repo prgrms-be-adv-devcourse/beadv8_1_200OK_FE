@@ -1,4 +1,5 @@
 import type { RequestHandler } from 'msw'
+import { addressesHandlers } from './addresses'
 import { adminHandlers } from './admin'
 import { authHandlers } from './auth'
 import { cartHandlers } from './cart'
@@ -22,6 +23,7 @@ export const handlers: RequestHandler[] = [
   ...cartHandlers,
   ...checkoutHandlers,
   ...ordersHandlers,
+  ...addressesHandlers,
   ...shipmentsHandlers,
   ...walletHandlers,
   ...sellerHandlers,

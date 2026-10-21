@@ -4,16 +4,6 @@
   gap: var(--mantine-spacing-md);
 }
 
-.tabs {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-
-  & > * {
-    flex: none;
-  }
-}
-
 .tableWrap {
   display: none;
   padding: 0 var(--mantine-spacing-md);
@@ -24,15 +14,6 @@
   @media (min-width: 64em) {
     display: block;
   }
-}
-
-.right {
-  text-align: end;
-}
-
-.address {
-  max-width: 14rem;
-  font-size: var(--mantine-font-size-sm);
 }
 
 .help {
@@ -53,21 +34,10 @@
   border: 0;
 }
 
-.wrapBadge {
-  height: auto;
-  white-space: normal;
-}
-
 .actions {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.25rem;
-}
-
-.actionRow {
-  display: flex;
-  align-items: center;
   gap: 0.25rem;
 }
 
@@ -97,6 +67,14 @@
 .itemHead,
 .itemMain {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--mantine-spacing-sm);

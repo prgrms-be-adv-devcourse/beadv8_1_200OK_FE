@@ -300,6 +300,14 @@ export function ShipmentView({
                 <dt>상태</dt>
                 <dd>{shipmentStatusLabels[shipment.status]}</dd>
               </div>
+              {shipment.status === ShipmentStatus.PREPARING && (
+                <div>
+                  <dt>출고 예정</dt>
+                  <dd className="pd-num">
+                    {formatDate(shipment.estimatedShipDate, 'monthDayWeek')}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt>도착 예정</dt>
                 <dd className="pd-num">

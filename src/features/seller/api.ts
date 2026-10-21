@@ -1,5 +1,7 @@
 import { apiClient } from '@/shared/api/client'
 import type {
+  AddressChangeDecision,
+  AddressChangeRequestResult,
   PageResponse,
   PayoutSellerCandidate,
   PayoutSellerDetail,
@@ -18,6 +20,10 @@ import type {
   SellerProductSummary,
   SellerProfileRequest,
   SellerProfileResponse,
+  SellerShipmentPage,
+  ShipmentDetail,
+  ShipmentDispatchRequest,
+  ShipmentDispatchResponse,
 } from '@/shared/api/types'
 
 // 판매자 상품·프로필·정산·잔액 요청. 모두 Bearer(SELLER). 403 SELLER가 아니거나 본인 것이 아님, 404 없거나 삭제됨.
@@ -71,6 +77,51 @@ export async function deleteProduct(productId: number): Promise<void> {
 export async function fetchMyProductDetail(productId: number): Promise<SellerProductDetail> {
   const { data } = await apiClient.get<SellerProductDetail>(
     `/api/v1/sellers/me/products/${productId}`,
+  )
+  return data
+}
+
+// ─── 출고 ────────────────────────────────────────────────
+// 403 판매자가 아님, 404 없거나 다른 판매자의 shipment(SHIPMENT_NOT_FOUND). 오류는 서버 detail을 그대로 보여 준다.
+
+// ✅ GET /api/v1/seller/shipments?page → 내 출고(최신순 25건 고정). 크기는 고정이라 page(0부터)만 받는다. 422 page가 음수
+export async function fetchSellerShipments(page: number): Promise<SellerShipmentPage> {
+  const { data } = await apiClient.get<SellerShipmentPage>('/api/v1/seller/shipments', {
+    params: { page },
+  })
+  return data
+}
+
+// ✅ GET /api/v1/seller/shipments/{id} → 구매자 배송 상세와 같은 모양. latestAddressChange.status === 'PENDING'이면 requestId를 승인·거절에 쓴다
+export async function fetchSellerShipmentDetail(shipmentId: number): Promise<ShipmentDetail> {
+  const { data } = await apiClient.get<ShipmentDetail>(`/api/v1/seller/shipments/${shipmentId}`)
+  return data
+}
+
+// ✅ POST /api/v1/seller/shipments/{id}/dispatch → 200. PREPARING → SHIPPING, 대기 중인 배송지 변경 요청은 자동 거절된다.
+// 409 PREPARING이 아님(INVALID_SHIPMENT_STATE) · 이미 쓴 송장번호(TRACKING_NUMBER_DUPLICATED) · 환불이 취소를 예약함(CANCELLATION_RESERVED),
+// 422 송장번호가 숫자 10~13자리가 아님
+export async function dispatchShipment(
+  shipmentId: number,
+  body: ShipmentDispatchRequest,
+): Promise<ShipmentDispatchResponse> {
+  const { data } = await apiClient.post<ShipmentDispatchResponse>(
+    `/api/v1/seller/shipments/${shipmentId}/dispatch`,
+    body,
+  )
+  return data
+}
+
+// ✅ PATCH /api/v1/seller/shipments/{id}/address-change-requests/{requestId} {decision} → 200.
+// 409 이미 처리된 요청(ADDRESS_CHANGE_ALREADY_PROCESSED) · 승인할 때 PREPARING이 아님, 404 이 shipment의 요청이 아님
+export async function decideAddressChange(
+  shipmentId: number,
+  requestId: number,
+  decision: AddressChangeDecision,
+): Promise<AddressChangeRequestResult> {
+  const { data } = await apiClient.patch<AddressChangeRequestResult>(
+    `/api/v1/seller/shipments/${shipmentId}/address-change-requests/${requestId}`,
+    { decision },
   )
   return data
 }

@@ -1,13 +1,25 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { sampleDefaultAddress } from '@/mocks/handlers/addresses'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
 import { AccountPage, LikesPage, MyPage } from './MyPages'
+
+const openPostcode = vi.hoisted(() =>
+  vi.fn(async (onPick: (picked: { zipCode: string; address: string }) => void) =>
+    onPick({ zipCode: '63000', address: '제주특별자치도 제주시 첨단로 242' }),
+  ),
+)
+vi.mock('@/shared/lib/daumPostcode', () => ({ openPostcode }))
+
+const registered = http.get('*/api/v1/shipments/addresses/default', () =>
+  HttpResponse.json(sampleDefaultAddress),
+)
 
 // 마이페이지 예치금: GET /wallets/me/balance(기본 128,000 / 한도 500,000)
 
@@ -52,7 +64,7 @@ describe('MyPage', () => {
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
 
-  it('주문 현황·관심·팔로우·배송지는 연결 전으로 보여 준다(0이나 가짜 값을 그리지 않는다)', async () => {
+  it('로그인 정보가 없으면 배송지를 부르지 않고 연결 전(–)으로 둔다(0이나 가짜 값을 그리지 않는다)', async () => {
     renderMy()
     expect(await screen.findByText('128,000')).toBeInTheDocument()
     expect(screen.queryByText('등록 전이에요')).not.toBeInTheDocument()
@@ -60,6 +72,36 @@ describe('MyPage', () => {
     expect(screen.getByRole('link', { name: /관심 상품.*연결 전/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /팔로우한 농가.*연결 전/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /배송지.*연결 전/ })).toBeInTheDocument()
+  })
+
+  it('구매자는 기본 배송지 요약(시·구)을 바로가기에 보여 준다', async () => {
+    server.use(registered)
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    renderMy()
+    expect(await screen.findByRole('link', { name: /배송지.*서울 중구/ })).toHaveAttribute(
+      'href',
+      '/me/account?tab=address',
+    )
+  })
+
+  it('기본 배송지가 없으면(204) 등록 전이라고 알린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    renderMy()
+    expect(await screen.findByText('등록 전이에요')).toBeInTheDocument()
+  })
+
+  it('판매자는 기본 배송지를 부르지 않는다(구매자 전용)', async () => {
+    let called = false
+    server.use(
+      http.get('*/api/v1/shipments/addresses/default', () => {
+        called = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    setAccessToken(fakeToken({ role: MemberRole.SELLER }))
+    renderMy()
+    await screen.findByRole('link', { name: '판매자 센터로 가기' })
+    expect(called).toBe(false)
   })
 
   it('잔액을 못 받으면 다시 시도를 보여 준다', async () => {
@@ -137,7 +179,6 @@ describe('LikesPage (연결 전)', () => {
 describe('AccountPage', () => {
   it.each([
     ['password', '비밀번호 변경은 아직 연결되지 않았어요'],
-    ['address', '배송지 관리는 아직 연결되지 않았어요'],
     ['withdraw', '회원 탈퇴는 아직 연결되지 않았어요'],
   ])('%s 탭은 폼 대신 연결 전 안내를 보여 준다', async (tab, title) => {
     renderAt(`/me/account?tab=${tab}`)
@@ -238,5 +279,105 @@ describe('AccountPage', () => {
     await screen.findByLabelText('이름')
     await user.click(screen.getByRole('button', { name: '저장' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('내 정보를 찾을 수 없어요')
+  })
+
+  describe('배송지 탭', () => {
+    beforeEach(() => setAccessToken(fakeToken({ role: MemberRole.BUYER })))
+
+    it('서버 기본 배송지를 연락처에 하이픈을 붙여 보여 주고 삭제는 막는다', async () => {
+      server.use(registered)
+      renderAt('/me/account?tab=address')
+      const card = await screen.findByLabelText('저장된 배송지')
+      expect(card).toHaveTextContent('이서연 · 010-2468-1357')
+      expect(card).toHaveTextContent('(04524) 서울 중구 세종대로 110, 3층 301호')
+      expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled()
+    })
+
+    it('미등록(204)이면 등록 안내를 보이고, 등록하면 PUT 본문(우편번호·요청사항)으로 보낸다', async () => {
+      let body: unknown
+      server.use(
+        http.put('*/api/v1/shipments/addresses/default', async ({ request }) => {
+          body = await request.json()
+          return HttpResponse.json({
+            ...(body as object),
+            recipientPhone: '01012345678',
+            deliveryNote: null,
+          })
+        }),
+      )
+      const user = userEvent.setup()
+      renderAt('/me/account?tab=address')
+      expect(await screen.findByText('저장된 배송지가 없어요')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: '배송지 등록' }))
+      await user.type(await screen.findByLabelText('받는 분'), '홍길동')
+      await user.type(screen.getByLabelText('연락처'), '010-1234-5678')
+      await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+      await user.type(screen.getByLabelText('상세주소'), '101동 202호')
+      await user.click(screen.getByRole('button', { name: '저장' }))
+
+      expect(await screen.findByLabelText('저장된 배송지')).toHaveTextContent('(63000)')
+      expect(body).toEqual({
+        recipientName: '홍길동',
+        recipientPhone: '010-1234-5678',
+        postalCode: '63000',
+        address: '제주특별자치도 제주시 첨단로 242',
+        addressDetail: '101동 202호',
+      })
+    })
+
+    it('수정할 때 화면에 없는 배송 요청사항은 서버에 있던 값을 그대로 보낸다', async () => {
+      let body: unknown
+      server.use(
+        registered,
+        http.put('*/api/v1/shipments/addresses/default', async ({ request }) => {
+          body = await request.json()
+          return HttpResponse.json(sampleDefaultAddress)
+        }),
+      )
+      const user = userEvent.setup()
+      renderAt('/me/account?tab=address')
+      await user.click(await screen.findByRole('button', { name: '수정' }))
+      await user.click(await screen.findByRole('button', { name: '저장' }))
+      await waitFor(() => expect(body).toBeDefined())
+      expect(body).toMatchObject({
+        recipientName: '이서연',
+        recipientPhone: '010-2468-1357',
+        postalCode: '04524',
+        deliveryNote: '문 앞에 놓아 주세요',
+      })
+    })
+
+    it('서버 422는 postalCode 같은 path를 화면 칸에 붙이고 모달을 열어 둔다', async () => {
+      server.use(
+        registered,
+        http.put('*/api/v1/shipments/addresses/default', () =>
+          HttpResponse.json(
+            {
+              type: 'about:blank',
+              title: 'Unprocessable',
+              status: 422,
+              detail: '요청 값이 올바르지 않습니다.',
+              instance: '/x',
+              errors: [{ path: 'recipientPhone', detail: '연락처는 숫자 10~11자리여야 합니다.' }],
+            },
+            { status: 422, headers: { 'Content-Type': 'application/problem+json' } },
+          ),
+        ),
+      )
+      const user = userEvent.setup()
+      renderAt('/me/account?tab=address')
+      await user.click(await screen.findByRole('button', { name: '수정' }))
+      await user.click(await screen.findByRole('button', { name: '저장' }))
+      expect(await screen.findByText('연락처는 숫자 10~11자리여야 합니다.')).toBeInTheDocument()
+      expect(screen.getByLabelText('연락처')).toHaveFocus()
+    })
+
+    it('판매자 토큰이면 부르지 않고 구매자 전용이라고 안내한다', async () => {
+      setAccessToken(fakeToken({ role: MemberRole.SELLER }))
+      renderAt('/me/account?tab=address')
+      expect(
+        await screen.findByText('기본 배송지는 구매자 계정에서만 쓸 수 있어요'),
+      ).toBeInTheDocument()
+    })
   })
 })

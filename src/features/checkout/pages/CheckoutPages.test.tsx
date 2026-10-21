@@ -222,4 +222,86 @@ describe('CheckoutPage', () => {
     expect(useCheckoutDraftStore.getState().draft).toBeNull()
     expect(sessionStorage.getItem(CHECKOUT_DRAFT_STORAGE_KEY)).not.toContain('이서연')
   })
+
+  describe('기본 배송지', () => {
+    const buyer = () => setAccessToken(fakeToken({ memberId: 2, role: MemberRole.BUYER }))
+    const registered = http.get('*/api/v1/shipments/addresses/default', () =>
+      HttpResponse.json({
+        recipientName: '박영희',
+        recipientPhone: '01099998888',
+        postalCode: '06236',
+        address: '서울시 강남구 테헤란로 1',
+        addressDetail: '101동 202호',
+        deliveryNote: null,
+      }),
+    )
+
+    it('서버 기본 배송지(연락처 하이픈 붙임)로 배송지를 채워 바로 주문할 수 있다', async () => {
+      buyer()
+      const bodies: unknown[] = []
+      server.use(
+        registered,
+        http.post('*/api/v1/orders', async ({ request }) => {
+          bodies.push(await request.json())
+          return HttpResponse.json({ orderId: SAMPLE_ORDER_ID }, { status: 201 })
+        }),
+      )
+      const { user } = renderCheckout()
+      expect(await screen.findByText('박영희')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '배송지 입력' })).not.toBeInTheDocument()
+      await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
+      await pay(user, '39,800원 결제하기')
+      expect(await screen.findByText(/주문번호 184/)).toBeInTheDocument()
+      expect(bodies).toEqual([
+        {
+          recipientName: '박영희',
+          recipientPhone: '010-9999-8888',
+          zipCode: '06236',
+          address: '서울시 강남구 테헤란로 1',
+          addressDetail: '101동 202호',
+          thirdPartyProvisionAgreed: true,
+          expectedTotalAmount: 39800,
+        },
+      ])
+    })
+
+    it('충전에 다녀온 초안이 있으면 기본 배송지보다 초안을 먼저 쓴다', async () => {
+      buyer()
+      const first = renderCheckout()
+      await fillAndAgree(first.user)
+      first.unmount()
+
+      server.use(registered)
+      renderCheckout()
+      expect(await screen.findByText('이서연')).toBeInTheDocument()
+      expect(screen.queryByText('박영희')).not.toBeInTheDocument()
+    })
+
+    it('기본 배송지가 없으면(204) 빈 배송지로 시작한다', async () => {
+      buyer()
+      renderCheckout()
+      expect(await screen.findByRole('button', { name: '배송지 입력' })).toBeInTheDocument()
+    })
+
+    it('기본 배송지를 못 받아도 주문서는 막히지 않는다', async () => {
+      buyer()
+      server.use(http.get('*/api/v1/shipments/addresses/default', () => problem(500, '서버 오류')))
+      renderCheckout()
+      expect(await screen.findByRole('button', { name: '배송지 입력' })).toBeInTheDocument()
+    })
+
+    it('구매자가 아니면(판매자) 기본 배송지를 부르지 않는다', async () => {
+      setAccessToken(fakeToken({ memberId: 3, role: MemberRole.SELLER }))
+      let called = false
+      server.use(
+        http.get('*/api/v1/shipments/addresses/default', () => {
+          called = true
+          return new HttpResponse(null, { status: 204 })
+        }),
+      )
+      renderCheckout()
+      expect(await screen.findByRole('button', { name: '배송지 입력' })).toBeInTheDocument()
+      expect(called).toBe(false)
+    })
+  })
 })

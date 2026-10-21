@@ -1,9 +1,4 @@
-import type {
-  OrderItemStatus,
-  ProductStatus,
-  ProductVisibility,
-  ShipmentCarrier,
-} from '@/shared/api/types'
+import type { ProductStatus, ProductVisibility } from '@/shared/api/types'
 import type { ClaimState } from '@/shared/lib/claimState'
 import type { WithdrawalState } from '@/shared/lib/withdrawalState'
 
@@ -53,49 +48,6 @@ export type SellerProductRow = {
   updatedAt: string
   /** 판매 가능 수량이 LOW_STOCK_THRESHOLD 이하 */
   hasLowStock: boolean
-}
-
-// ─── 주문·출고 ───────────────────────────────────────────
-// ✅ 출고(송장) POST /seller/shipments/{id}/dispatch · 배송지 변경 승인·거절 PATCH. TODO(api): ❌ 판매자 주문 목록 API 없음(shipmentId를 받을 곳이 없어 연결 보류), ❌ 지연·판매자 취소
-
-/** 한 줄 = 한 주문에서 이 농가로 온 배송 묶음 */
-export type SellerOrderRow = {
-  shipmentId: number
-  orderNumber: string
-  orderedAt: string
-  buyerNickname: string
-  productName: string
-  itemText: string // 옵션 × 수량
-  address: string
-  amount: number
-  status: OrderItemStatus
-  cancelRequested: boolean
-  addressChange: { after: string; requestedAt: string } | null
-  delay: { reason: string; newShipDate: string } | null
-  carrier: ShipmentCarrier | null
-  trackingNumber: string | null
-  /** 처리 결과 한 줄 (예: 10.13 승인된 배송지로 보내요) */
-  note?: string
-}
-
-export enum SellerOrderTab {
-  WAITING = 'WAITING',
-  SHIPPING = 'SHIPPING',
-  DELIVERED = 'DELIVERED',
-  CANCELED = 'CANCELED',
-}
-
-export enum DelayReason {
-  HARVEST = 'HARVEST',
-  WEATHER = 'WEATHER',
-  SCHEDULE = 'SCHEDULE',
-  ETC = 'ETC',
-}
-
-export enum SellerCancelReason {
-  SOLD_OUT = 'SOLD_OUT',
-  BAD_HARVEST = 'BAD_HARVEST',
-  ETC = 'ETC',
 }
 
 // ─── 취소 요청 ───────────────────────────────────────────

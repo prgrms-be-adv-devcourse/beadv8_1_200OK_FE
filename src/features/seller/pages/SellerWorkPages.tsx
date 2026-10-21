@@ -10,6 +10,7 @@ import {
 } from '@/shared/api/types'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { QueryState, showToast, useMediaUploads } from '@/shared/ui'
+import { AddressRequestModal, InvoiceModal } from '../components/OrderModals'
 import { toProductFormFailure } from '../productErrors'
 import type { ProductFormValues } from '../productSchema'
 import {
@@ -17,14 +18,18 @@ import {
   useChangeProductStatus,
   useChangeProductVisibility,
   useCreateProduct,
+  useDecideAddressChange,
   useDeleteProduct,
+  useDispatchShipment,
   useMyProducts,
   useSellerProductDetail,
+  useSellerShipmentDetail,
+  useSellerShipments,
   useUpdateProduct,
 } from '../queries'
 import type { SellerProductRow } from '../types'
 import { SellerClaimsNotConnectedView } from '../views/SellerClaimsView'
-import { SellerOrdersNotConnectedView } from '../views/SellerOrdersView'
+import { SellerOrdersView } from '../views/SellerOrdersView'
 import { SellerProductFormView } from '../views/SellerProductFormView'
 import { type ProductTab, SellerProductsView } from '../views/SellerProductsView'
 
@@ -33,7 +38,7 @@ import { type ProductTab, SellerProductsView } from '../views/SellerProductsView
 //   상태·노출 PATCH /products/{id}/status · /visibility(목록에서 바로), 삭제 DELETE, 사진 POST /media/PRODUCT.
 // 수정 화면은 ✅ GET /sellers/me/products/{id}(version · 옵션 id · 재고 · 상태 · 노출)로 채우고, 저장할 때 그 version을 그대로 보낸다.
 //   저장·상태·노출 변경이 성공하면 서버 version이 오르므로 상세·목록을 다시 받는다. 409면 ‘최신 내용 불러오기’로 상세를 다시 받는다.
-// TODO(api): 📝 판매자 주문 목록·클레임(취소 요청) API 없음 → 주문·출고와 취소 요청 처리는 화면 전체를 연결 전(NotConnected)으로 둔다.
+// 주문·출고(S-06)는 ✅ 출고 API로 연결. TODO(api): 📝 판매자 취소 요청(클레임) API 없음 → 취소 요청 화면 전체를 연결 전(NotConnected)으로 둔다.
 
 const productTabs: ProductTab[] = ['ALL', ...Object.values(ProductStatus)]
 
@@ -290,10 +295,99 @@ function ProductEditForm({
   )
 }
 
-// TODO(api): 📝 판매자 주문 목록 API 없음. 출고 POST /seller/shipments/{shipmentId}/dispatch는 있지만
-//   shipmentId를 받을 곳이 없어 화면 전체를 연결 전으로 둔다. 출고 지연·판매자 취소·배송지 변경 응답도 그 뒤에 붙인다.
+// S-06 주문·출고 /seller/orders. ✅ 목록 GET /seller/shipments?page(?page=는 1부터), 송장 POST …/dispatch,
+//   배송지 변경 승인·거절 PATCH(대기 요청의 requestId는 상세 GET /seller/shipments/{id}에서 받는다).
+// TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 API 없음, 📝 판매자 취소 요청(클레임)은 아래 SellerClaimsPage.
+type ShipmentModal = { type: 'invoice' | 'address'; shipmentId: number } | null
+
 export function SellerOrdersPage() {
-  return <SellerOrdersNotConnectedView />
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawPage = Number(searchParams.get('page'))
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage - 1 : 0
+  const shipments = useSellerShipments(page)
+  const [modal, setModal] = useState<ShipmentModal>(null)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const dispatch = useDispatchShipment()
+  const decide = useDecideAddressChange()
+  const target = shipments.data?.content.find((s) => s.shipmentId === modal?.shipmentId) ?? null
+  const detail = useSellerShipmentDetail(modal?.type === 'address' ? modal.shipmentId : null)
+
+  const close = () => {
+    setModal(null)
+    setModalError(null)
+    dispatch.reset()
+    decide.reset()
+  }
+  const open = (type: 'invoice' | 'address', shipmentId: number) => {
+    setModalError(null)
+    setModal({ type, shipmentId })
+  }
+
+  return (
+    <>
+      <SellerOrdersView
+        status={shipments.data ? 'success' : shipments.isError ? 'error' : 'pending'}
+        shipments={shipments.data?.content ?? []}
+        page={page}
+        totalPages={shipments.data?.totalPages ?? 0}
+        totalElements={shipments.data?.totalElements ?? 0}
+        onPageChange={(next) =>
+          setSearchParams(next === 0 ? {} : { page: String(next + 1) }, { replace: true })
+        }
+        onRegisterInvoice={(shipment) => open('invoice', shipment.shipmentId)}
+        onOpenAddressChange={(shipment) => open('address', shipment.shipmentId)}
+        onRetry={() => void shipments.refetch()}
+      />
+      <InvoiceModal
+        shipment={modal?.type === 'invoice' ? target : null}
+        onClose={close}
+        submitting={dispatch.isPending}
+        error={modalError}
+        onSubmit={(body) => {
+          if (!modal) return
+          setModalError(null)
+          dispatch.mutate(
+            { shipmentId: modal.shipmentId, body },
+            {
+              onSuccess: () => {
+                showToast({ message: '송장을 등록했어요. 이제 배송 중이에요' })
+                close()
+              },
+              onError: (error) => setModalError(error.detail),
+            },
+          )
+        }}
+      />
+      <AddressRequestModal
+        shipment={modal?.type === 'address' ? target : null}
+        detailStatus={detail.isError ? 'error' : detail.data ? 'success' : 'pending'}
+        detail={detail.data}
+        onRetry={() => void detail.refetch()}
+        onClose={close}
+        submitting={decide.isPending}
+        error={modalError}
+        onAnswer={(requestId, approve) => {
+          if (!modal) return
+          setModalError(null)
+          decide.mutate(
+            { shipmentId: modal.shipmentId, requestId, decision: approve ? 'APPROVE' : 'REJECT' },
+            {
+              onSuccess: () => {
+                showToast({
+                  message: approve ? '배송지 변경을 승인했어요' : '배송지 변경을 거절했어요',
+                })
+                close()
+              },
+              onError: (error) => {
+                setModalError(error.detail)
+                void detail.refetch()
+              },
+            },
+          )
+        }}
+      />
+    </>
+  )
 }
 
 // TODO(api): 📝 판매자 취소 요청(클레임) 목록·승인·거절 API 없음 → 화면 전체를 연결 전으로 둔다.

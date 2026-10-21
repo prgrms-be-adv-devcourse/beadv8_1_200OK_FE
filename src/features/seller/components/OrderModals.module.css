@@ -36,32 +36,3 @@
     font-weight: 600;
   }
 }
-
-.previewBox {
-  display: flex;
-  flex-direction: column;
-  gap: var(--mantine-spacing-xs);
-}
-
-.previewLabel {
-  font-size: var(--mantine-font-size-sm);
-  font-weight: 600;
-}
-
-.delayPreview {
-  margin: 0;
-
-  & > div {
-    display: flex;
-    gap: var(--mantine-spacing-md);
-  }
-
-  & dt {
-    width: 6rem;
-  }
-
-  & dd {
-    margin: 0;
-    font-weight: 600;
-  }
-}

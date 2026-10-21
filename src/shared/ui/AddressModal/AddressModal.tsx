@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { ShippingAddress } from '@/shared/api/types'
 import { openPostcode } from '@/shared/lib/daumPostcode'
+import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import { type AddressFormValues, addressSchema } from './addressSchema'
 
 // 배송지 입력·변경 모달: 받는 분 · 연락처 · 우편번호 찾기(다음) · 주소 · 상세주소.
@@ -25,6 +26,10 @@ export type AddressModalProps = {
   /** 기본: 이번 주문에 적용 */
   submitLabel?: string
   submitting?: boolean
+  /** 서버가 돌려준 칸 오류 (422 errors[].path를 이 폼의 칸 이름으로 바꾼 것) */
+  serverErrors?: Partial<Record<keyof AddressFormValues, string>>
+  /** 칸에 붙일 수 없는 저장 실패 문구 */
+  errorMessage?: string
 }
 
 const empty: AddressFormValues = {
@@ -43,6 +48,8 @@ function AddressForm({
   help = '여기서 바꾼 배송지는 이번 주문에만 적용돼요',
   submitLabel = '이번 주문에 적용',
   submitting,
+  serverErrors,
+  errorMessage,
 }: Omit<AddressModalProps, 'opened' | 'title'>) {
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -51,11 +58,14 @@ function AddressForm({
     handleSubmit,
     setValue,
     setFocus,
+    setError,
     formState: { errors },
   } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
     defaultValues: { ...empty, ...initial, addressDetail: initial?.addressDetail ?? '' },
   })
+
+  useServerFieldErrors(setError, serverErrors)
 
   const searchAddress = async () => {
     setSearching(true)
@@ -102,6 +112,11 @@ function AddressForm({
             {...register('recipientPhone')}
           />
         </SimpleGrid>
+        {errorMessage && (
+          <Alert color="error" icon={<CircleAlert />} role="alert">
+            {errorMessage}
+          </Alert>
+        )}
         {searchError && (
           <Alert color="error" icon={<CircleAlert />} role="alert">
             {searchError}

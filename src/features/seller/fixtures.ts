@@ -1,5 +1,4 @@
 import {
-  OrderItemStatus,
   PayoutEventType,
   type PayoutSellerCandidate,
   type PayoutSellerDetail,
@@ -14,7 +13,10 @@ import {
   type SellerProductSummary,
   type SellerProfile,
   type SellerProfileResponse,
+  type SellerShipmentSummary,
   ShipmentCarrier,
+  type ShipmentDetail,
+  ShipmentStatus,
 } from '@/shared/api/types'
 import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, PAYOUT_FEE_RATE } from '@/shared/lib/constants'
@@ -25,7 +27,6 @@ import type {
   Follower,
   PayoutOutlook,
   SellerHomeStats,
-  SellerOrderRow,
   SellerProductRow,
   SellerProductStats,
   SellerTodo,
@@ -278,136 +279,125 @@ export const sellerProductDetail101: SellerProductDetail = {
   updatedAt: '2026-10-12T18:20:00',
 }
 
-// ─── 주문·출고 (출고 대기 5건은 센터 홈 ‘오늘 처리할 일’과 같다) ───
+// ─── 출고 (✅ GET /seller/shipments · /seller/shipments/{id}) — 테스트(MSW)·/__design 전용 ───
 
-const order = (
-  row: Omit<
-    SellerOrderRow,
-    'addressChange' | 'delay' | 'carrier' | 'trackingNumber' | 'cancelRequested'
-  > &
-    Partial<SellerOrderRow>,
-): SellerOrderRow => ({
-  cancelRequested: false,
-  addressChange: null,
-  delay: null,
+const sellerShipment = (
+  row: Pick<SellerShipmentSummary, 'shipmentId' | 'orderId'> & Partial<SellerShipmentSummary>,
+): SellerShipmentSummary => ({
+  status: ShipmentStatus.PREPARING,
+  recipientName: '이서연',
+  regionGroup: 'GENERAL',
+  estimatedShipDate: '2026-10-19',
   carrier: null,
   trackingNumber: null,
+  delayed: false,
+  createdAt: '2026-10-18T14:30:00',
+  representativeProductName: '청송 꿀사과 부사',
+  otherItemCount: 0,
+  addressChangePending: false,
   ...row,
 })
 
-export const sellerOrders: SellerOrderRow[] = [
-  order({
-    shipmentId: 1,
-    orderNumber: '20261018-0184',
-    orderedAt: '2026-10-18T14:30:00',
-    buyerNickname: '주말장보기',
-    productName: '청송 꿀사과 부사',
-    itemText: '2kg (11~13과) × 1',
-    address: '서울 중구 세종대로 110, 3층 301호',
-    amount: 23900,
-    status: OrderItemStatus.PREPARING,
+export const sellerShipments: SellerShipmentSummary[] = [
+  sellerShipment({ shipmentId: 1, orderId: 184 }),
+  sellerShipment({
+    shipmentId: 2,
+    orderId: 178,
+    recipientName: '박민수',
+    otherItemCount: 2,
+    createdAt: '2026-10-18T11:02:00',
+    addressChangePending: true,
   }),
-  order({
-    shipmentId: 11,
-    orderNumber: '20261018-0178',
-    orderedAt: '2026-10-18T11:02:00',
-    buyerNickname: '사과먹는곰',
-    productName: '청송 꿀사과 부사',
-    itemText: '3kg (16~18과) × 1',
-    address: '경기 성남시 분당구 판교역로 235',
-    amount: 33900,
-    status: OrderItemStatus.PREPARING,
-    cancelRequested: true,
+  sellerShipment({
+    shipmentId: 3,
+    orderId: 170,
+    recipientName: '정하늘',
+    regionGroup: 'JEJU_MAIN',
+    estimatedShipDate: '2026-10-17',
+    delayed: true,
+    createdAt: '2026-10-16T09:15:00',
   }),
-  order({
-    shipmentId: 12,
-    orderNumber: '20261018-0170',
-    orderedAt: '2026-10-18T09:15:00',
-    buyerNickname: '아침사과',
-    productName: '청송 꿀사과 부사',
-    itemText: '1kg (5~6과) × 2',
-    address: '서울 마포구 월드컵북로 21, 302호',
-    amount: 25800,
-    status: OrderItemStatus.PREPARING,
-    addressChange: { after: '서울 마포구 성미산로 17, 1층', requestedAt: '2026-10-18T10:12:00' },
-  }),
-  order({
-    shipmentId: 13,
-    orderNumber: '20261017-0168',
-    orderedAt: '2026-10-17T21:40:00',
-    buyerNickname: '둘이서한끼',
-    productName: '청송 사과즙 100% (30포)',
-    itemText: '120ml × 30포 × 1',
-    address: '부산 해운대구 센텀중앙로 79',
-    amount: 29900,
-    status: OrderItemStatus.PREPARING,
-    delay: { reason: '수확 지연', newShipDate: '2026-10-21T00:00:00' },
-  }),
-  order({
-    shipmentId: 14,
-    orderNumber: '20261017-0149',
-    orderedAt: '2026-10-17T18:05:00',
-    buyerNickname: '망원동카페',
-    productName: '청송 꿀사과 부사',
-    itemText: '3kg (16~18과) × 2',
-    address: '서울 마포구 망원로 54',
-    amount: 67800,
-    status: OrderItemStatus.PREPARING,
-    cancelRequested: true,
-  }),
-  order({
-    shipmentId: 15,
-    orderNumber: '20261016-0131',
-    orderedAt: '2026-10-16T08:20:00',
-    buyerNickname: '초록식탁',
-    productName: '청송 꿀사과 부사',
-    itemText: '2kg (11~13과) × 1',
-    address: '대전 유성구 대학로 99',
-    amount: 23900,
-    status: OrderItemStatus.SHIPPING,
-    carrier: ShipmentCarrier.CJ_LOGISTICS,
-    trackingNumber: '684219375520',
-  }),
-  order({
-    shipmentId: 16,
-    orderNumber: '20261015-0122',
-    orderedAt: '2026-10-15T19:45:00',
-    buyerNickname: '귤보다사과',
-    productName: '청송 사과즙 100% (30포)',
-    itemText: '120ml × 30포 × 2',
-    address: '광주 서구 상무중앙로 7',
-    amount: 59800,
-    status: OrderItemStatus.SHIPPING,
-    carrier: ShipmentCarrier.POST_OFFICE,
-    trackingNumber: '6070123456789',
-    note: '10.17 승인한 배송지로 보냈어요',
-  }),
-  order({
-    shipmentId: 6,
-    orderNumber: '20261006-0027',
-    orderedAt: '2026-10-06T08:20:00',
-    buyerNickname: '주말장보기',
-    productName: '청송 사과즙 100% (30포)',
-    itemText: '120ml × 30포 × 1',
-    address: '서울 중구 세종대로 110, 3층 301호',
-    amount: 29900,
-    status: OrderItemStatus.DELIVERED,
+  sellerShipment({
+    shipmentId: 4,
+    orderId: 131,
+    status: ShipmentStatus.SHIPPING,
     carrier: ShipmentCarrier.CJ_LOGISTICS,
     trackingNumber: '684219371180',
+    createdAt: '2026-10-16T08:20:00',
   }),
-  order({
-    shipmentId: 17,
-    orderNumber: '20261014-0101',
-    orderedAt: '2026-10-14T13:00:00',
-    buyerNickname: '오늘도과일',
-    productName: '청송 꿀사과 부사',
-    itemText: '1kg (5~6과) × 1',
-    address: '인천 연수구 컨벤시아대로 165',
-    amount: 12900,
-    status: OrderItemStatus.REFUNDED,
-    note: '10.14 판매자 취소 · 품절',
+  sellerShipment({
+    shipmentId: 5,
+    orderId: 93,
+    status: ShipmentStatus.DELIVERED,
+    carrier: ShipmentCarrier.HANJIN,
+    trackingNumber: '4012345678901',
+    createdAt: '2026-10-12T11:40:00',
+  }),
+  sellerShipment({
+    shipmentId: 6,
+    orderId: 140,
+    status: ShipmentStatus.CANCELLED,
+    createdAt: '2026-10-14T20:05:00',
   }),
 ]
+
+/** 대기 중인 배송지 변경 요청이 있는 출고 상세 (shipmentId 2) */
+export const sellerShipmentDetail2: ShipmentDetail = {
+  shipmentId: 2,
+  orderId: 178,
+  status: ShipmentStatus.PREPARING,
+  carrier: null,
+  trackingNumber: null,
+  address: {
+    recipientName: '박민수',
+    recipientPhone: '01011112222',
+    postalCode: '04524',
+    address: '서울 중구 세종대로 110',
+    addressDetail: '3층 301호',
+    deliveryNote: null,
+  },
+  regionGroup: 'GENERAL',
+  chargedShippingFee: 3000,
+  additionalShippingFee: 0,
+  estimatedShipDate: '2026-10-19',
+  estimatedDeliveryStart: '2026-10-21',
+  estimatedDeliveryEnd: '2026-10-22',
+  delayed: false,
+  createdAt: '2026-10-18T11:02:00',
+  shippedAt: null,
+  deliveredAt: null,
+  completedAt: null,
+  cancelledAt: null,
+  items: [
+    {
+      orderItemId: 1781,
+      productName: '청송 꿀사과 부사',
+      optionName: '3kg (16~18과)',
+      quantity: 1,
+      unitPrice: 33900,
+      canceledQuantity: 0,
+      confirmed: false,
+    },
+  ],
+  latestAddressChange: {
+    requestId: 9,
+    status: 'PENDING',
+    requestedAddress: {
+      recipientName: '박민수',
+      recipientPhone: '01011112222',
+      postalCode: '63000',
+      address: '제주특별자치도 제주시 첨단로 242',
+      addressDetail: '1층',
+      deliveryNote: null,
+    },
+    additionalFeeNotice: 3000,
+    rejectReason: null,
+    requestedAt: '2026-10-18T12:10:00',
+    processedAt: null,
+  },
+}
+
+export const sellerShipmentDetails: ShipmentDetail[] = [sellerShipmentDetail2]
 
 // ─── 취소 요청 ───────────────────────────────────────────
 

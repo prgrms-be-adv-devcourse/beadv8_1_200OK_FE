@@ -22,8 +22,10 @@ import { formatDate, formatPrice } from '@/shared/lib/format'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import {
   AddressModal,
+  type AddressModalProps,
   DisabledReason,
   EmptyView,
+  NOT_CONNECTED_REASON,
   NotConnected,
   PageHeader,
   PasswordRules,
@@ -42,8 +44,9 @@ import classes from './AccountView.module.css'
 // B-15 계정 관리 /me/account?tab=info|password|address|withdraw. 시안: b2c/Account, AccountMobile
 // 탈퇴 차단: 예치금 잔액 · 진행 중 요청 · 판매자 (C-13), 신청 뒤 7일 유예.
 // ✅ 내 정보 탭: GET·PUT /members/me (AccountInfoPanel).
-// TODO(api): ❌ POST /members/me/password, 배송지 GET/PUT/DELETE, POST /members/me/withdrawal 없음
-//   지금 라우트는 AccountNotConnectedView(내 정보 탭만 실제, 나머지 탭은 ‘연결 전’)를 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
+// ✅ 배송지 탭: GET·PUT /shipments/addresses/default (AccountAddressPanel). 회원당 1개, 삭제 API는 없다.
+// TODO(api): ❌ POST /members/me/password, 배송지 DELETE, POST /members/me/withdrawal 없음
+//   지금 라우트는 AccountNotConnectedView(내 정보·배송지 탭만 실제, 나머지 탭은 ‘연결 전’)를 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
 
 export type AccountTab = 'info' | 'password' | 'address' | 'withdraw'
 
@@ -477,12 +480,14 @@ export function AccountView({
   )
 }
 
-const notConnectedTabs: Record<Exclude<AccountTab, 'info'>, { title: string; api: string }> = {
+const notConnectedTabs: Record<
+  Exclude<AccountTab, 'info' | 'address'>,
+  { title: string; api: string }
+> = {
   password: {
     title: '비밀번호 변경은 아직 연결되지 않았어요',
     api: '❌ POST /members/me/password',
   },
-  address: { title: '배송지 관리는 아직 연결되지 않았어요', api: '❌ 배송지 GET/PUT/DELETE' },
   withdraw: {
     title: '회원 탈퇴는 아직 연결되지 않았어요',
     api: '❌ POST /members/me/withdrawal',
@@ -537,12 +542,107 @@ export function AccountInfoPanel({
   )
 }
 
-/** 지금 라우트가 그리는 계정 관리: 내 정보 탭은 실제, 나머지 탭은 ‘연결 전’ */
+export type AccountAddressPanelProps = {
+  status: 'pending' | 'error' | 'success'
+  /** null이면 등록 전 */
+  address?: ShippingAddress | null
+  /** 저장 요청. 실패(reject)하면 모달을 열어 둔다 */
+  onSave: (address: ShippingAddress) => MaybeAsync
+  submitting?: boolean
+  serverErrors?: AddressModalProps['serverErrors']
+  errorMessage?: string
+  loadErrorMessage?: string
+  onRetry?: () => void
+  /** 처음부터 열어 둘 모달 (미리보기) */
+  defaultOpen?: boolean
+}
+
+/** 배송지 탭: ✅ GET·PUT /shipments/addresses/default. 삭제 API가 없어 삭제는 막고 이유를 보인다 */
+export function AccountAddressPanel({
+  status,
+  address,
+  onSave,
+  submitting = false,
+  serverErrors,
+  errorMessage,
+  loadErrorMessage,
+  onRetry,
+  defaultOpen = false,
+}: AccountAddressPanelProps) {
+  const [opened, setOpened] = useState(defaultOpen)
+  const close = () => setOpened(false)
+  return (
+    <QueryState
+      status={status === 'success' && address === undefined ? 'pending' : status}
+      skeleton={<Skeleton h={120} radius="md" />}
+      loadingLabel="배송지를 불러오고 있어요"
+      errorMessage={loadErrorMessage}
+      onRetry={onRetry}
+    >
+      <Stack gap="sm">
+        <Text className={classes.help}>
+          배송지는 1개만 저장돼요. 주문서에서 바꾼 배송지는 그 주문에만 적용되고, 이미 주문한 상품의
+          배송지는 바뀌지 않아요.
+        </Text>
+        {address ? (
+          <section className={`${classes.card} ${classes.addressCard}`} aria-label="저장된 배송지">
+            <div>
+              <p className="pd-num">
+                <strong>{address.recipientName}</strong> · {address.recipientPhone}
+              </p>
+              <p className="pd-num">
+                ({address.zipCode}) {address.address}
+                {address.addressDetail ? `, ${address.addressDetail}` : ''}
+              </p>
+            </div>
+            <Group gap="xs">
+              <Button variant="subtle" onClick={() => setOpened(true)}>
+                수정
+              </Button>
+              <DisabledReason reason={NOT_CONNECTED_REASON}>
+                <Button variant="subtle" disabled>
+                  삭제
+                </Button>
+              </DisabledReason>
+            </Group>
+          </section>
+        ) : (
+          <div className={classes.card}>
+            <EmptyView
+              icon={<MapPin />}
+              title="저장된 배송지가 없어요"
+              description="배송지를 등록하면 주문서에 바로 채워져요."
+              action={{ label: '배송지 등록', onClick: () => setOpened(true) }}
+            />
+          </div>
+        )}
+      </Stack>
+      <AddressModal
+        opened={opened}
+        initial={address}
+        title={address ? '배송지 수정' : '배송지 등록'}
+        help="저장한 배송지는 주문서에 바로 채워져요."
+        submitLabel="저장"
+        submitting={submitting}
+        serverErrors={serverErrors}
+        errorMessage={errorMessage}
+        onClose={close}
+        onSave={(next) => run(() => onSave(next), close)}
+      />
+    </QueryState>
+  )
+}
+
+/** 지금 라우트가 그리는 계정 관리: 내 정보·배송지 탭은 실제, 나머지 탭은 ‘연결 전’ */
 export function AccountNotConnectedView({
   tab,
   onTabChange,
   info,
-}: Pick<AccountViewProps, 'tab' | 'onTabChange'> & { info: AccountInfoPanelProps }) {
+  address,
+}: Pick<AccountViewProps, 'tab' | 'onTabChange'> & {
+  info: AccountInfoPanelProps
+  address: AccountAddressPanelProps
+}) {
   return (
     <div className={classes.root}>
       <PageHeader title="계정 관리" backTo="/me" />
@@ -558,6 +658,8 @@ export function AccountNotConnectedView({
           <Tabs.Panel key={t.value} value={t.value} pt="lg">
             {t.value === 'info' ? (
               <AccountInfoPanel {...info} />
+            ) : t.value === 'address' ? (
+              <AccountAddressPanel {...address} />
             ) : (
               <NotConnected
                 title={notConnectedTabs[t.value].title}

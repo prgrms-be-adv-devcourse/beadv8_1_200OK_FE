@@ -196,6 +196,7 @@ export const shippingShipment: ShipmentDetail = {
   regionGroup: 'GENERAL',
   chargedShippingFee: 3000,
   additionalShippingFee: 0,
+  estimatedShipDate: '2026-10-17',
   estimatedDeliveryStart: '2026-10-18',
   estimatedDeliveryEnd: '2026-10-19',
   delayed: false,

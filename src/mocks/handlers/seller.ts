@@ -7,6 +7,8 @@ import {
   payoutItems,
   payouts,
   sellerProductDetail101,
+  sellerShipmentDetails,
+  sellerShipments,
   sellerWalletBalance,
 } from '@/features/seller/fixtures'
 import type { SellerProfileRequest } from '@/shared/api/types'
@@ -34,6 +36,40 @@ export const sellerHandlers = [
   http.patch(
     '*/api/v1/products/:productId/visibility',
     () => new HttpResponse(null, { status: 204 }),
+  ),
+
+  // 출고 목록(25건 고정)·상세·송장·배송지 변경 처리. 실패(409 등)는 테스트에서 덮는다
+  http.get('*/api/v1/seller/shipments', ({ request }) =>
+    HttpResponse.json(pageOf(sellerShipments, new URL(request.url).searchParams, 25)),
+  ),
+  http.get('*/api/v1/seller/shipments/:shipmentId', ({ params }) => {
+    const detail = sellerShipmentDetails.find((s) => s.shipmentId === Number(params.shipmentId))
+    return detail ? HttpResponse.json(detail) : problem(404, '배송을 찾을 수 없습니다.')
+  }),
+  http.post('*/api/v1/seller/shipments/:shipmentId/dispatch', async ({ params, request }) => {
+    const body = (await request.json()) as { carrier: string; trackingNumber: string }
+    return HttpResponse.json({
+      shipmentId: Number(params.shipmentId),
+      status: 'SHIPPING',
+      ...body,
+      shippedAt: '2026-10-19T15:00:00',
+    })
+  }),
+  http.patch(
+    '*/api/v1/seller/shipments/:shipmentId/address-change-requests/:requestId',
+    async ({ params, request }) => {
+      const { decision } = (await request.json()) as { decision: 'APPROVE' | 'REJECT' }
+      return HttpResponse.json({
+        requestId: Number(params.requestId),
+        shipmentId: Number(params.shipmentId),
+        status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+        additionalFeeNotice: 3000,
+        rejectReason:
+          decision === 'REJECT' ? '상품 준비가 완료되어 배송지 변경이 불가능합니다.' : null,
+        requestedAt: '2026-10-18T12:10:00',
+        processedAt: '2026-10-19T09:00:00',
+      })
+    },
   ),
 
   http.get('*/api/v1/sellers/me/profile', () => HttpResponse.json(myProfile)),

@@ -8,8 +8,10 @@ import {
   myProfile,
 } from './fixtures'
 import {
+  type AccountAddressPanelProps,
   type AccountInfoPanelProps,
   AccountNotConnectedView,
+  type AccountTab,
   AccountView,
   type AccountViewProps,
 } from './views/AccountView'
@@ -21,6 +23,22 @@ import { MyPageView, type MyPageViewProps } from './views/MyPageView'
 const noop = () => {}
 
 const infoPanel: AccountInfoPanelProps = { status: 'success', profile: myProfile, onSave: noop }
+
+const addressPanel = (props: Partial<AccountAddressPanelProps> = {}): AccountAddressPanelProps => ({
+  status: 'success',
+  address: myAddress,
+  onSave: noop,
+  ...props,
+})
+
+const accountLive = (tab: AccountTab, address: Partial<AccountAddressPanelProps> = {}) => (
+  <AccountNotConnectedView
+    tab={tab}
+    onTabChange={noop}
+    info={infoPanel}
+    address={addressPanel(address)}
+  />
+)
 
 const my = (props: Partial<MyPageViewProps> = {}) => (
   <MyPageView
@@ -169,20 +187,53 @@ export const mePreviews: ScreenPreview[] = [
         id: 'not-connected',
         label: '연결 전 · 비밀번호 탭',
         path: '/me/account?tab=password',
-        render: () => (
-          <AccountNotConnectedView tab="password" onTabChange={noop} info={infoPanel} />
-        ),
+        render: () => accountLive('password'),
       },
       {
-        id: 'not-connected-address',
-        label: '연결 전 · 배송지 탭',
+        id: 'address-live',
+        label: '배송지 (지금 화면)',
         path: '/me/account?tab=address',
-        render: () => <AccountNotConnectedView tab="address" onTabChange={noop} info={infoPanel} />,
+        render: () => accountLive('address'),
+      },
+      {
+        id: 'address-empty',
+        label: '배송지 · 등록 전',
+        path: '/me/account?tab=address',
+        render: () => accountLive('address', { address: null }),
+      },
+      {
+        id: 'address-edit-live',
+        label: '배송지 · 수정 창 (칸 오류)',
+        path: '/me/account?tab=address',
+        render: () =>
+          accountLive('address', {
+            defaultOpen: true,
+            serverErrors: { recipientPhone: '연락처는 숫자 10~11자리여야 합니다.' },
+            errorMessage: '배송지를 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요',
+          }),
+      },
+      {
+        id: 'address-loading',
+        label: '배송지 · 불러오는 중',
+        path: '/me/account?tab=address',
+        render: () => accountLive('address', { status: 'pending', address: undefined }),
+      },
+      {
+        id: 'address-error',
+        label: '배송지 · 불러오기 실패',
+        path: '/me/account?tab=address',
+        render: () =>
+          accountLive('address', {
+            status: 'error',
+            address: undefined,
+            loadErrorMessage: '배송지를 불러오지 못했어요',
+            onRetry: noop,
+          }),
       },
       {
         id: 'info-live',
         label: '내 정보 (지금 화면)',
-        render: () => <AccountNotConnectedView tab="info" onTabChange={noop} info={infoPanel} />,
+        render: () => accountLive('info'),
       },
       {
         id: 'info-saved',
@@ -191,6 +242,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            address={addressPanel()}
             info={{ ...infoPanel, saved: true }}
           />
         ),
@@ -202,6 +254,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            address={addressPanel()}
             info={{
               ...infoPanel,
               serverErrors: { nickname: '닉네임은 2자 이상 30자 이하여야 합니다.' },
@@ -216,6 +269,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            address={addressPanel()}
             info={{
               ...infoPanel,
               errorMessage: '내 정보를 찾을 수 없어요. 탈퇴했거나 없는 계정이에요',
@@ -230,6 +284,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            address={addressPanel()}
             info={{
               status: 'error',
               onSave: noop,
@@ -246,6 +301,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            address={addressPanel()}
             info={{ status: 'pending', onSave: noop }}
           />
         ),

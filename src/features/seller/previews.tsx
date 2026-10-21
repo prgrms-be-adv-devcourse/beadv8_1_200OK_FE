@@ -1,8 +1,13 @@
-import { OrderItemStatus, ProductStatus } from '@/shared/api/types'
+import { ProductStatus } from '@/shared/api/types'
 import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
+import {
+  AddressRequestModal,
+  type AddressRequestModalProps,
+  InvoiceModal,
+} from './components/OrderModals'
 import {
   adjustedPayoutDetail,
   adjustedPayoutItems,
@@ -18,26 +23,22 @@ import {
   payoutOutlook,
   payouts,
   productStats,
-  sellerOrders,
   sellerProducts,
+  sellerShipmentDetail2,
+  sellerShipments,
   sellerWallet,
   sellerWalletBalance,
   sellerWalletTxs,
   todos,
   withdrawals,
 } from './fixtures'
-import { SellerOrderTab } from './types'
 import {
   SellerClaimsNotConnectedView,
   SellerClaimsView,
   type SellerClaimsViewProps,
 } from './views/SellerClaimsView'
 import { SellerHomeView, type SellerHomeViewProps } from './views/SellerHomeView'
-import {
-  SellerOrdersNotConnectedView,
-  SellerOrdersView,
-  type SellerOrdersViewProps,
-} from './views/SellerOrdersView'
+import { SellerOrdersView, type SellerOrdersViewProps } from './views/SellerOrdersView'
 import { SellerPayoutsView, type SellerPayoutsViewProps } from './views/SellerPayoutsView'
 import {
   SellerProductFormView,
@@ -268,23 +269,41 @@ const edit = (props: Partial<SellerProductFormViewProps> = {}) =>
     ...props,
   })
 
-const waiting = sellerOrders.filter((o) => o.status === OrderItemStatus.PREPARING)
-const orderCounts = { WAITING: 5, SHIPPING: 2, DELIVERED: 1, CANCELED: 1 }
-
 const orders = (props: Partial<SellerOrdersViewProps> = {}) => (
   <SellerOrdersView
     status="success"
-    orders={waiting}
-    tab={SellerOrderTab.WAITING}
-    onTabChange={noop}
-    counts={orderCounts}
+    shipments={sellerShipments}
+    page={0}
+    totalPages={1}
+    totalElements={sellerShipments.length}
+    onPageChange={noop}
     onRegisterInvoice={noop}
-    onNotifyDelay={noop}
-    onSellerCancel={noop}
-    onAnswerAddressChange={noop}
-    today={new Date('2026-10-18T15:00:00')}
+    onOpenAddressChange={noop}
     {...props}
   />
+)
+
+const shipmentOf = (shipmentId: number) => sellerShipments.find((s) => s.shipmentId === shipmentId)
+
+const withInvoiceModal = (props: { error?: string } = {}) => (
+  <>
+    {orders()}
+    <InvoiceModal shipment={shipmentOf(1) ?? null} onClose={noop} onSubmit={noop} {...props} />
+  </>
+)
+
+const withAddressModal = (props: Partial<AddressRequestModalProps> = {}) => (
+  <>
+    {orders()}
+    <AddressRequestModal
+      shipment={shipmentOf(2) ?? null}
+      detailStatus="success"
+      detail={sellerShipmentDetail2}
+      onClose={noop}
+      onAnswer={noop}
+      {...props}
+    />
+  </>
 )
 
 const pendingClaims = cancelClaims.filter((c) => c.state === ClaimState.CLAIM_PENDING)
@@ -453,65 +472,70 @@ export const sellerWorkPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/orders',
     states: [
+      { id: 'list', label: '출고 목록', session: 'seller', render: () => orders() },
       {
-        id: 'not-connected',
-        label: '지금 연결 모양 (연결 전)',
+        id: 'many-pages',
+        label: '여러 쪽',
         session: 'seller',
-        render: () => <SellerOrdersNotConnectedView />,
+        render: () => orders({ totalPages: 4, totalElements: 92 }),
       },
-      { id: 'waiting', label: '출고 대기', session: 'seller', render: () => orders() },
       {
         id: 'invoice',
         label: '송장 등록',
         session: 'seller',
-        render: () => orders({ defaultModal: { type: 'invoice', shipmentId: 1 } }),
+        render: () => withInvoiceModal(),
       },
       {
-        id: 'delay',
-        label: '출고 지연 알리기',
+        id: 'invoice-error',
+        label: '송장 등록 거절 (중복 송장)',
         session: 'seller',
-        render: () => orders({ defaultModal: { type: 'delay', shipmentId: 1 } }),
-      },
-      {
-        id: 'delay-again',
-        label: '지연 다시 알리기',
-        session: 'seller',
-        render: () => orders({ defaultModal: { type: 'delay', shipmentId: 13 } }),
+        render: () => withInvoiceModal({ error: '이미 사용된 송장번호입니다.' }),
       },
       {
         id: 'address',
         label: '배송지 변경 요청',
         session: 'seller',
-        render: () => orders({ defaultModal: { type: 'address', shipmentId: 12 } }),
+        render: () => withAddressModal(),
       },
       {
-        id: 'cancel',
-        label: '판매자 취소',
+        id: 'address-loading',
+        label: '배송지 변경 요청 불러오는 중',
         session: 'seller',
-        render: () => orders({ defaultModal: { type: 'cancel', shipmentId: 1 } }),
+        render: () => withAddressModal({ detailStatus: 'pending', detail: undefined }),
       },
       {
-        id: 'shipping',
-        label: '배송 중 탭',
+        id: 'address-processed',
+        label: '이미 처리된 요청',
         session: 'seller',
         render: () =>
-          orders({
-            tab: SellerOrderTab.SHIPPING,
-            orders: sellerOrders.filter((o) => o.status === OrderItemStatus.SHIPPING),
+          withAddressModal({
+            detail: {
+              ...sellerShipmentDetail2,
+              latestAddressChange: sellerShipmentDetail2.latestAddressChange && {
+                ...sellerShipmentDetail2.latestAddressChange,
+                status: 'APPROVED',
+              },
+            },
+            error: '이미 처리된 배송지 변경 요청입니다.',
           }),
       },
       {
         id: 'empty',
         label: '빈 목록',
         session: 'seller',
-        render: () =>
-          orders({ orders: [], counts: { WAITING: 0, SHIPPING: 0, DELIVERED: 0, CANCELED: 0 } }),
+        render: () => orders({ shipments: [], totalPages: 0, totalElements: 0 }),
+      },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        session: 'seller',
+        render: () => orders({ status: 'error', shipments: [] }),
       },
       {
         id: 'loading',
         label: '로딩',
         session: 'seller',
-        render: () => orders({ status: 'pending' }),
+        render: () => orders({ status: 'pending', shipments: [] }),
       },
     ],
   },

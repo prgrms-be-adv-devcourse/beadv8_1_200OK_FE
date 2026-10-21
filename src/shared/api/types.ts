@@ -548,6 +548,16 @@ export enum ShipmentStatus {
   CANCELLED = 'CANCELLED',
 }
 
+/** 기본 배송지 저장 PUT /shipments/addresses/default. 연락처는 하이픈이 있어도 되고 숫자만 저장된다 */
+export type ShipmentAddressRequest = {
+  recipientName: string
+  recipientPhone: string // 숫자 10~11자리
+  postalCode: string // 숫자 5자리
+  address: string
+  addressDetail: string
+  deliveryNote?: string
+}
+
 /** 배송지 변경 요청 상태 */
 export type AddressChangeStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
@@ -603,6 +613,55 @@ export type LatestAddressChange = {
   processedAt: string | null
 }
 
+/** 판매자 출고 목록 한 줄 GET /seller/shipments (최신순, 25건 고정) */
+export type SellerShipmentSummary = {
+  shipmentId: number // 구매자 쪽 shipmentId와 값이 다를 수 있다
+  orderId: number
+  status: ShipmentStatus
+  recipientName: string // 현재 배송지 기준
+  regionGroup: RegionGroup
+  estimatedShipDate: string // 출고 예정일 yyyy-MM-dd
+  carrier: ShipmentCarrier | null // 출고 전이면 null
+  trackingNumber: string | null
+  delayed: boolean // 도착 예정일을 넘겨 지연됐는지
+  createdAt: string
+  representativeProductName: string
+  otherItemCount: number
+  addressChangePending: boolean // 처리 대기 중인 배송지 변경 요청이 있는지. 출고 전에 승인·거절해야 한다
+}
+
+export type SellerShipmentPage = {
+  content: SellerShipmentSummary[]
+  page: number // 0부터
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+/** 출고·송장 등록 POST /seller/shipments/{id}/dispatch. 송장번호는 숫자 10~13자리, 같은 택배사 안에서 중복 불가 */
+export type ShipmentDispatchRequest = { carrier: ShipmentCarrier; trackingNumber: string }
+
+export type ShipmentDispatchResponse = {
+  shipmentId: number
+  status: ShipmentStatus
+  carrier: ShipmentCarrier
+  trackingNumber: string
+  shippedAt: string
+}
+
+export type AddressChangeDecision = 'APPROVE' | 'REJECT'
+
+/** 배송지 변경 요청 승인·거절 PATCH …/address-change-requests/{requestId} 의 응답 */
+export type AddressChangeRequestResult = {
+  requestId: number
+  shipmentId: number
+  status: AddressChangeStatus
+  additionalFeeNotice: number
+  rejectReason: string | null
+  requestedAt: string
+  processedAt: string | null
+}
+
 /** 내 배송 상세 GET /shipments/{shipmentId}. 없거나 다른 구매자의 배송은 404 */
 export type ShipmentDetail = {
   shipmentId: number
@@ -614,6 +673,7 @@ export type ShipmentDetail = {
   regionGroup: RegionGroup
   chargedShippingFee: number
   additionalShippingFee: number // 승인된 배송지 변경으로 판매자에게 따로 낼 추가 운임 합계
+  estimatedShipDate: string // 출고 예정일 yyyy-MM-dd. 배송지 변경이 승인되면 다시 계산된다
   estimatedDeliveryStart: string
   estimatedDeliveryEnd: string
   delayed: boolean

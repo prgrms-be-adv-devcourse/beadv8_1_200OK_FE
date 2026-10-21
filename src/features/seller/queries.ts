@@ -5,6 +5,8 @@ import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
 import type {
+  AddressChangeDecision,
+  AddressChangeRequestResult,
   PageResponse,
   PayoutSellerCandidate,
   PayoutSellerDetail,
@@ -21,6 +23,10 @@ import type {
   SellerProductSummary,
   SellerProfileRequest,
   SellerProfileResponse,
+  SellerShipmentPage,
+  ShipmentDetail,
+  ShipmentDispatchRequest,
+  ShipmentDispatchResponse,
 } from '@/shared/api/types'
 import { PAYOUT_RUN_HOUR } from '@/shared/lib/constants'
 import { recentYear, thisMonth, toServerDateTime } from '@/shared/lib/dateRange'
@@ -29,11 +35,15 @@ import {
   changeProductVisibility,
   createMyProfile,
   createProduct,
+  decideAddressChange,
   deleteProduct,
+  dispatchShipment,
   fetchMyProductDetail,
   fetchMyProducts,
   fetchMyProfile,
   fetchSellerBalance,
+  fetchSellerShipmentDetail,
+  fetchSellerShipments,
   getPayout,
   getPayoutCandidates,
   getPayoutItems,
@@ -53,6 +63,10 @@ export const sellerKeys = {
     [queryKeyPrefix.seller, 'productDetail', productId] as const,
   profile: () => [queryKeyPrefix.seller, 'profile'] as const,
   balance: () => [queryKeyPrefix.seller, 'balance'] as const,
+  shipments: () => [queryKeyPrefix.seller, 'shipments'] as const,
+  shipmentPage: (page: number) => [queryKeyPrefix.seller, 'shipments', 'page', page] as const,
+  shipmentDetail: (shipmentId: number) =>
+    [queryKeyPrefix.seller, 'shipments', 'detail', shipmentId] as const,
 }
 
 export const payoutKeys = {
@@ -67,6 +81,58 @@ export const payoutKeys = {
 /** 로그인한 회원 번호 (토큰 payload의 sub). /farms/:id 링크에 쓴다 */
 export function useMemberId(): number | null {
   return useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)?.memberId ?? null
+}
+
+// ─── 출고 ────────────────────────────────────────────────
+
+/** 내 출고 목록 한 쪽(25건 고정). 쪽을 넘겨도 이전 쪽을 들고 있다가 바꾼다 */
+export function useSellerShipments(page: number) {
+  return useQuery<SellerShipmentPage, ApiError>({
+    queryKey: sellerKeys.shipmentPage(page),
+    queryFn: () => fetchSellerShipments(page),
+    placeholderData: (previous) => previous,
+  })
+}
+
+/** 출고 상세. 배송지 변경 모달을 열 때만 받는다(shipmentId가 null이면 요청하지 않는다). 처리 직전 값이라 캐시를 오래 쓰지 않는다 */
+export function useSellerShipmentDetail(shipmentId: number | null) {
+  return useQuery<ShipmentDetail, ApiError>({
+    queryKey: sellerKeys.shipmentDetail(shipmentId ?? 0),
+    queryFn: () => fetchSellerShipmentDetail(shipmentId ?? 0),
+    enabled: shipmentId !== null,
+    gcTime: 0,
+  })
+}
+
+/** 출고·변경 요청 처리 뒤(성공이든 409든): 목록·상세를 다시 받는다 */
+function useRefreshShipments() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: sellerKeys.shipments() })
+}
+
+export function useDispatchShipment() {
+  const refresh = useRefreshShipments()
+  return useMutation<
+    ShipmentDispatchResponse,
+    ApiError,
+    { shipmentId: number; body: ShipmentDispatchRequest }
+  >({
+    mutationFn: ({ shipmentId, body }) => dispatchShipment(shipmentId, body),
+    onSettled: refresh,
+  })
+}
+
+export function useDecideAddressChange() {
+  const refresh = useRefreshShipments()
+  return useMutation<
+    AddressChangeRequestResult,
+    ApiError,
+    { shipmentId: number; requestId: number; decision: AddressChangeDecision }
+  >({
+    mutationFn: ({ shipmentId, requestId, decision }) =>
+      decideAddressChange(shipmentId, requestId, decision),
+    onSettled: refresh,
+  })
 }
 
 // ─── 상품 ────────────────────────────────────────────────
