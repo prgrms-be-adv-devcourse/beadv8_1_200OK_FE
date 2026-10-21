@@ -14,22 +14,26 @@ import {
   showRole,
   sleep,
 } from './lib.mjs'
-import { createState, prepare, restoreSessions, scenes } from './scenes.mjs'
+import * as main from './scenes.mjs'
 
 const args = process.argv.slice(2)
 const fromIndex = args.indexOf('--from')
 const from = fromIndex === -1 ? 1 : Number(args[fromIndex + 1])
 const record = args.includes('--record')
 const auto = args.includes('--auto')
+// --set additional: 본 시연이 남긴 state.json의 계정·상품·주문으로 추가 장면을 실행한다
+const setIndex = args.indexOf('--set')
+const set = setIndex === -1 ? 'main' : args[setIndex + 1]
+const { scenes } = set === 'additional' ? await import('./scenes-additional.mjs') : main
 
 let state
-if (from === 1) {
-  state = createState()
-  await prepare(state)
+if (set === 'main' && from === 1) {
+  state = main.createState()
+  await main.prepare(state)
   await saveState(state)
 } else {
   state = await loadState()
-  if (!state) throw new Error('state.json이 없어요. 처음부터 실행해 주세요')
+  if (!state) throw new Error('state.json이 없어요. 본 시연(demo.sh)을 먼저 실행해 주세요')
 }
 
 console.log(
@@ -42,7 +46,8 @@ const win = await openWindows({ record })
 await go(win.admin.page, '/login')
 console.log('\n🔑 관리자 창에서 관리자 계정으로 로그인해 주세요. 로그인하면 자동으로 넘어가요.')
 await win.admin.page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 0 })
-await restoreSessions({ win, state, from })
+// 추가 장면은 본 시연이 끝난 뒤라 구매자·판매자 모두 다시 로그인한다
+await main.restoreSessions({ win, state, from: set === 'main' ? from : Number.POSITIVE_INFINITY })
 
 for (let index = from; index <= scenes.length; index += 1) {
   const scene = scenes[index - 1]

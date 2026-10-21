@@ -1,6 +1,7 @@
 // 시연 장면. 각 장면은 화면을 실제로 조작하고, 다음 장면에 필요한 값은 state에 남긴다.
 // 사람이 하는 일: 시작할 때 관리자 로그인, 5번 장면 끝의 토스 테스트 결제.
 // 누르는 동작은 press·tick으로 한다(화면 가운데로 옮기고 강조한 뒤 누른다).
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   api,
@@ -18,8 +19,13 @@ import {
   uiLogin,
 } from './lib.mjs'
 
-const PRODUCT_IMAGE = fileURLToPath(new URL('./assets/product.png', import.meta.url))
+const asset = (name) => fileURLToPath(new URL(`./assets/${name}`, import.meta.url))
+const PRODUCT_IMAGE = asset('product.png')
 const PRODUCT_PRICE = 30_000
+// 리뷰 사진은 review.png가 있으면 그것을, 없으면 상품 사진을 쓴다. 영상(review.mp4)은 있을 때만 올린다
+const REVIEW_IMAGE = existsSync(asset('review.png')) ? asset('review.png') : PRODUCT_IMAGE
+const REVIEW_VIDEO = asset('review.mp4')
+const REVIEW_CONTENT = '아삭하고 달아요. 포장도 꼼꼼해서 하나도 상하지 않고 왔어요. 또 시킬게요!'
 
 export function createState() {
   const now = new Date()
@@ -112,15 +118,18 @@ export const scenes = [
       await typeIn(page.getByLabel('사업자등록번호', { exact: true }), state.businessNumber)
       await typeIn(page.getByLabel('통신판매업 신고번호', { exact: true }), '제2026-시연-0001호')
       await press(page.getByRole('button', { name: '다음', exact: true }))
-      // 신청 내용 확인 단계
-      await hold()
-      await press(page.getByRole('button', { name: '판매자 등록 신청하기' }))
+
       // 완료 제목은 h2지만 role="status"라 heading으로 찾을 수 없다
-      await page
-        .getByRole('status')
-        .filter({ hasText: '판매자 등록을 신청했어요' })
-        .first()
-        .waitFor()
+      const done = page.getByRole('status').filter({ hasText: '판매자 등록을 신청했어요' }).first()
+      const submit = page.getByRole('button', { name: '판매자 등록 신청하기' })
+      // 신청 내용 확인 단계가 나오면 보여 주고 신청한다.
+      // 앱 수정(다음 버튼이 제출되던 문제)이 배포되기 전에는 '다음'에서 바로 신청되어 확인 단계가 없다
+      await submit.or(done).first().waitFor()
+      if (await submit.isVisible()) {
+        await hold()
+        await press(submit)
+      }
+      await done.waitFor()
       await hold()
     },
   },
@@ -231,10 +240,10 @@ export const scenes = [
       await page.getByText('장바구니에 담았어요').first().waitFor()
       await hold()
 
-      // 알림의 [장바구니 보기]로 가서 주문한다
-      const toCart = page.getByRole('button', { name: '장바구니 보기' }).first()
-      if (await toCart.isVisible().catch(() => false)) await press(toCart)
-      else await go(page, '/cart')
+      // 상단 메뉴의 장바구니로 간다(알림의 [장바구니 보기]는 몇 초 뒤 사라진다). 이름에 담긴 개수가 붙는다
+      await press(
+        page.getByRole('navigation', { name: '내 메뉴' }).getByRole('link', { name: /장바구니/ }),
+      )
       await page.waitForURL((url) => url.pathname === '/cart')
       await hold()
       await press(page.getByRole('button', { name: /개 주문하기$/ }))
@@ -319,6 +328,12 @@ export const scenes = [
       await press(dialog.getByRole('button', { name: '송장 등록' }))
       await page.getByText('송장을 등록했어요').first().waitFor()
       await hold()
+
+      // 가짜 택배사가 몇 초 뒤 배송 완료로 바꾼다. 기다렸다가 한 번 새로고침해 보여 준다
+      await sleep(6000)
+      await page.reload()
+      await beat()
+      await hold()
     },
   },
   {
@@ -389,6 +404,43 @@ export const scenes = [
       await beat()
       await press(page.getByRole('link', { name: /정산 \d+ 상세 보기/ }).first())
       await page.getByRole('dialog', { name: '정산 상세' }).waitFor()
+      await hold()
+    },
+  },
+  {
+    title: '구매자 리뷰 작성 (사진·영상)',
+    role: 'buyer',
+    async run({ win, state }) {
+      const { page } = win.buyer
+      await go(page, `/orders/${state.orderId}`)
+      await beat()
+      await press(page.getByRole('link', { name: '리뷰 쓰기' }).first())
+      await page.waitForURL((url) => url.pathname === '/reviews/new')
+      await beat()
+
+      await press(page.getByRole('button', { name: '별점 5점' }))
+      await typeIn(page.getByLabel('어떤 점이 좋았나요?'), REVIEW_CONTENT)
+
+      const files = [REVIEW_IMAGE, existsSync(REVIEW_VIDEO) ? REVIEW_VIDEO : null].filter(Boolean)
+      if (files.length === 1) console.log('\n🎞️  assets/review.mp4가 없어 사진만 올려요.')
+      await centerInView(page.getByRole('group', { name: /^사진·영상/ }))
+      await page.getByLabel('사진·영상 (선택) 파일 고르기').setInputFiles(files)
+
+      // 영상은 올리는 데 시간이 걸린다. 등록 버튼이 열릴 때까지 기다린다
+      const submit = page.getByRole('button', { name: '등록하기' })
+      for (let waited = 0; !(await submit.isEnabled()); waited += 1000) {
+        if (waited > 180_000) throw new Error('사진·영상 업로드가 3분 넘게 끝나지 않았어요')
+        await sleep(1000)
+      }
+      await hold()
+      await press(submit)
+      await page.getByRole('status').filter({ hasText: '리뷰를 등록했어요' }).first().waitFor()
+      await hold()
+
+      // 상품 상세에서 방금 쓴 리뷰를 보여 준다
+      await press(page.getByRole('link', { name: '상품 보기' }))
+      await page.waitForURL((url) => url.pathname.startsWith('/products/'))
+      await centerInView(page.getByText(REVIEW_CONTENT).first()).catch(() => {})
       await hold()
     },
   },
