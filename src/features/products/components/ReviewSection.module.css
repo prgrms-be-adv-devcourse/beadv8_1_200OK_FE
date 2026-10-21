@@ -112,10 +112,22 @@
   border-radius: var(--mantine-radius-sm);
   background-color: var(--pd-color-surface-subtle);
 
-  & img {
+  & img,
+  & video {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  /* 영상은 재생 버튼이 들어가도록 넓게 */
+  &[data-video] {
+    width: 10rem;
+    height: 5.625rem;
+    background-color: var(--pd-color-text);
+  }
+
+  &[data-video] video {
+    object-fit: contain;
   }
 }
 

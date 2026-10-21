@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { ProductStatus } from '@/shared/api/types'
+import { ProductStatus, ReviewMediaType } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { appleReviews, MY_MEMBER_ID, productDetailOf, sellers } from '../fixtures'
 import { ProductDetailView, type ProductDetailViewProps } from './ProductDetailView'
@@ -85,6 +85,18 @@ describe('ProductDetailView', () => {
 
     expect(screen.getAllByText('내 리뷰')).toHaveLength(1)
     expect(screen.getByRole('link', { name: '수정' })).toHaveAttribute('href', '/reviews/5003/edit')
+  })
+
+  it('리뷰 영상은 주소가 있으면 재생할 수 있게 그린다', () => {
+    const url = 'https://example.com/review.mp4'
+    const [first] = appleReviews
+    if (!first) throw new Error('리뷰 없음')
+    renderDetail({ reviews: [{ ...first, media: [{ type: ReviewMediaType.VIDEO, url }] }] })
+
+    const video = screen.getByLabelText('리뷰 영상 1')
+    expect(video.tagName).toBe('VIDEO')
+    expect(video).toHaveAttribute('src', url)
+    expect(video).toHaveAttribute('controls')
   })
 
   it('리뷰가 없으면 안내한다', () => {

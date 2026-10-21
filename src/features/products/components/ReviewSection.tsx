@@ -33,11 +33,15 @@ function ReviewMedia({ media }: { media: ProductReview['media'] }) {
   return (
     <ul className={classes.media} aria-label="첨부">
       {media.map((item, i) => {
-        const label = `${item.type === ReviewMediaType.VIDEO ? '리뷰 영상' : '리뷰 사진'} ${i + 1}`
+        const isVideo = item.type === ReviewMediaType.VIDEO
+        const label = `${isVideo ? '리뷰 영상' : '리뷰 사진'} ${i + 1}`
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: 첨부는 순서로 구분한다
-          <li key={i} className={classes.mediaItem}>
-            {item.type === ReviewMediaType.IMAGE && item.url ? (
+          <li key={i} className={classes.mediaItem} data-video={isVideo || undefined}>
+            {item.url && isVideo ? (
+              // biome-ignore lint/a11y/useMediaCaption: 구매자가 올린 리뷰 영상이라 자막이 없다
+              <video src={item.url} aria-label={label} controls playsInline preload="metadata" />
+            ) : item.url ? (
               <img src={item.url} alt={label} />
             ) : (
               <span role="img" aria-label={label} className={classes.mediaPlaceholder}>
