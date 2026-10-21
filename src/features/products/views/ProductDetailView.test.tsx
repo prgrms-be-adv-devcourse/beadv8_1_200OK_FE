@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { ProductStatus, ReviewMediaType } from '@/shared/api/types'
@@ -87,16 +87,44 @@ describe('ProductDetailView', () => {
     expect(screen.getByRole('link', { name: '수정' })).toHaveAttribute('href', '/reviews/5003/edit')
   })
 
-  it('리뷰 영상은 주소가 있으면 재생할 수 있게 그린다', () => {
-    const url = 'https://example.com/review.mp4'
+  it('리뷰 사진·영상은 썸네일을 누르면 갤러리에서 크게 보고, 영상은 거기서 재생한다', async () => {
+    const user = userEvent.setup()
+    const photo = 'https://example.com/review.jpg'
+    const clip = 'https://example.com/review.mp4'
     const [first] = appleReviews
     if (!first) throw new Error('리뷰 없음')
-    renderDetail({ reviews: [{ ...first, media: [{ type: ReviewMediaType.VIDEO, url }] }] })
+    renderDetail({
+      reviews: [
+        {
+          ...first,
+          media: [
+            { type: ReviewMediaType.IMAGE, url: photo },
+            { type: ReviewMediaType.VIDEO, url: clip },
+          ],
+        },
+      ],
+    })
 
-    const video = screen.getByLabelText('리뷰 영상 1')
-    expect(video.tagName).toBe('VIDEO')
-    expect(video).toHaveAttribute('src', url)
+    // 썸네일 영상은 재생 컨트롤 없이 첫 장면만 보인다
+    const videoThumb = screen.getByRole('button', { name: '리뷰 영상 2 크게 보기' })
+    expect(videoThumb.querySelector('video')).not.toHaveAttribute('controls')
+
+    await user.click(screen.getByRole('button', { name: '리뷰 사진 1 크게 보기' }))
+    const gallery = await screen.findByRole('dialog', { name: '리뷰 사진·영상 1 / 2' })
+    expect(within(gallery).getByRole('img', { name: '리뷰 사진 1' })).toHaveAttribute('src', photo)
+    expect(within(gallery).getByRole('button', { name: '이전 사진·영상' })).toBeDisabled()
+
+    await user.click(within(gallery).getByRole('button', { name: '다음 사진·영상' }))
+    const video = await screen.findByLabelText('리뷰 영상 2', { selector: 'video' })
+    expect(video).toHaveAttribute('src', clip)
     expect(video).toHaveAttribute('controls')
+    const second = screen.getByRole('dialog', { name: '리뷰 사진·영상 2 / 2' })
+
+    await user.click(within(second).getByRole('button', { name: '닫기' }))
+    // 닫힘 전환이 끝난 뒤 연 썸네일로 focus가 돌아온다
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '리뷰 사진 1 크게 보기' })).toHaveFocus(),
+    )
   })
 
   it('리뷰가 없으면 안내한다', () => {

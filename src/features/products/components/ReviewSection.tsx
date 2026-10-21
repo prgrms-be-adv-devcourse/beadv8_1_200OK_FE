@@ -1,11 +1,12 @@
 import { Badge, Button, Skeleton, Stack } from '@mantine/core'
-import { Image as ImageIcon, MessageSquareText, Play } from 'lucide-react'
+import { MessageSquareText } from 'lucide-react'
 import { Link } from 'react-router'
-import { type ProductReview, ReviewMediaType } from '@/shared/api/types'
+import type { ProductReview } from '@/shared/api/types'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import { toStarRating } from '@/shared/lib/rating'
 import { EmptyView, QueryState, RatingStars } from '@/shared/ui'
 import type { ListStatus } from '../types'
+import { ReviewMediaGallery } from './ReviewMediaGallery'
 import classes from './ReviewSection.module.css'
 
 // 상품 상세의 리뷰: 요약(평균 26 + 별 20 + 리뷰 수) → 목록(최신순) → 더 보기. 리뷰 0개면 “아직 리뷰가 없어요”(A-4)
@@ -26,37 +27,6 @@ export type ReviewSectionProps = {
   loadingMore?: boolean
   onLoadMore?: () => void
   onDeleteReview?: (reviewId: number) => void
-}
-
-function ReviewMedia({ media }: { media: ProductReview['media'] }) {
-  if (media.length === 0) return null
-  return (
-    <ul className={classes.media} aria-label="첨부">
-      {media.map((item, i) => {
-        const isVideo = item.type === ReviewMediaType.VIDEO
-        const label = `${isVideo ? '리뷰 영상' : '리뷰 사진'} ${i + 1}`
-        return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 첨부는 순서로 구분한다
-          <li key={i} className={classes.mediaItem} data-video={isVideo || undefined}>
-            {item.url && isVideo ? (
-              // biome-ignore lint/a11y/useMediaCaption: 구매자가 올린 리뷰 영상이라 자막이 없다
-              <video src={item.url} aria-label={label} controls playsInline preload="metadata" />
-            ) : item.url ? (
-              <img src={item.url} alt={label} />
-            ) : (
-              <span role="img" aria-label={label} className={classes.mediaPlaceholder}>
-                {item.type === ReviewMediaType.VIDEO ? (
-                  <Play size={20} aria-hidden="true" />
-                ) : (
-                  <ImageIcon size={20} aria-hidden="true" />
-                )}
-              </span>
-            )}
-          </li>
-        )
-      })}
-    </ul>
-  )
 }
 
 export function ReviewSection({
@@ -162,7 +132,7 @@ export function ReviewSection({
                     <RatingStars value={toStarRating(review.rating)} size={14} />
                     <span className={classes.help}>구매 옵션 · {review.optionName}</span>
                     <p className={classes.content}>{review.content}</p>
-                    <ReviewMedia media={review.media} />
+                    <ReviewMediaGallery media={review.media} />
                   </article>
                 )
               })}
