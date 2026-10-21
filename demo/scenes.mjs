@@ -38,6 +38,8 @@ export function createState() {
     password: 'Demo1234!x',
     buyer: { loginId: `db${suffix}`, nickname: '시연구매자', signedUp: false },
     seller: { loginId: `ds${suffix}` },
+    // 같은 상품(재고 1개)을 장바구니에 담아 두는 구매 경쟁자. 12번 장면에서 품절을 보여 준다
+    buyer2: { loginId: `dr${suffix}` },
     storeName: `[시연] 햇살농원 ${suffix.slice(-4)}`,
     businessNumber,
     productName: `[시연] 청송 꿀사과 ${suffix.slice(-4)}`,
@@ -46,17 +48,22 @@ export function createState() {
   }
 }
 
-/** 판매자 계정은 화면 밖에서 만든다(가입 장면은 구매자로 한 번만 보여 준다) */
+/** 판매자·구매자2 계정은 화면 밖에서 만든다(가입 장면은 구매자로 한 번만 보여 준다) */
 export async function prepare(state) {
+  await signupSilently(state.seller.loginId, state.password, '김시연', '시연판매자')
+  await signupSilently(state.buyer2.loginId, state.password, '박경쟁', '경쟁구매자')
+}
+
+async function signupSilently(loginId, password, name, nickname) {
   try {
     await api('/members/signup', {
       method: 'POST',
       body: {
-        loginId: state.seller.loginId,
-        password: state.password,
-        email: `${state.seller.loginId}@example.com`,
-        name: '김시연',
-        nickname: '시연판매자',
+        loginId,
+        password,
+        email: `${loginId}@example.com`,
+        name,
+        nickname,
         termsAgreed: true,
         privacyAgreed: true,
       },
@@ -208,7 +215,8 @@ export const scenes = [
       await typeIn(page.locator('#option-0-name'), '3kg 특품')
       await typeIn(page.locator('#option-0-salePrice'), PRODUCT_PRICE)
       await typeIn(page.locator('#option-0-listPrice'), 40_000)
-      await typeIn(page.locator('#option-0-totalStock'), 100)
+      // 재고 1개: 구매자가 사면 구매자2의 장바구니에서 품절이 된다(12번 장면)
+      await typeIn(page.locator('#option-0-totalStock'), 1)
 
       await press(page.locator('label').filter({ hasText: /^판매 중$/ }))
       await tick(page.getByRole('switch'))
@@ -227,6 +235,18 @@ export const scenes = [
         .sort((a, b) => b.productId - a.productId)[0]
       if (!product) throw new Error('등록한 상품을 찾지 못했어요')
       state.productId = product.productId
+
+      // 구매자2도 같은 상품을 장바구니에 담아 둔다(화면 밖)
+      if (state.buyer2) {
+        const detail = await api(`/products/${state.productId}`)
+        state.optionId = detail.options[0].optionId
+        const buyer2Token = await apiToken(state.buyer2.loginId, state.password)
+        await api('/cart/items', {
+          token: buyer2Token,
+          method: 'POST',
+          body: { productOptionId: state.optionId, quantity: 1 },
+        })
+      }
     },
   },
   {
@@ -441,6 +461,40 @@ export const scenes = [
       await press(page.getByRole('link', { name: '상품 보기' }))
       await page.waitForURL((url) => url.pathname.startsWith('/products/'))
       await centerInView(page.getByText(REVIEW_CONTENT).first()).catch(() => {})
+      await hold()
+    },
+  },
+  {
+    title: '구매자2 장바구니에서 품절 확인',
+    role: 'buyer2',
+    async run({ win, state }) {
+      if (!state.buyer2)
+        throw new Error('구매자2가 없는 시연 기록이에요. 처음부터 다시 실행해 주세요')
+      const { page } = win.buyer2
+      await uiLogin(page, state.buyer2.loginId, state.password)
+      // 장바구니 조회에 상품 번호가 없어 앱은 담을 때 이 브라우저에 '옵션 → 상품'을 적어 둔다
+      // (features/cart/optionProducts.ts). 구매자2는 화면 밖에서 담았으니 같은 값을 넣어 준다
+      await page.evaluate(
+        ([optionId, productId]) => {
+          const key = 'paldo.cart.optionProducts'
+          const map = JSON.parse(localStorage.getItem(key) ?? '{}')
+          localStorage.setItem(key, JSON.stringify({ ...map, [optionId]: productId }))
+        },
+        [state.optionId, state.productId],
+      )
+      await beat()
+      await press(
+        page.getByRole('navigation', { name: '내 메뉴' }).getByRole('link', { name: /장바구니/ }),
+      )
+      await page.waitForURL((url) => url.pathname === '/cart')
+      // 먼저 담아 두었지만 다른 구매자가 마지막 1개를 사서 구매할 수 없다
+      await centerInView(page.getByText('지금 구매할 수 없는 상품이 있어요'))
+      await hold()
+      await hold()
+
+      // 상품 상세에서도 품절로 보인다
+      await go(page, `/products/${state.productId}`)
+      await beat()
       await hold()
     },
   },

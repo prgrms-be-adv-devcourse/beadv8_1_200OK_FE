@@ -52,7 +52,12 @@ export async function saveState(state) {
 
 // ---- 창 ----
 
-const ROLE_LABELS = { buyer: '구매자', seller: '판매자', admin: '관리자' }
+const ROLE_LABELS = {
+  buyer: '구매자',
+  buyer2: '구매자2 (경쟁자)',
+  seller: '판매자',
+  admin: '관리자',
+}
 
 /**
  * 역할마다 브라우저를 따로 띄운다. 세션(sessionStorage)이 창마다 분리된다.
@@ -68,7 +73,7 @@ export async function openWindows({ record }) {
   const slowMo = Number(process.env.DEMO_SLOWMO ?? 120)
   const windows = {}
 
-  for (const role of ['buyer', 'seller', 'admin']) {
+  for (const role of Object.keys(ROLE_LABELS)) {
     const browser = await chromium.launch({
       headless: false,
       slowMo,
