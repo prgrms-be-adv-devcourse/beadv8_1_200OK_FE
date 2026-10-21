@@ -200,12 +200,19 @@ export function SellerApplyView({
               이전
             </Button>
           )}
+          {/* key가 다르면 다른 <button>이 된다. 같은 요소를 재사용해 type만 바뀌면 '다음' 클릭이 제출로 처리된다 */}
           {step < LAST ? (
-            <Button size="lg" className={classes.primary} onClick={next}>
+            <Button key="next" size="lg" className={classes.primary} onClick={next}>
               다음
             </Button>
           ) : (
-            <Button type="submit" size="lg" className={classes.primary} loading={submitting}>
+            <Button
+              key="submit"
+              type="submit"
+              size="lg"
+              className={classes.primary}
+              loading={submitting}
+            >
               판매자 등록 신청하기
             </Button>
           )}

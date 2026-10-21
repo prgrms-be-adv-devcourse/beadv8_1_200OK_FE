@@ -38,6 +38,21 @@ describe('SellerApplyView', () => {
     expect(onSubmit).toHaveBeenCalledWith({ ...applyValues, businessNumber: '5128104273' })
   })
 
+  // 같은 <button>을 재사용해 type만 submit으로 바뀌면, 브라우저가 '다음' 클릭을 제출로 처리해 확인 단계 없이 신청된다
+  it('다음 버튼과 신청 버튼은 다른 요소라 다음을 눌러도 제출되지 않는다', async () => {
+    const { user, onSubmit } = renderApply()
+    await user.type(screen.getByLabelText('상호명'), applyValues.storeName)
+    await user.type(screen.getByLabelText('대표자명'), applyValues.representativeName)
+    await user.type(screen.getByLabelText('사업자등록번호'), '5128104273')
+    await user.type(screen.getByLabelText('통신판매업 신고번호'), applyValues.mailOrderNumber)
+    const next = screen.getByRole('button', { name: '다음' })
+    await user.click(next)
+
+    const submit = await screen.findByRole('button', { name: '판매자 등록 신청하기' })
+    expect(submit).not.toBe(next)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
   it('사업자번호가 중복이면 1단계로 돌아가 그 칸에 알린다', async () => {
     renderApply({
       defaultValues: applyValues,
