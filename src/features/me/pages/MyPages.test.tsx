@@ -90,7 +90,7 @@ describe('MyPage', () => {
     expect(await screen.findByText('등록 전이에요')).toBeInTheDocument()
   })
 
-  it('판매자는 기본 배송지를 부르지 않는다(구매자 전용)', async () => {
+  it('관리자는 기본 배송지를 부르지 않는다(구매자 API)', async () => {
     let called = false
     server.use(
       http.get('*/api/v1/shipments/addresses/default', () => {
@@ -98,10 +98,16 @@ describe('MyPage', () => {
         return new HttpResponse(null, { status: 204 })
       }),
     )
+    setAccessToken(fakeToken({ role: MemberRole.ADMIN }))
+    renderMy()
+    await screen.findByRole('heading', { level: 1 })
+    expect(called).toBe(false)
+  })
+
+  it('판매자도 기본 배송지를 불러온다(BUYER 권한을 함께 가짐)', async () => {
     setAccessToken(fakeToken({ role: MemberRole.SELLER }))
     renderMy()
-    await screen.findByRole('link', { name: '판매자 센터로 가기' })
-    expect(called).toBe(false)
+    expect(await screen.findByText('등록 전이에요')).toBeInTheDocument()
   })
 
   it('잔액을 못 받으면 다시 시도를 보여 준다', async () => {
@@ -372,8 +378,8 @@ describe('AccountPage', () => {
       expect(screen.getByLabelText('연락처')).toHaveFocus()
     })
 
-    it('판매자 토큰이면 부르지 않고 구매자 전용이라고 안내한다', async () => {
-      setAccessToken(fakeToken({ role: MemberRole.SELLER }))
+    it('관리자 토큰이면 부르지 않고 구매자 전용이라고 안내한다', async () => {
+      setAccessToken(fakeToken({ role: MemberRole.ADMIN }))
       renderAt('/me/account?tab=address')
       expect(
         await screen.findByText('기본 배송지는 구매자 계정에서만 쓸 수 있어요'),

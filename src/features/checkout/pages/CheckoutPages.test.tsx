@@ -290,8 +290,8 @@ describe('CheckoutPage', () => {
       expect(await screen.findByRole('button', { name: '배송지 입력' })).toBeInTheDocument()
     })
 
-    it('구매자가 아니면(판매자) 기본 배송지를 부르지 않는다', async () => {
-      setAccessToken(fakeToken({ memberId: 3, role: MemberRole.SELLER }))
+    it('관리자는 기본 배송지를 부르지 않는다', async () => {
+      setAccessToken(fakeToken({ memberId: 3, role: MemberRole.ADMIN }))
       let called = false
       server.use(
         http.get('*/api/v1/shipments/addresses/default', () => {

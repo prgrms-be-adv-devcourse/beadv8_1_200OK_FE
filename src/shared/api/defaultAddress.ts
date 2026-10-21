@@ -11,7 +11,7 @@ import {
 } from './types'
 
 // 구매자 기본 배송지(회원당 1개)는 checkout(주문서 처음 값)과 me(계정 관리·마이페이지)가 함께 써서 shared에 둔다(ADR-0003).
-// BUYER만 부를 수 있다(판매자·관리자는 403) → 조회 훅은 토큰 역할이 BUYER일 때만 요청한다.
+// 구매자 API라 관리자(ADMIN 단독 토큰)는 못 부른다. 승인된 판매자는 BUYER 권한도 함께 받아 부를 수 있다 → 조회 훅은 BUYER·SELLER일 때만 요청한다.
 
 // ✅ GET /api/v1/shipments/addresses/default → 200 AddressResponse, 204 = 등록한 기본 배송지 없음(오류 아님 → null)
 export async function fetchDefaultAddress(): Promise<ShipmentAddress | null> {
@@ -33,10 +33,10 @@ export const defaultAddressQueryOptions = () =>
     staleTime: 60_000,
   })
 
-/** 내 기본 배송지. BUYER가 아니면 요청하지 않는다(isPending이 계속 true이므로 enabled를 같이 본다) */
+/** 내 기본 배송지. BUYER·SELLER가 아니면(관리자) 요청하지 않는다(isPending이 계속 true이므로 enabled를 같이 본다) */
 export function useDefaultAddress() {
   const role = useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)?.role
-  const enabled = role === MemberRole.BUYER
+  const enabled = role === MemberRole.BUYER || role === MemberRole.SELLER
   return { ...useQuery({ ...defaultAddressQueryOptions(), enabled }), enabled }
 }
 
