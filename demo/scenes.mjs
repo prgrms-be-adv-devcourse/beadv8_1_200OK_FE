@@ -1,7 +1,22 @@
 // 시연 장면. 각 장면은 화면을 실제로 조작하고, 다음 장면에 필요한 값은 state에 남긴다.
 // 사람이 하는 일: 시작할 때 관리자 로그인, 5번 장면 끝의 토스 테스트 결제.
+// 누르는 동작은 press·tick으로 한다(화면 가운데로 옮기고 강조한 뒤 누른다).
 import { fileURLToPath } from 'node:url'
-import { api, apiToken, ask, beat, go, hold, showRole, sleep, typeIn, uiLogin } from './lib.mjs'
+import {
+  api,
+  apiToken,
+  ask,
+  beat,
+  centerInView,
+  go,
+  hold,
+  press,
+  showRole,
+  sleep,
+  tick,
+  typeIn,
+  uiLogin,
+} from './lib.mjs'
 
 const PRODUCT_IMAGE = fileURLToPath(new URL('./assets/product.png', import.meta.url))
 const PRODUCT_PRICE = 30_000
@@ -53,18 +68,21 @@ export const scenes = [
       const { page } = win.buyer
       const { loginId, nickname } = state.buyer
       await go(page, '/signup')
+      await beat()
       await typeIn(page.getByLabel('아이디', { exact: true }), loginId)
       await typeIn(page.getByLabel('비밀번호', { exact: true }), state.password)
       await typeIn(page.getByLabel('비밀번호 확인', { exact: true }), state.password)
       await typeIn(page.getByLabel('이메일', { exact: true }), `${loginId}@example.com`)
       await typeIn(page.getByLabel('이름', { exact: true }), '이구매')
       await typeIn(page.getByLabel('닉네임', { exact: true }), nickname)
-      await page.getByLabel('약관 전체 동의').check()
-      await page.getByRole('button', { name: '가입하기' }).click()
+      await tick(page.getByLabel('약관 전체 동의'))
+      await press(page.getByRole('button', { name: '가입하기' }))
       await page.getByRole('heading', { name: /가입을 환영해요/ }).waitFor()
-      await sleep(1500)
+      await hold()
+
       await uiLogin(page, loginId, state.password)
       state.buyer.signedUp = true
+      await beat()
 
       // 주문서에 쓸 기본 배송지는 화면 밖에서 저장한다(우편번호 찾기는 외부 팝업이라 자동화하지 않는다)
       const token = await apiToken(loginId, state.password)
@@ -88,14 +106,22 @@ export const scenes = [
       const { page } = win.seller
       await uiLogin(page, state.seller.loginId, state.password)
       await go(page, '/seller/apply')
+      await beat()
       await typeIn(page.getByLabel('상호명', { exact: true }), state.storeName)
       await typeIn(page.getByLabel('대표자명', { exact: true }), '김시연')
       await typeIn(page.getByLabel('사업자등록번호', { exact: true }), state.businessNumber)
       await typeIn(page.getByLabel('통신판매업 신고번호', { exact: true }), '제2026-시연-0001호')
-      await page.getByRole('button', { name: '다음', exact: true }).click()
-      await sleep(1000)
-      await page.getByRole('button', { name: '판매자 등록 신청하기' }).click()
-      await page.getByRole('heading', { name: '판매자 등록을 신청했어요' }).waitFor()
+      await press(page.getByRole('button', { name: '다음', exact: true }))
+      // 신청 내용 확인 단계
+      await hold()
+      await press(page.getByRole('button', { name: '판매자 등록 신청하기' }))
+      // 완료 제목은 h2지만 role="status"라 heading으로 찾을 수 없다
+      await page
+        .getByRole('status')
+        .filter({ hasText: '판매자 등록을 신청했어요' })
+        .first()
+        .waitFor()
+      await hold()
     },
   },
   {
@@ -104,17 +130,33 @@ export const scenes = [
     async run({ win, state }) {
       const { page } = win.admin
       await go(page, '/admin/sellers')
-      await page.getByRole('link', { name: `${state.storeName} 신청 보기` }).click()
-      await page.getByRole('button', { name: '심사 시작' }).click()
-      await page.getByRole('button', { name: '승인', exact: true }).click()
+      await beat()
+      // 심사 대기 탭에 있으면 목록에서 열고, 이미 심사 중이면(이어 하기) 상세로 바로 간다
+      const row = page.getByRole('link', { name: `${state.storeName} 신청 보기` })
+      if (await row.isVisible().catch(() => false)) {
+        await press(row)
+      } else {
+        await go(page, `/admin/sellers/${await findApplicationId(state)}`)
+      }
+      // 신청 정보
+      await hold()
+      const start = page.getByRole('button', { name: '심사 시작' })
+      const approve = page.getByRole('button', { name: '승인', exact: true })
+      await start.or(approve).first().waitFor()
+      if (await start.isVisible()) {
+        await press(start)
+        await beat()
+      }
+      await press(approve)
       await page.getByText('판매자를 승인했어요').first().waitFor()
+      await hold()
 
       // 판매자 창: 신청 현황을 다시 열면 새 토큰을 받고 판매자 센터로 넘어간다
-      await sleep(1500)
       await showRole(win, 'seller')
       const seller = win.seller.page
       await go(seller, '/seller/apply/status')
       await seller.waitForURL((url) => url.pathname === '/seller')
+      await hold()
 
       // 상점 프로필은 화면 밖에서 등록한다
       const token = await apiToken(state.seller.loginId, state.password)
@@ -140,11 +182,15 @@ export const scenes = [
     async run({ win, state }) {
       const { page } = win.seller
       await go(page, '/seller/products/new')
+      await beat()
       await typeIn(page.getByLabel('상품명', { exact: true }), state.productName)
-      await page.getByLabel('상품 사진 파일 고르기').setInputFiles(PRODUCT_IMAGE)
+      const photo = page.getByLabel('상품 사진 파일 고르기')
+      await centerInView(page.getByRole('group', { name: /^상품 사진/ }))
+      await photo.setInputFiles(PRODUCT_IMAGE)
+      await beat()
 
       const editor = page.locator('#product-description')
-      await editor.waitFor()
+      await centerInView(editor)
       await editor.click()
       await page.keyboard.type('청송 일교차가 키운 아삭한 꿀사과예요. 산지에서 바로 보내 드려요.', {
         delay: 25,
@@ -155,18 +201,15 @@ export const scenes = [
       await typeIn(page.locator('#option-0-listPrice'), 40_000)
       await typeIn(page.locator('#option-0-totalStock'), 100)
 
-      // 위아래 고정 막대에 가리지 않도록 화면 가운데로 옮긴 뒤 누른다
-      const onSale = page.locator('label').filter({ hasText: /^판매 중$/ })
-      await centerInView(onSale)
-      await onSale.click()
-      const visibility = page.getByRole('switch')
-      await centerInView(visibility)
-      await visibility.check()
+      await press(page.locator('label').filter({ hasText: /^판매 중$/ }))
+      await tick(page.getByRole('switch'))
       await page.getByText('공개', { exact: true }).waitFor()
+      await beat()
 
       // 사진 업로드가 끝나야 버튼이 열린다(click이 활성화를 기다린다)
-      await page.getByRole('button', { name: '등록하기' }).click()
+      await press(page.getByRole('button', { name: '등록하기' }))
       await page.waitForURL((url) => url.pathname === '/seller/products')
+      await hold()
 
       const token = await apiToken(state.seller.loginId, state.password)
       const { content } = await api('/sellers/me/products?page=0&size=20', { token })
@@ -178,26 +221,49 @@ export const scenes = [
     },
   },
   {
-    title: '구매자 장바구니 담기 → 토스 충전창 열기',
+    title: '구매자 장바구니 → 주문서(예치금 부족) → 충전',
     role: 'buyer',
     async run({ win, state }) {
       const { page } = win.buyer
       await go(page, `/products/${state.productId}`)
       await beat()
-      await page.getByRole('button', { name: '장바구니 담기' }).click()
+      await press(page.getByRole('button', { name: '장바구니 담기' }))
       await page.getByText('장바구니에 담았어요').first().waitFor()
       await hold()
 
-      await go(page, '/wallet/charge')
-      await beat()
-      await page.getByRole('button', { name: '+5만' }).click()
-      await beat()
-      await page.getByRole('button', { name: /원 충전하기$/ }).click()
+      // 알림의 [장바구니 보기]로 가서 주문한다
+      const toCart = page.getByRole('button', { name: '장바구니 보기' }).first()
+      if (await toCart.isVisible().catch(() => false)) await press(toCart)
+      else await go(page, '/cart')
+      await page.waitForURL((url) => url.pathname === '/cart')
+      await hold()
+      await press(page.getByRole('button', { name: /개 주문하기$/ }))
+      await page.waitForURL((url) => url.pathname === '/checkout')
 
+      // 주문서: 예치금이 부족하다는 안내에서 충전하러 간다
+      const toCharge = page.getByRole('link', { name: '예치금 충전하기' })
+      await toCharge.waitFor()
+      await hold()
+      await press(toCharge)
+      await page.waitForURL((url) => url.pathname === '/wallet/charge')
+      await beat()
+      const fillShortfall = page.getByRole('button', { name: '부족한 금액만큼' })
+      await press(
+        (await fillShortfall.isVisible())
+          ? fillShortfall
+          : page.getByRole('button', { name: '+5만' }),
+      )
+      await beat()
+      await press(page.getByRole('button', { name: /원 충전하기$/ }))
+
+      // 첫 충전이면 약관 동의 창이 뜬다. 여기서 멈추고 발표자가 직접 동의한다
       const terms = page.getByRole('dialog', { name: '첫 충전 전에 약관에 동의해 주세요' })
-      if (await terms.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await terms.getByLabel('전체 동의').check()
-        await terms.getByRole('button', { name: '동의하고 충전하기' }).click()
+      await terms.waitFor({ timeout: 5000 }).catch(() => {})
+      if (await terms.isVisible()) {
+        console.log(
+          '\n📝 약관 동의 창에서 직접 동의하고 [동의하고 충전하기]를 눌러 주세요. 이어서 토스 결제창이 열려요.',
+        )
+        await terms.waitFor({ state: 'hidden', timeout: 0 })
       }
 
       console.log(
@@ -209,20 +275,26 @@ export const scenes = [
     },
   },
   {
-    title: '구매자 주문·예치금 결제',
+    title: '구매자 주문서로 돌아가 예치금 결제',
     role: 'buyer',
     async run({ win, state }) {
       const { page } = win.buyer
-      await go(page, '/cart')
-      await beat()
-      await page.getByRole('button', { name: /개 주문하기$/ }).click()
+      // 충전 완료 화면의 [주문서로 돌아가기]로 이어간다. 그 화면이 아니면(이어 하기) 장바구니에서 다시 주문한다
+      const back = page.getByRole('link', { name: '주문서로 돌아가기' })
+      if (await back.isVisible().catch(() => false)) {
+        await press(back)
+      } else {
+        await go(page, '/cart')
+        await beat()
+        await press(page.getByRole('button', { name: /개 주문하기$/ }))
+      }
       await page.waitForURL((url) => url.pathname === '/checkout')
-      // 배송지·배송비·예치금 잔액을 보여 준다
+      // 배송지·배송비·충전된 예치금 잔액을 보여 준다
       await page.getByRole('button', { name: /원 결제하기$/ }).waitFor()
       await hold()
-      await page.getByLabel('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요').check()
+      await tick(page.getByLabel('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
       await beat()
-      await page.getByRole('button', { name: /원 결제하기$/ }).click()
+      await press(page.getByRole('button', { name: /원 결제하기$/ }))
       await page.waitForURL(/\/checkout\/complete/, { timeout: 30_000 })
       state.orderId = Number(new URL(page.url()).searchParams.get('orderId'))
       await page.getByRole('heading', { name: '주문이 완료됐어요' }).waitFor()
@@ -235,15 +307,16 @@ export const scenes = [
     async run({ win, state }) {
       const { page } = win.seller
       await go(page, '/seller/orders')
-      await page.getByRole('button', { name: `주문 ${state.orderId} 송장 등록` }).waitFor()
+      const register = page.getByRole('button', { name: `주문 ${state.orderId} 송장 등록` })
+      await register.waitFor()
       await hold()
-      await page.getByRole('button', { name: `주문 ${state.orderId} 송장 등록` }).click()
+      await press(register)
       const dialog = page.getByRole('dialog', { name: '송장 등록' })
       await beat()
       const trackingNumber = `61${Date.now().toString().slice(-10)}`
       await typeIn(dialog.getByLabel('송장번호'), trackingNumber)
       await beat()
-      await dialog.getByRole('button', { name: '송장 등록' }).click()
+      await press(dialog.getByRole('button', { name: '송장 등록' }))
       await page.getByText('송장을 등록했어요').first().waitFor()
       await hold()
     },
@@ -262,9 +335,9 @@ export const scenes = [
         await page.reload()
       }
       await hold()
-      await confirm.click()
+      await press(confirm)
       await beat()
-      await page.getByRole('dialog').getByRole('button', { name: '구매확정', exact: true }).click()
+      await press(page.getByRole('dialog').getByRole('button', { name: '구매확정', exact: true }))
       await page.getByText('구매확정했어요').first().waitFor()
       await hold()
     },
@@ -296,10 +369,10 @@ export const scenes = [
       }
 
       await hold()
-      await page.getByRole('button', { name: '대기 건너뛰고 실행 (테스트용)' }).click()
+      await press(page.getByRole('button', { name: '대기 건너뛰고 실행 (테스트용)' }))
       const dialog = page.getByRole('dialog', { name: '대기 기간을 건너뛰고 정산할까요?' })
       await beat()
-      await dialog.getByRole('button', { name: '건너뛰고 실행' }).click()
+      await press(dialog.getByRole('button', { name: '건너뛰고 실행' }))
       await page.getByText('정산 배치를 실행했어요').first().waitFor({ timeout: 60_000 })
       await hold()
     },
@@ -314,18 +387,20 @@ export const scenes = [
       await hold()
       await go(page, '/seller/payouts')
       await beat()
-      await page
-        .getByRole('link', { name: /정산 \d+ 상세 보기/ })
-        .first()
-        .click()
+      await press(page.getByRole('link', { name: /정산 \d+ 상세 보기/ }).first())
       await page.getByRole('dialog', { name: '정산 상세' }).waitFor()
       await hold()
     },
   },
 ]
 
-function centerInView(locator) {
-  return locator.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+/** 판매자 계정의 가장 최근 신청 번호 */
+async function findApplicationId(state) {
+  const token = await apiToken(state.seller.loginId, state.password)
+  const { applications } = await api('/sellers/me/applications', { token })
+  if (!applications.length)
+    throw new Error('판매자 신청을 찾지 못했어요. 2번 장면부터 다시 해 주세요')
+  return applications[0].applicationId
 }
 
 /** 중간부터 다시 시작할 때 구매자·판매자 창에 다시 로그인한다(세션은 창을 닫으면 사라진다) */

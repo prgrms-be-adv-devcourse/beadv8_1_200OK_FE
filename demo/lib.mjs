@@ -56,12 +56,12 @@ const ROLE_LABELS = { buyer: '구매자', seller: '판매자', admin: '관리자
 
 /**
  * 역할마다 브라우저를 따로 띄운다. 세션(sessionStorage)이 창마다 분리된다.
- * 세 창은 모두 화면 왼쪽 같은 자리(폭 80%)에 두고, 장면에 맞는 창 하나만 펼친다(showRole).
- * 오른쪽 20%는 터미널 자리다.
+ * 세 창은 모두 화면 왼쪽 같은 자리(폭 75%)에 두고, 장면에 맞는 창 하나만 펼친다(showRole).
+ * 오른쪽 25%는 터미널 자리다.
  */
 const screenW = Number(process.env.DEMO_SCREEN_W ?? 1920)
 const screenH = Number(process.env.DEMO_SCREEN_H ?? 1080)
-const windowW = Math.floor(screenW * Number(process.env.DEMO_WIDTH_RATIO ?? 0.8))
+const windowW = Math.floor(screenW * Number(process.env.DEMO_WIDTH_RATIO ?? 0.75))
 
 export async function openWindows({ record }) {
   const scale = Number(process.env.DEMO_SCALE ?? 1)
@@ -144,8 +144,49 @@ export async function closeWindows(windows) {
 
 export const go = (page, path) => page.goto(`${BASE}${path}`)
 
+/** 화면 가운데로 부드럽게 옮긴다. 고정 막대에 가리거나 화면 밖에 있는 요소를 관객이 보게 한다 */
+export async function centerInView(locator) {
+  await locator.waitFor()
+  await locator.evaluate((element) =>
+    element.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+  )
+  await sleep(400)
+}
+
+/** 누를 요소에 잠깐 테두리를 그린다 */
+function spotlight(locator) {
+  return locator.evaluate((element) => {
+    const { outline, outlineOffset } = element.style
+    element.style.outline = '3px solid rgba(255, 140, 0, .9)'
+    element.style.outlineOffset = '3px'
+    setTimeout(() => {
+      element.style.outline = outline
+      element.style.outlineOffset = outlineOffset
+    }, 1200)
+  })
+}
+
+const pressDelay = () => sleep(Number(process.env.DEMO_PRESS ?? 700))
+
+/** 보이는 자리로 옮기고 강조한 뒤 누른다 */
+export async function press(locator) {
+  await centerInView(locator)
+  await spotlight(locator).catch(() => {})
+  await pressDelay()
+  await locator.click()
+}
+
+/** 체크박스·스위치를 보이는 자리로 옮기고 강조한 뒤 켠다 */
+export async function tick(locator) {
+  await centerInView(locator)
+  await spotlight(locator).catch(() => {})
+  await pressDelay()
+  await locator.check()
+}
+
 /** 관객이 보이도록 한 글자씩 입력한다 */
 export async function typeIn(locator, text) {
+  await centerInView(locator)
   await locator.click()
   await locator.fill('')
   await locator.pressSequentially(String(text), { delay: 40 })
@@ -155,7 +196,7 @@ export async function uiLogin(page, loginId, password) {
   await go(page, '/login')
   await typeIn(page.getByLabel('아이디', { exact: true }), loginId)
   await typeIn(page.getByLabel('비밀번호', { exact: true }), password)
-  await page.getByRole('button', { name: '로그인', exact: true }).click()
+  await press(page.getByRole('button', { name: '로그인', exact: true }))
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
 }
 
