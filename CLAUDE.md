@@ -6,10 +6,10 @@ React 19 · TypeScript · Vite · React Router(data mode) · TanStack Query · M
 ## 명령어
 
 ```bash
-pnpm dev          # 개발 서버. /api는 VITE_API_PROXY_TARGET으로 프록시 (아래 '서버 연결')
-pnpm typecheck    # tsc -b
-pnpm check        # Biome lint + format (고칠 때 check:fix)
-pnpm test         # Vitest (특정 폴더: pnpm vitest run src/features/cart)
+pnpm dev          # vite(5173) + BFF(8787)를 같이 띄워요. /api·/bff는 BFF를 거쳐요 (아래 'BFF')
+pnpm typecheck    # tsc -b + bff
+pnpm check        # Biome lint + format (고칠 때 check:fix). bff/도 포함
+pnpm test         # Vitest 프론트 + bff (특정 폴더: pnpm vitest run src/features/cart)
 ```
 
 - Node 24가 필요해요(`.nvmrc`). 셸 기본 `node`가 23이면 vitest 워커가 뜨지 않아요. 비대화형 셸에서는 nvm의 Node 24 `bin`을 PATH 앞에 두고 실행해요.
@@ -23,6 +23,7 @@ src/features/  화면 단위 기능. 다른 feature는 index.ts로 공개한 것
 src/shared/    api(요청·토큰·오류) · ui(공통 컴포넌트) · lib(유틸·라벨·상수) · styles(테마·토큰)
 src/mocks/     MSW 핸들러 — 테스트 전용
 src/test/      Vitest setup, render 래퍼, fakeToken
+bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 ```
 
 - 의존 방향은 `app → features → shared`. Biome `noRestrictedImports`가 막아요: feature 내부(`api`·`queries`·`schemas`·`components`) 직접 import 금지, shared에서 features·app import 금지, 앱 코드에서 mocks import 금지.
@@ -37,7 +38,7 @@ src/test/      Vitest setup, render 래퍼, fakeToken
 ## 서버 연결
 
 - 요청은 `apiClient`(`shared/api/client.ts`)로만 보내요. 경로는 `/api/v1/...` 그대로 쓰고, 백엔드 주소는 코드에 적지 않고 env로만 정해요(`.env.example`).
-  - `VITE_API_PROXY_TARGET`: 개발 서버 프록시가 `/api`를 보낼 백엔드. 지금은 로컬 서버(`http://localhost:8080`)예요.
+  - `VITE_BFF_PROXY_TARGET`: 개발 서버 프록시가 `/api`·`/bff`를 보낼 BFF(기본 `http://localhost:8787`). 백엔드 주소는 BFF의 `bff/.env` `BACKEND_URL`(기본 `http://localhost:8080`)이에요.
   - `VITE_API_BASE_URL`: 브라우저가 직접 부를 API 오리진(`/api/v1` 없이). 비우면 같은 오리진으로 보내 프록시를 타요. API 서버가 배포되면 여기에 그 오리진을 넣어요(백엔드 CORS가 열려 있어야 해요).
 - API 계약의 기준은 백엔드 `dev` 브랜치의 Swagger(`{백엔드}/v3/api-docs`)예요. 아직 API 서버가 배포 전이라 로컬 서버 기준이에요. `bruno_for_front/`는 dev 기준 요청 예시·오류 케이스·타입 참고용이에요.
 - **인증**: 로그인 accessToken(30분)·refreshToken은 메모리 + sessionStorage에 둬요(`shared/api/authToken.ts`). 새로고침해도 유지되고, 탭을 닫으면 다시 로그인해요. 역할·회원 번호는 토큰 payload(`sub`·`roles[]`)에서 읽어요(`app/session.ts`의 `useSession`). 판매자 승인처럼 권한이 바뀌면 새 토큰을 받아야 해요(`reissueSession()`).
@@ -50,6 +51,19 @@ src/test/      Vitest setup, render 래퍼, fakeToken
   - 서버에 아직 없는 API는 404 `"No static resource …"`, 아직 막아 둔 기능은 501이 와요. 원문은 화면에 내지 말고 해요체 안내로 바꿔요(예: `features/admin/errors.ts`).
 - **업로드**: `useMediaUploads(MediaPurpose.X)`(`shared/ui`)와 `PhotoUploader`를 같이 써요. 제출할 때는 `urls`(다 올린 서버 주소)만 보내고, `uploading`이면 제출을 막아요.
 - 실서버 확인은 연결한 백엔드에 curl로 해요. 계정은 `POST /api/v1/members/signup`으로 새로 만들어요(가입하면 BUYER). 남의 데이터는 건드리지 않고, 확인용으로 만든 상품은 지워요.
+
+## BFF
+
+- 결정 근거는 ADR-0006(`docs/private/architecture/decisions/0006-bff-session.md`). 토큰을 브라우저에서 걷어내고, 백엔드가 서비스로 나뉘었을 때 화면용 응답을 합치려고 둬요.
+- **지금은 1단계예요**: BFF가 `/api/v1/*`을 경로 그대로 백엔드로 넘기고, 브라우저가 보낸 `Authorization`도 그대로 넘겨요. 그래서 프론트의 토큰 인증(위 '인증')은 바뀌지 않았어요. 쿠키 세션(`/bff/session/*`)과 합친 응답(`GET /bff/products/:id/detail`)은 만들어 두었지만 프론트는 아직 쓰지 않아요.
+  - 2단계(운영 EC2에 BFF 배포 뒤): 프론트를 쿠키 세션으로 바꾸고 `authToken.ts`·`reissue.ts`를 걷어내요. `TODO(bff-2단계)`를 따라가요. 운영에 BFF가 없을 때 바꾸면 로그인이 깨져요.
+- Node 24가 `.ts`를 그대로 실행해요(빌드 단계 없음). 그래서 BFF 코드는 import에 `.ts`를 붙이고 enum·생성자 매개변수 속성처럼 지울 수 없는 문법은 쓰지 않아요(`erasableSyntaxOnly`).
+- 백엔드 모듈별 클라이언트 주소는 env로 받아요(`MEMBER_API_URL` 등, 없으면 `BACKEND_URL`). 경로 → 모듈 표는 `bff/src/upstream.ts`예요. 공개 계약 `/api/v1`만 부르고 `/internal`은 쓰지 않아요.
+- 세션 저장소는 `REDIS_URL`이 있으면 Redis(`bff/src/session/redis.ts`), 없으면 메모리예요. 운영(`NODE_ENV=production`)은 `REDIS_URL`이 없으면 시작하지 않아요. 근거는 ADR-0007(BFF 전용 Redis, 재발급 락, Redis 장애는 503·쿠키 유지).
+- BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트).
+- 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절). Redis 테스트는 Testcontainers로 실제 Redis를 띄워서 **Docker가 떠 있어야 해요**(`bff/src/test/redis.ts`, globalSetup이라 MSW를 타지 않아요).
+- 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.
+- 이미지: `docker build -f bff/Dockerfile .`(컨텍스트는 저장소 루트).
 
 ## API가 없는 곳
 
