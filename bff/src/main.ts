@@ -4,8 +4,9 @@ import { loadConfig } from './config.ts'
 import { connectRedis, RedisSessionStore } from './session/redis.ts'
 
 const config = loadConfig()
-const redis = config.redisUrl ? await connectRedis(config.redisUrl) : null
-const store = redis ? new RedisSessionStore(redis) : undefined
+const redis = config.redis && (await connectRedis(config.redis.url))
+const store =
+  config.redis && redis ? new RedisSessionStore(redis, config.redis.encryptionKey) : undefined
 const server = serve({ fetch: createApp({ config, store }).fetch, port: config.port }, (info) => {
   console.log(
     `BFF listening on :${info.port} → ${config.backendUrl} (세션: ${redis ? 'Redis' : '메모리'})`,

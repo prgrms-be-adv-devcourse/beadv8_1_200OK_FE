@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { connectRedis, type RedisConnection, RedisSessionStore } from './redis.ts'
 import type { Session } from './session.ts'
@@ -22,7 +23,7 @@ afterAll(() => redis.destroy())
 // 같은 약속을 메모리·Redis 구현에 똑같이 확인한다 (ADR-0007)
 describe.each([
   ['메모리', () => new MemorySessionStore()],
-  ['Redis', () => new RedisSessionStore(redis)],
+  ['Redis', () => new RedisSessionStore(redis, randomBytes(32))],
 ])('%s 세션 저장소', (_name, createStore: () => SessionStore) => {
   it('저장한 세션을 돌려주고 지우면 null이다', async () => {
     const store = createStore()

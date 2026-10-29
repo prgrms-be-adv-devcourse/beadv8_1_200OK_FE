@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createClient } from 'redis'
+import { seal, unseal } from './sealed.ts'
 import type { Session } from './session.ts'
 import { type ReleaseLock, type SessionStore, SessionStoreUnavailable } from './store.ts'
 
@@ -31,23 +32,27 @@ const RELEASE_IF_OWNER = `if redis.call('GET', KEYS[1]) == ARGV[1] then return r
 
 export class RedisSessionStore implements SessionStore {
   readonly #client: RedisConnection
+  readonly #key: Uint8Array
   readonly #now: () => number
 
-  constructor(client: RedisConnection, now: () => number = Date.now) {
+  /** key: 세션 암호화 키(32바이트) */
+  constructor(client: RedisConnection, key: Uint8Array, now: () => number = Date.now) {
     this.#client = client
+    this.#key = key
     this.#now = now
   }
 
   async get(id: string): Promise<Session | null> {
     const value = await this.#orUnavailable(() => this.#client.get(sessionKey(id)))
-    return value ? (JSON.parse(value) as Session) : null
+    const plaintext = value ? unseal(this.#key, id, value) : null
+    return plaintext ? (JSON.parse(plaintext) as Session) : null
   }
 
   async set(id: string, session: Session, expiresAt: number): Promise<void> {
     const ttl = expiresAt - this.#now()
     if (ttl <= 0) return this.delete(id)
     await this.#orUnavailable(() =>
-      this.#client.set(sessionKey(id), JSON.stringify(session), {
+      this.#client.set(sessionKey(id), seal(this.#key, id, JSON.stringify(session)), {
         expiration: { type: 'PX', value: ttl },
       }),
     )

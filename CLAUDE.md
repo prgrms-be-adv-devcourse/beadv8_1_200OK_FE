@@ -60,7 +60,7 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
   - 2단계(1.5단계와 HTTPS #243 뒤): 프론트를 쿠키 세션으로 바꾸고 `authToken.ts`·`reissue.ts`를 걷어내요. `TODO(bff-2단계)`를 따라가요. 운영에 BFF가 없을 때 바꾸면 로그인이 깨져요.
 - Node 24가 `.ts`를 그대로 실행해요(빌드 단계 없음). 그래서 BFF 코드는 import에 `.ts`를 붙이고 enum·생성자 매개변수 속성처럼 지울 수 없는 문법은 쓰지 않아요(`erasableSyntaxOnly`).
 - 백엔드 모듈별 클라이언트 주소는 env로 받아요(`MEMBER_API_URL` 등, 없으면 `BACKEND_URL`). 경로 → 모듈 표는 `bff/src/upstream.ts`예요. 공개 계약 `/api/v1`만 부르고 `/internal`은 쓰지 않아요.
-- 세션 저장소는 `REDIS_URL`이 있으면 Redis(`bff/src/session/redis.ts`), 없으면 메모리예요. 운영(`NODE_ENV=production`)은 `REDIS_URL`이 없으면 시작하지 않아요. 근거는 ADR-0007(BFF 전용 Redis, 재발급 락, Redis 장애는 503·쿠키 유지).
+- 세션 저장소는 `REDIS_URL`이 있으면 Redis(`bff/src/session/redis.ts`), 없으면 메모리예요. 운영(`NODE_ENV=production`)은 `REDIS_URL`이 없으면 시작하지 않아요. Redis에는 세션을 `SESSION_ENCRYPTION_KEY`로 암호화해서 넣어요(`session/sealed.ts`, 키가 바뀌면 모두 재로그인). 근거는 ADR-0007(백엔드 데이터용 Redis 공유·BFF ACL 계정, 재발급 락, Redis 장애는 503·쿠키 유지).
 - BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
 - 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절). Redis 테스트는 Testcontainers로 실제 Redis를 띄워서 **Docker가 떠 있어야 해요**(`bff/src/test/redis.ts`, globalSetup이라 MSW를 타지 않아요).
 - 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.
