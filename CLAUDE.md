@@ -56,14 +56,15 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 
 - 결정 근거는 ADR-0006(`docs/private/architecture/decisions/0006-bff-session.md`). 토큰을 브라우저에서 걷어내고, 백엔드가 서비스로 나뉘었을 때 화면용 응답을 합치려고 둬요.
 - **지금은 1단계예요**: BFF가 `/api/v1/*`을 경로 그대로 백엔드로 넘기고, 브라우저가 보낸 `Authorization`도 그대로 넘겨요. 그래서 프론트의 토큰 인증(위 '인증')은 바뀌지 않았어요. 쿠키 세션(`/bff/session/*`)과 합친 응답(`GET /bff/products/:id/detail`)은 만들어 두었지만 프론트는 아직 쓰지 않아요.
-  - 2단계(운영 EC2에 BFF 배포 뒤): 프론트를 쿠키 세션으로 바꾸고 `authToken.ts`·`reissue.ts`를 걷어내요. `TODO(bff-2단계)`를 따라가요. 운영에 BFF가 없을 때 바꾸면 로그인이 깨져요.
+  - 1.5단계: 운영 EC2에 BFF를 1단계 그대로 올려요(프론트 변경 없음, ADR-0008).
+  - 2단계(1.5단계와 HTTPS #243 뒤): 프론트를 쿠키 세션으로 바꾸고 `authToken.ts`·`reissue.ts`를 걷어내요. `TODO(bff-2단계)`를 따라가요. 운영에 BFF가 없을 때 바꾸면 로그인이 깨져요.
 - Node 24가 `.ts`를 그대로 실행해요(빌드 단계 없음). 그래서 BFF 코드는 import에 `.ts`를 붙이고 enum·생성자 매개변수 속성처럼 지울 수 없는 문법은 쓰지 않아요(`erasableSyntaxOnly`).
 - 백엔드 모듈별 클라이언트 주소는 env로 받아요(`MEMBER_API_URL` 등, 없으면 `BACKEND_URL`). 경로 → 모듈 표는 `bff/src/upstream.ts`예요. 공개 계약 `/api/v1`만 부르고 `/internal`은 쓰지 않아요.
 - 세션 저장소는 `REDIS_URL`이 있으면 Redis(`bff/src/session/redis.ts`), 없으면 메모리예요. 운영(`NODE_ENV=production`)은 `REDIS_URL`이 없으면 시작하지 않아요. 근거는 ADR-0007(BFF 전용 Redis, 재발급 락, Redis 장애는 503·쿠키 유지).
-- BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트).
+- BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
 - 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절). Redis 테스트는 Testcontainers로 실제 Redis를 띄워서 **Docker가 떠 있어야 해요**(`bff/src/test/redis.ts`, globalSetup이라 MSW를 타지 않아요).
 - 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.
-- 이미지: `docker build -f bff/Dockerfile .`(컨텍스트는 저장소 루트).
+- 이미지: `docker build -f bff/Dockerfile .`(컨텍스트는 저장소 루트). `main`에 `bff/`나 의존성 파일이 바뀌어 push되면(또는 수동 실행) `.github/workflows/bff-image.yml`이 GHCR `paldo-gotgan-bff`(`latest`·SHA 7자리)에 올려요. 운영 배치(compose·nginx·`deploy.sh bff`)는 백엔드 레포 `deploy/`에 있어요(ADR-0008).
 
 ## API가 없는 곳
 

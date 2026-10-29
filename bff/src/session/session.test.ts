@@ -136,4 +136,55 @@ describe('CSRF Origin 확인', () => {
 
     expect(response.status).toBe(403)
   })
+
+  it('쿠키 없는 /api 요청은 다른 Origin이어도 통과한다 — 1단계 Bearer는 다른 사이트가 대신 보낼 수 없다', async () => {
+    const { request } = setup()
+    server.use(
+      http.post(`${BACKEND}/api/v1/cart/items`, () => HttpResponse.json({}, { status: 201 })),
+    )
+
+    const response = await request('/api/v1/cart/items', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://paldo-gotgan-fe-git-feature.vercel.app',
+        Authorization: 'Bearer t',
+      },
+    })
+
+    expect(response.status).toBe(201)
+  })
+
+  it('쿠키를 실은 /api 요청은 다른 Origin이면 403이다', async () => {
+    const { request, login } = setup()
+    const { cookie } = await login()
+    let reached = false
+    server.use(
+      http.post(`${BACKEND}/api/v1/cart/items`, () => {
+        reached = true
+        return HttpResponse.json({}, { status: 201 })
+      }),
+    )
+
+    const response = await request('/api/v1/cart/items', {
+      method: 'POST',
+      cookie,
+      headers: { Origin: 'https://evil.example' },
+    })
+
+    expect(response.status).toBe(403)
+    expect(reached).toBe(false)
+  })
+
+  it('/bff 요청은 쿠키가 없어도 다른 Origin이면 403이다 — 로그인 CSRF를 막는다', async () => {
+    const { request, calls } = setup()
+
+    const response = await request('/bff/session/login', {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loginId: 'buyer01', password: 'pass1234!' }),
+    })
+
+    expect(response.status).toBe(403)
+    expect(calls.login).toBe(0)
+  })
 })
