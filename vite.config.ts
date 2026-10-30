@@ -7,14 +7,17 @@ import { defineConfig, loadEnv } from 'vite'
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
-    // 백엔드가 CORS 응답 헤더를 주지 않아(2026-10-18 확인) 개발 서버가 /api를 대신 전달한다.
-    // VITE_API_BASE_URL을 비워 두면 브라우저는 같은 오리진으로 보내고 여기서 백엔드로 넘긴다.
-    proxy: {
-      '/api': {
-        target: loadEnv(mode, process.cwd(), '').VITE_API_PROXY_TARGET || 'http://localhost:8080',
-        changeOrigin: true,
-      },
-    },
+    // 브라우저 → vite → BFF(bff/) → 백엔드. 백엔드 주소는 BFF가 env(BACKEND_URL)로 정한다 (ADR-0006).
+    // VITE_API_BASE_URL을 비워 두면 브라우저는 같은 오리진으로 보내고 여기서 BFF로 넘긴다
+    proxy: Object.fromEntries(
+      ['/api', '/bff'].map((path) => [
+        path,
+        {
+          target: loadEnv(mode, process.cwd(), '').VITE_BFF_PROXY_TARGET || 'http://localhost:8787',
+          changeOrigin: true,
+        },
+      ]),
+    ),
   },
   resolve: {
     alias: {

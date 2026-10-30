@@ -1,0 +1,34 @@
+{
+  "name": "@paldo/bff",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "^24.15.0 || >=26.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/app.ts"
+    }
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "test:redis": "vitest run --config vitest.redis.config.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.14",
+    "redis": "^6.3.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@testcontainers/redis": "^12.2.1",
+    "@types/node": "^24.19.2",
+    "msw": "^3.0.3",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
