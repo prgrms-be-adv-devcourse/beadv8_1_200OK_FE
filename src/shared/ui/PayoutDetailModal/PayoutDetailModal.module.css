@@ -1,0 +1,123 @@
+.help {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+  margin: 0;
+  font-size: var(--mantine-font-size-sm);
+
+  & > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  & dt {
+    color: var(--pd-color-text-muted);
+    font-size: var(--pd-font-caption);
+  }
+
+  & dd {
+    margin: 0;
+    color: var(--pd-color-text);
+  }
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  list-style: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+
+  & + & {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+}
+
+.groupTitle {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  font-weight: 600;
+}
+
+.lines {
+  margin: 0;
+
+  & > div {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--mantine-spacing-md);
+    min-height: 2rem;
+    padding: 0.25rem 0;
+    color: var(--pd-color-text-secondary);
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  & dt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  & dd {
+    flex: none;
+    margin: 0;
+    color: var(--pd-color-text);
+    font-weight: 600;
+  }
+}
+
+.reason {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.signed {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.total {
+  margin: 0;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface-subtle);
+
+  & > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 2.25rem;
+    color: var(--pd-color-text-secondary);
+  }
+
+  & dd {
+    margin: 0;
+  }
+
+  & > .totalRow {
+    border-top: 1px dashed var(--pd-color-border);
+    color: var(--pd-color-text);
+    font-weight: 600;
+  }
+}

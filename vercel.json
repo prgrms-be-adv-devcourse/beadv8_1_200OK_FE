@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://2000k.duckdns.org/api/:path*"
+    },
+    {
+      "source": "/bff/:path*",
+      "destination": "http://2000k.duckdns.org/bff/:path*"
+    },
+    { "source": "/((?!api/|bff/|assets/).*)", "destination": "/index.html" }
+  ]
+}

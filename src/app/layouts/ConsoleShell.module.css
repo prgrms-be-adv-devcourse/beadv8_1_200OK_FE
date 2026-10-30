@@ -1,0 +1,163 @@
+.root {
+  --pd-page-gutter: 1rem;
+  --pd-page-top: 1rem;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* ─── 상단 바 56 (데스크톱) ─── */
+
+.topBar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  height: 3.5rem;
+  padding: 0 1.5rem;
+  background-color: var(--pd-color-surface);
+  border-bottom: 1px solid var(--pd-color-border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.logo {
+  flex: none;
+  text-decoration: none;
+}
+
+.drawerTitle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.drawerHelp {
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ─── 모바일 상단 바 56 ─── */
+
+.mobileBar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 3.5rem;
+  padding: 0 0.5rem 0 0.25rem;
+  background-color: var(--pd-color-surface);
+  border-bottom: 1px solid var(--pd-color-divider);
+}
+
+.mobileTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.5rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobileAside {
+  flex: none;
+  padding-inline-end: 0.5rem;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+/* ─── 사이드바 240 + 본문 ─── */
+
+.body {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+}
+
+.sidebar {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: var(--pd-sidebar-width);
+  padding: 1rem 0.75rem;
+  background-color: var(--pd-color-surface);
+  border-right: 1px solid var(--pd-color-border);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  max-width: calc(var(--pd-console-max-width) + var(--pd-page-gutter) * 2);
+  padding: var(--pd-page-top) var(--pd-page-gutter) 4rem;
+}
+
+.drawerBody {
+  padding: 0.5rem 0.75rem 1rem;
+}
+
+.drawerNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 관리자 콘솔: 어두운 상단 바 + 흰 14% 배지 */
+.root[data-variant="admin"] .topBar,
+.root[data-variant="admin"] .mobileBar {
+  background-color: var(--pd-color-text);
+  border-bottom-color: var(--pd-color-text);
+  color: var(--pd-color-surface);
+}
+
+.root[data-variant="admin"] .topBar .badge,
+.root[data-variant="admin"] .mobileBar .badge {
+  background-color: color-mix(in srgb, var(--pd-color-surface) 14%, transparent);
+  color: var(--pd-color-surface);
+}
+
+.root[data-variant="admin"] .menuButton {
+  --ai-color: var(--pd-color-surface);
+  --ai-hover: color-mix(in srgb, var(--pd-color-surface) 14%, transparent);
+}
+
+.root[data-variant="admin"] .mobileAside {
+  color: var(--pd-color-surface);
+}
+
+@media (min-width: 64em) {
+  .root {
+    --pd-page-gutter: 2rem;
+    --pd-page-top: 2rem;
+  }
+
+  .topBar {
+    display: flex;
+  }
+
+  .mobileBar {
+    display: none;
+  }
+
+  .sidebar {
+    display: flex;
+  }
+}

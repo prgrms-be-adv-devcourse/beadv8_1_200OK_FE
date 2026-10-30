@@ -1,0 +1,137 @@
+/* 입력 공통 (Input · InputWrapper · Combobox) */
+
+/* ─── Input.Wrapper (라벨 · 도움말 · 오류) ─── */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  margin-bottom: 0.375rem;
+  color: var(--pd-color-text);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+.root:has(:disabled) .label {
+  color: var(--pd-color-disabled-text);
+}
+
+/* 입력과 6px: Mantine이 입력 아래에 4px를 두므로 2px만 더한다 */
+.description,
+.error {
+  margin-top: 0.125rem;
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.description {
+  color: var(--pd-color-text-muted);
+}
+
+.error + .description {
+  margin-top: 0.25rem;
+}
+
+/* 오류: 아이콘(x-circle) + 문구. 색만으로 전달하지 않는다 */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  color: var(--pd-color-error);
+
+  &::before {
+    content: "";
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.0625rem;
+    background-color: currentColor;
+    mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m15 9-6 6M9 9l6 6'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+}
+
+/* ─── Input ─── */
+
+.wrapper {
+  /* 높이 48, 좌우 14 */
+  --input-height-md: 3rem;
+  --input-padding: 0.875rem;
+}
+
+/* 오류여도 입력한 글자는 기본색 (테두리 + 아이콘 + 문구로 알린다) */
+.wrapper[data-error] {
+  --input-color: var(--mantine-color-text);
+  --input-placeholder-color: var(--mantine-color-placeholder);
+}
+
+/* 기본 테두리 border-input(gray.4), focus primary, 오류 error는 Mantine 규칙 그대로 */
+.input {
+  transition: border-color var(--pd-duration-fast) var(--pd-ease);
+}
+
+@media (hover: hover) {
+  .wrapper:not([data-error])
+    .input:where(:not(:focus, :focus-within, :disabled, [data-disabled], [readonly])):hover {
+    --input-bd: var(--pd-color-text-muted);
+  }
+}
+
+/* focus: 테두리 primary + 파란 포커스 링 2px (간격 2px) */
+.input:focus,
+.input:focus-within {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* disabled: 배경·테두리 disabled-bg, 글자 disabled-text (Mantine의 반투명 대신) */
+.input:disabled,
+.input[data-disabled],
+.input:has(input:disabled) {
+  opacity: 1;
+  --input-bd: var(--pd-color-disabled-bg);
+}
+
+/* read-only: surface-subtle 배경, 테두리 없음. Select가 내부적으로 쓰는 readonly(목록 열기용)는 제외 */
+.input[readonly]:not([aria-haspopup]),
+.input:has(input[readonly]:not([aria-haspopup])) {
+  --input-bd: var(--pd-color-surface-subtle);
+  background-color: var(--pd-color-surface-subtle);
+}
+
+/* ─── Combobox (Select 목록) ─── */
+
+.dropdown {
+  padding: 0.25rem;
+  border-color: var(--pd-color-border);
+  border-radius: var(--mantine-radius-sm);
+  box-shadow: var(--mantine-shadow-md);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--pd-touch-min);
+  padding: 0 0.75rem;
+  border-radius: var(--mantine-radius-xs);
+  font-size: var(--mantine-font-size-md);
+
+  &:where([data-combobox-selected], :hover) {
+    background-color: var(--pd-color-bg);
+  }
+
+  &[aria-selected="true"] {
+    background-color: var(--pd-color-primary-tint);
+    color: var(--pd-color-primary);
+    font-weight: 600;
+  }
+
+  &[data-combobox-disabled] {
+    color: var(--pd-color-disabled-text);
+  }
+}

@@ -1,0 +1,132 @@
+/*
+ * 상품 상세설명(descriptionHtml) 본문 스타일. 구매자 상세와 판매자 에디터가 같이 쓴다.
+ * 서버가 class를 지우므로 태그 기준으로만 꾸민다(허용 태그: p·h1~6·b/strong·i/em·u·s·ul·ol·li·blockquote·
+ * table 계열·a·img·figure·hr·pre·code·span). 색·크기·정렬은 본문에 남은 style 속성을 그대로 따른다.
+ */
+.root {
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.75rem;
+  color: var(--pd-color-text);
+  overflow-wrap: anywhere;
+
+  /* 목록·표 칸 안의 문단은 여백 없이 (에디터가 li·td 안에 p를 만든다) */
+  & li > p,
+  & th > p,
+  & td > p {
+    margin: 0;
+  }
+
+  & > :where(:first-child) {
+    margin-top: 0;
+  }
+
+  & > :where(:last-child) {
+    margin-bottom: 0;
+  }
+
+  & p {
+    margin: 0 0 var(--mantine-spacing-md);
+  }
+
+  & h1,
+  & h2,
+  & h3,
+  & h4 {
+    margin: var(--mantine-spacing-lg) 0 var(--mantine-spacing-sm);
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  & h1,
+  & h2 {
+    font-size: var(--mantine-font-size-xl);
+  }
+
+  & h3,
+  & h4 {
+    font-size: var(--mantine-font-size-lg);
+  }
+
+  & ul,
+  & ol {
+    margin: 0 0 var(--mantine-spacing-md);
+    padding-inline-start: var(--mantine-spacing-xl);
+  }
+
+  & blockquote {
+    margin: 0 0 var(--mantine-spacing-md);
+    padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+    border-inline-start: 4px solid var(--pd-color-border);
+    color: var(--pd-color-text-secondary);
+  }
+
+  & hr {
+    margin: var(--mantine-spacing-lg) 0;
+    border: 0;
+    border-top: 1px solid var(--pd-color-divider);
+  }
+
+  & a {
+    color: var(--pd-color-primary);
+    text-decoration: underline;
+  }
+
+  & img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--mantine-radius-sm);
+    vertical-align: middle;
+  }
+
+  & figure {
+    margin: 0 0 var(--mantine-spacing-md);
+  }
+
+  /* 표는 좁은 화면에서 본문을 넘지 않게 표 자체를 가로 스크롤한다 */
+  & table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    margin: 0 0 var(--mantine-spacing-md);
+    border-collapse: collapse;
+    font-size: var(--mantine-font-size-md);
+  }
+
+  & th,
+  & td {
+    min-width: 4rem;
+    padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+    border: 1px solid var(--pd-color-border);
+    vertical-align: top;
+    text-align: start;
+  }
+
+  & th {
+    background: var(--pd-color-surface-subtle);
+    font-weight: 700;
+  }
+
+  & pre {
+    margin: 0 0 var(--mantine-spacing-md);
+    padding: var(--mantine-spacing-sm);
+    overflow-x: auto;
+    background: var(--pd-color-surface-subtle);
+    border-radius: var(--mantine-radius-sm);
+  }
+}
+
+/* 보는 화면(구매자 상세) 전용: 사진은 본문 너비에 꽉 채운다. 에디터에서 조절한 너비(style)도 덮는다 */
+.view {
+  & figure {
+    /* biome-ignore lint/complexity/noImportantStyles: 본문 HTML의 인라인 style 너비를 덮어야 한다 */
+    width: 100% !important;
+  }
+
+  & img {
+    display: block;
+    /* biome-ignore lint/complexity/noImportantStyles: 본문 HTML의 인라인 style 너비를 덮어야 한다 */
+    width: 100% !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 본문 HTML의 인라인 style 너비를 덮어야 한다 */
+    height: auto !important;
+  }
+}

@@ -1,0 +1,126 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.balance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  padding: var(--mantine-spacing-md) var(--mantine-spacing-lg);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface-subtle);
+
+  & > div {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.label {
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+
+  & > .label {
+    width: 2.5rem;
+  }
+}
+
+.range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mantine-spacing-sm);
+  max-width: 28rem;
+}
+
+.tableWrap {
+  display: none;
+  padding: 0 var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 64em) {
+    display: block;
+  }
+}
+
+.right {
+  text-align: end;
+}
+
+.muted {
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.plus {
+  display: inline-flex;
+  align-items: baseline;
+  color: var(--pd-color-success);
+  font-weight: 700;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+
+  & + & {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+}
+
+.itemTop,
+.itemMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+.itemBalance {
+  align-self: flex-end;
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}

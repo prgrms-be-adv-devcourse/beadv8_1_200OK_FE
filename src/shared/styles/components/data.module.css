@@ -1,0 +1,146 @@
+/* 판매자 센터·관리자 콘솔: Table · Pagination · NavLink · Stepper · Rating */
+
+/* ─── Table: 헤더 44 · 행 52 · 행 구분 divider · hover bg ─── */
+
+.table {
+  --table-border-color: var(--pd-color-divider);
+  --table-highlight-on-hover-color: var(--pd-color-bg);
+
+  background-color: var(--pd-color-surface);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.375rem;
+}
+
+.thead > tr {
+  border-bottom-color: var(--pd-color-border);
+}
+
+.th {
+  height: 2.75rem;
+  background-color: var(--pd-color-surface-subtle);
+  color: var(--pd-color-text-secondary);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.td {
+  height: 3.25rem;
+}
+
+/* 화면 낭독용 숨긴 머리글(VisuallyHidden)이 가로 스크롤 영역 밖으로 빠져 페이지가 넓어지지 않게 */
+.thead:not([data-sticky]) .th {
+  position: relative;
+}
+
+/* ─── Pagination: 36, 테두리 없음, 현재 쪽 primary ─── */
+
+.pagination {
+  --pagination-control-size-md: 2.25rem;
+}
+
+.paginationControl {
+  border: 0;
+  background-color: transparent;
+  font-size: var(--mantine-font-size-sm);
+  font-variant-numeric: tabular-nums;
+
+  &[data-active] {
+    background-color: var(--pagination-active-bg);
+    color: var(--pagination-active-color, var(--mantine-color-white));
+    font-weight: 600;
+  }
+
+  &:disabled,
+  &[data-disabled] {
+    opacity: 1;
+    color: var(--pd-color-disabled-text);
+  }
+
+  @media (hover: hover) {
+    &:where(:not([data-active], :disabled, [data-disabled])):hover {
+      background-color: var(--pd-color-surface-subtle);
+    }
+  }
+}
+
+/* 이전·다음 글자 */
+.edge {
+  padding: 0 0.625rem;
+}
+
+.paginationControl:not(:disabled, [data-disabled]) .edge {
+  color: var(--pd-color-primary);
+  font-weight: 600;
+}
+
+/* ─── NavLink: 44, radius 8, 아이콘 20 + 간격 10, 활성 tint + 600 ─── */
+
+.navLink {
+  min-height: var(--pd-touch-min);
+  padding: 0 0.75rem;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--pd-color-text);
+
+  &[data-active] {
+    color: var(--nl-color);
+    font-weight: 600;
+  }
+
+  @media (hover: hover) {
+    &:where(:not([data-active])):hover {
+      background-color: var(--pd-color-surface-subtle);
+    }
+  }
+}
+
+.navLabel {
+  font-size: var(--mantine-font-size-md);
+}
+
+.navSection[data-position="left"] {
+  margin-inline-end: 0.625rem;
+}
+
+/* ─── Stepper ─── */
+
+.stepIcon {
+  border-width: 1px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepLabel {
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+.stepDescription {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.stepSeparator {
+  background-color: var(--pd-color-border);
+}
+
+/* ─── Rating: 채운 별 straw-ink, 빈 별은 border-input 테두리만 ─── */
+
+.star {
+  fill: transparent;
+  stroke: var(--pd-color-border-input);
+  stroke-width: 1.75;
+
+  &[data-filled] {
+    fill: var(--rating-color);
+    stroke: var(--rating-color);
+  }
+}
+
+.ratingInput:focus-visible + label {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}

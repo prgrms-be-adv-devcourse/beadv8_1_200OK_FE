@@ -1,0 +1,56 @@
+/*
+ * 갤러리 전용: :hover · :active · :focus-visible 상태를 정지 화면으로 보여 준다.
+ * 실제 규칙(shared/styles/components)과 같은 변수를 써서 결과가 같아야 한다. 이 파일은 /__design에서만 번들된다.
+ */
+
+/* Button */
+/* primary filled는 Mantine이 --button-hover를 넣지 않고 기본값을 쓴다 */
+.buttonHover {
+  background-color: var(--button-hover, var(--mantine-primary-color-filled-hover));
+  color: var(--button-hover-color, var(--button-color));
+}
+
+.buttonPressed {
+  background-color: var(--pd-button-pressed-bg);
+  color: var(--pd-button-pressed-color, var(--button-color));
+
+  &[data-variant="outline"] {
+    border-color: var(--pd-button-pressed-color);
+  }
+}
+
+.focus {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* Input */
+.inputHover :global(.mantine-Input-input) {
+  --input-bd: var(--pd-color-text-muted);
+}
+
+.inputFocus :global(.mantine-Input-input) {
+  --input-bd: var(--input-bd-focus);
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* Checkbox */
+.checkboxFocus :global(.mantine-Checkbox-input) {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* Table 행 · NavLink hover */
+.rowHover {
+  background-color: var(--pd-color-bg);
+}
+
+.navHover {
+  background-color: var(--pd-color-surface-subtle);
+}
+
+/* OptionCard hover */
+.optionHover :global(.mantine-RadioCard-card) {
+  background-color: var(--pd-color-bg);
+}

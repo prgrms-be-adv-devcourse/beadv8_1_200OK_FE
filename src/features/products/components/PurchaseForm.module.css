@@ -1,0 +1,41 @@
+.legend {
+  margin-bottom: var(--mantine-spacing-xs);
+  font-size: var(--mantine-font-size-md);
+  font-weight: 600;
+}
+
+.label {
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.375rem;
+  font-weight: 600;
+}
+
+.quantity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+
+  & > :first-child {
+    padding-top: 0.4375rem;
+  }
+}
+
+.total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+}
+
+.totalLabel {
+  display: flex;
+  flex-direction: column;
+}
+
+.help {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}

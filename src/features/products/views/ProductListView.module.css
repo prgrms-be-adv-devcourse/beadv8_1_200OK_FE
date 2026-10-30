@@ -1,0 +1,76 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+
+  @media (min-width: 64em) {
+    gap: var(--mantine-spacing-lg);
+  }
+}
+
+/* 모바일만: 가로로 넘기는 카테고리 */
+.categories {
+  display: flex;
+  gap: var(--mantine-spacing-xs);
+  margin-inline: calc(var(--pd-page-gutter, 1rem) * -1);
+  padding: 0.25rem var(--pd-page-gutter, 1rem);
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  & > * {
+    flex: none;
+  }
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+
+  @media (min-width: 64em) {
+    gap: var(--mantine-spacing-lg);
+  }
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+
+.count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-sm) var(--mantine-spacing-lg);
+}
+
+.region {
+  width: 10rem;
+
+  @media (min-width: 64em) {
+    width: 12.5rem;
+  }
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--mantine-spacing-xl);
+}

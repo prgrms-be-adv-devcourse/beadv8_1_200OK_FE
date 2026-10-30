@@ -18,24 +18,30 @@
 ## 시작하기
 
 ```bash
+nvm use                  # .nvmrc의 Node 24 LTS. Node 23·24.15 미만은 jsdom·react-router가 지원하지 않음
+corepack enable pnpm     # 처음 한 번. package.json의 packageManager(pnpm 12) 버전을 그대로 씀
 cp .env.example .env     # 환경변수
-npm install              # .npmrc의 legacy-peer-deps=true 적용 (npm 10.9 peer 해석 버그 우회)
-npm run dev
+pnpm install
+pnpm dev
 ```
+
+패키지 매니저는 **pnpm**이에요(`pnpm-lock.yaml`). 패키지 추가는 `pnpm add <패키지>`(개발용 `-D`), 일회성 실행은 `pnpm dlx`.
+pnpm은 나온 지 24시간이 안 된 버전을 바로 설치하지 않아요(공급망 보호). 꼭 필요하면 `pnpm-workspace.yaml`의 `minimumReleaseAgeExclude`에 그 버전을 적어요(lock을 새로 만들 때 pnpm이 자동으로 넣기도 해요).
 
 | 스크립트 | 설명 |
 | --- | --- |
-| `npm run dev` / `build` / `preview` | Vite 개발 서버 / 프로덕션 빌드(`tsc -b` 포함) / 빌드 미리보기 |
-| `npm run check` / `check:fix` | Biome lint + format 검사 / 자동 수정 |
-| `npm run typecheck` | TypeScript 프로젝트 참조 빌드 |
-| `npm run test` / `test:watch` | Vitest |
+| `pnpm dev` / `build` / `preview` | Vite 개발 서버 / 프로덕션 빌드(`tsc -b` 포함) / 빌드 미리보기 |
+| `pnpm check` / `check:fix` | Biome lint + format 검사 / 자동 수정 |
+| `pnpm typecheck` | TypeScript 프로젝트 참조 빌드 |
+| `pnpm test` / `test:watch` | Vitest |
 
 ## 디렉토리 구조와 의존 방향
 
 ```
 src/
   app/        진입·providers·router·layouts·guards        (features, shared import 가능)
-  features/   auth products farms cart checkout orders seller  (shared만 import, feature 간 금지)
+  features/   auth products farms cart checkout orders reviews wallet me sellerApply seller admin
+              (shared만 import, feature 간 금지. sellerApply는 구매자 쪽 신청 화면, seller는 판매자 센터 청크)
   shared/     api ui lib styles                            (아무것도 import 안 함)
   mocks/      MSW 핸들러 (Vitest 테스트 전용)
   test/       Vitest setup·유틸

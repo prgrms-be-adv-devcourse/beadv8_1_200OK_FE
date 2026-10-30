@@ -1,0 +1,76 @@
+.root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: var(--pd-cta-bar-height);
+  padding: 0.625rem 1rem;
+  background-color: var(--pd-color-surface);
+  border-top: 1px solid var(--pd-color-divider);
+  box-shadow: var(--mantine-shadow-md);
+
+  &[data-position="fixed"] {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 100;
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom));
+  }
+}
+
+.spacer {
+  height: calc(var(--pd-cta-bar-height) + env(safe-area-inset-bottom));
+}
+
+/* 데스크톱에서는 화면 안의 버튼을 쓴다 */
+@media (min-width: 64em) {
+  .root[data-position="fixed"],
+  .spacer {
+    display: none;
+  }
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* 총 45,800원 — 17/24 700 */
+.amount {
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.note,
+.reason {
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1rem;
+}
+
+.note {
+  color: var(--pd-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.reason {
+  color: var(--pd-color-warning);
+  font-weight: 600;
+}
+
+/* 주 버튼 최소 150. 요약이 없으면 남은 너비를 다 쓴다 */
+.action {
+  flex: none;
+  min-width: 9.375rem;
+
+  & > * {
+    width: 100%;
+  }
+
+  &[data-grow] {
+    flex: 1;
+  }
+}

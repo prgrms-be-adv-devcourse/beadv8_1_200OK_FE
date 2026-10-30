@@ -1,0 +1,62 @@
+/* 인장 크기 · 워드마크 font/line은 design/BRAND.md ‘Logo 컴포넌트’ 표 */
+.root {
+  --logo-seal: 2rem;
+
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--pd-color-text);
+
+  &[data-tone="dark"] {
+    color: var(--pd-color-surface);
+  }
+
+  &[data-preset="header"] {
+    --logo-seal: 2rem;
+
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+
+  &[data-preset="headerMobile"],
+  &[data-preset="console"] {
+    --logo-seal: 1.75rem;
+
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  &[data-preset="drawer"] {
+    --logo-seal: 1.625rem;
+
+    font-size: 1.125rem;
+    line-height: 1.625rem;
+  }
+
+  &[data-preset="auth"] {
+    --logo-seal: 2.25rem;
+
+    font-size: 1.75rem;
+    line-height: 2.375rem;
+
+    @media (min-width: 64em) {
+      --logo-seal: 2.5rem;
+
+      font-size: 2rem;
+      line-height: 2.625rem;
+    }
+  }
+}
+
+.seal {
+  flex: none;
+  display: block;
+  width: var(--logo-seal);
+  height: var(--logo-seal);
+}
+
+.wordmark {
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}

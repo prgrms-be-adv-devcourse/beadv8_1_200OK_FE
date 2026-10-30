@@ -1,0 +1,16 @@
+.skip {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--pd-color-surface);
+  color: var(--pd-color-text);
+  font-weight: 600;
+  transform: translateY(-200%);
+
+  &:focus-visible {
+    transform: none;
+  }
+}

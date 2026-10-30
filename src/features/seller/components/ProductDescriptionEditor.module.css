@@ -1,0 +1,68 @@
+/* SunEditor 겉모양을 앱 토큰에 맞춘다. 에디터 내부 클래스(.sun-editor, .se-*)는 :global로 덮는다 */
+.root {
+  min-width: 0;
+  max-width: 100%;
+
+  & :global(.sun-editor) {
+    border-color: var(--pd-color-border-input);
+    border-radius: var(--mantine-radius-md);
+    font-family: inherit;
+  }
+
+  &[data-invalid] :global(.sun-editor) {
+    border-color: var(--pd-color-error);
+  }
+
+  & :global(.se-toolbar) {
+    border-radius: var(--mantine-radius-md) var(--mantine-radius-md) 0 0;
+  }
+
+  /* 툴바 단추도 터치 영역 44px */
+  & :global(.se-toolbar .se-btn) {
+    min-width: var(--pd-touch-min);
+    min-height: var(--pd-touch-min);
+  }
+
+  /* 좁은 화면: 여러 줄로 쌓이면 편집 칸을 가리므로 한 줄로 두고 툴바만 가로로 밀어 본다 */
+  @media (max-width: 47.99em) {
+    & :global(.se-btn-tray) {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
+    }
+
+    & :global(.se-btn-module) {
+      flex-shrink: 0;
+    }
+  }
+
+  & :global(.sun-editor-editable) {
+    min-height: 15rem;
+    padding: var(--mantine-spacing-md);
+    font-family: inherit;
+  }
+
+  & :global(.sun-editor-editable:focus-visible) {
+    outline: 2px solid var(--pd-color-focus);
+    outline-offset: -2px;
+  }
+}
+
+/* 링크 창: 서버가 target을 지우므로 '새 창에서 열기'는 숨긴다 (창은 body에 붙을 수 있어 전역) */
+:global(.sun-editor label:has(._se_anchor_check)) {
+  display: none;
+}
+
+/* 화면에서만 숨기고 스크린리더에는 읽히는 라벨 */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

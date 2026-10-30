@@ -1,0 +1,76 @@
+.root {
+  padding: 1rem 1.25rem;
+  background-color: var(--pd-color-surface-subtle);
+  border-radius: var(--mantine-radius-md);
+
+  &[data-with-title] {
+    padding: 1.25rem;
+  }
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  margin: 0;
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.5rem;
+  font-weight: 700;
+
+  & svg {
+    flex: none;
+    color: var(--pd-color-straw-ink);
+  }
+}
+
+.list {
+  margin: 0;
+}
+
+.title + .list {
+  margin-top: 0.25rem;
+}
+
+/* 라벨-값 행, 행 사이 1px 점선 */
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--mantine-spacing-md);
+  padding: 0.75rem 0;
+  border-top: 1px dotted var(--pd-color-border);
+
+  &:first-child {
+    padding-top: 0.5rem;
+    border-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.label {
+  margin: 0;
+  flex: none;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+.value {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+
+  &[data-empty] {
+    color: var(--pd-color-text-muted);
+    font-weight: 400;
+  }
+}

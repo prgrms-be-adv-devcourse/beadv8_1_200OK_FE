@@ -1,0 +1,8 @@
+# bff/Dockerfile 전용(BuildKit). 컨텍스트가 저장소 루트라 프론트 파일을 보내지 않는다
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!bff
+bff/node_modules
+bff/.env

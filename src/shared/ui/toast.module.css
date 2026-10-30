@@ -1,0 +1,23 @@
+.message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.625rem;
+}
+
+/* 액션 링크: 밑줄 600. 토스트 높이는 늘리지 않으면서 터치 영역 44 */
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--pd-touch-min);
+  margin-block: -0.625rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

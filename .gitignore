@@ -27,3 +27,12 @@ dist-ssr
 
 # private docs
 docs/private/**
+
+# local-only references
+design/
+bruno_for_front/
+.vercel
+.env.local
+
+# 브라우저 자동화 도구 로그
+.playwright-mcp/

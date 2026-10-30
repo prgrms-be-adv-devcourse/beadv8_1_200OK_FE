@@ -1,0 +1,104 @@
+/* 선택 컨트롤: Checkbox · Radio · Chip · SegmentedControl · Tabs */
+
+/* ─── Checkbox · Radio: 상자 20px, 라벨까지 행 높이 44가 터치 영역 ─── */
+
+.body {
+  align-items: center;
+  min-height: var(--pd-touch-min);
+}
+
+.labelWrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  min-height: var(--pd-touch-min);
+}
+
+/* ─── Chip: 36 pill, 미선택 흰 배경 + border, 선택 primary 채움 ─── */
+
+.chipRoot {
+  --chip-size-md: 2.25rem;
+  --chip-padding-md: 0.875rem;
+  --chip-checked-padding-md: 0.875rem;
+}
+
+.chipLabel {
+  font-size: var(--mantine-font-size-sm);
+  transition:
+    background-color var(--pd-duration-fast) var(--pd-ease),
+    color var(--pd-duration-fast) var(--pd-ease);
+
+  &[data-checked]:not([data-disabled]) {
+    border-color: var(--pd-color-primary);
+    background-color: var(--pd-color-primary);
+    color: var(--mantine-color-white);
+    font-weight: 600;
+  }
+
+  @media (hover: hover) {
+    &[data-checked]:not([data-disabled]):hover {
+      background-color: var(--pd-color-primary-hover);
+    }
+  }
+}
+
+.chipIcon {
+  display: none;
+}
+
+input:focus-visible + .chipLabel {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* ─── SegmentedControl: 36 pill, 활성은 primary 채움 ─── */
+
+.segmentRoot {
+  --sc-padding-sm: 0.25rem 0.875rem;
+  --sc-padding-md: 0.25rem 0.875rem;
+}
+
+.segmentLabel {
+  line-height: 1.25rem;
+}
+
+.segmentInput:focus-visible + .segmentLabel {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* ─── Tabs: 높이 48, 비활성 text-secondary, 활성 2px primary 밑줄 + 600 ─── */
+
+.tabsList {
+  gap: 1.75rem;
+
+  /* 목록 아래 선은 1px border (Mantine 기본 2px 회색) */
+  &::before {
+    border: 0;
+    border-bottom: 1px solid var(--pd-color-border);
+  }
+}
+
+.tab {
+  height: 3rem;
+  padding: 0;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.375rem;
+
+  &[data-active] {
+    color: var(--pd-color-text);
+    font-weight: 600;
+  }
+
+  @media (hover: hover) {
+    &:hover {
+      background-color: transparent;
+      color: var(--pd-color-text);
+    }
+  }
+}

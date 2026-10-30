@@ -1,11 +1,24 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  server: {
+    // 브라우저 → vite → BFF(bff/) → 백엔드. 백엔드 주소는 BFF가 env(BACKEND_URL)로 정한다 (ADR-0006).
+    // VITE_API_BASE_URL을 비워 두면 브라우저는 같은 오리진으로 보내고 여기서 BFF로 넘긴다
+    proxy: Object.fromEntries(
+      ['/api', '/bff'].map((path) => [
+        path,
+        {
+          target: loadEnv(mode, process.cwd(), '').VITE_BFF_PROXY_TARGET || 'http://localhost:8787',
+          changeOrigin: true,
+        },
+      ]),
+    ),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -41,4 +54,4 @@ export default defineConfig({
     css: { modules: { classNameStrategy: 'non-scoped' } },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
-})
+}))

@@ -1,0 +1,128 @@
+/*
+ * 디자인 토큰 CSS 변수 (원본: design/tokens.md)
+ * 모든 '@mantine/{pkg}/styles.css'(core → dates → notifications → dropzone) 다음, 맨 마지막에 import한다.
+ * 아래 Mantine 덮어쓰기는 import 순서에 기대고 있다.
+ * CSS Modules에서는 var(--pd-*)만 쓰고 hex를 직접 쓰지 않는다.
+ */
+
+:root {
+  /* 색 */
+  --pd-color-primary: #2e6b3f;
+  --pd-color-primary-hover: #245733;
+  --pd-color-primary-pressed: #1b4427;
+  --pd-color-primary-tint: #e6f0e8;
+  --pd-color-straw: #efe6d2;
+  --pd-color-straw-ink: #5a4321;
+  --pd-color-accent: #b8481a;
+  --pd-color-bg: #f7f5ef;
+  --pd-color-surface: #ffffff;
+  --pd-color-surface-subtle: #f0ede4;
+  --pd-color-text: #1f2421;
+  --pd-color-text-secondary: #4a524c;
+  --pd-color-text-muted: #626963;
+  --pd-color-border: #dcd7cb;
+  --pd-color-border-input: #8f958f;
+  --pd-color-divider: #e9e5db;
+  --pd-color-success: #1e6b3e;
+  --pd-color-success-bg: #e6f3ea;
+  --pd-color-warning: #7a4f00;
+  --pd-color-warning-bg: #fff3d1;
+  --pd-color-error: #b3261e;
+  --pd-color-error-bg: #fdecea;
+  --pd-color-info: #1d5a94;
+  --pd-color-info-bg: #e6eff8;
+  --pd-color-disabled-bg: #ece9e2;
+  --pd-color-disabled-text: #9a9f99;
+  --pd-color-focus: #1f6fd1;
+  --pd-color-toast-bg: #1f2421;
+
+  /* 서체 */
+  --pd-font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", sans-serif;
+  --pd-font-serif: "Noto Serif KR", "Nanum Myeongjo", serif;
+  --pd-font-caption: 0.8125rem; /* 13/18 */
+  --pd-line-caption: 1.125rem;
+
+  /* 레이아웃 */
+  --pd-buyer-max-width: 75rem; /* 1200 */
+  --pd-console-max-width: 80rem; /* 1280 */
+  --pd-sidebar-width: 15rem; /* 240 */
+  --pd-header-height: 4rem; /* 64, 모바일 56 */
+  --pd-category-bar-height: 3rem; /* 48 */
+  --pd-tabbar-height: 3.5rem; /* 56 + safe area */
+  --pd-cta-bar-height: 4.5rem; /* 72 */
+  --pd-touch-min: 2.75rem; /* 44 */
+
+  /* 모션 */
+  --pd-ease: ease-out;
+  --pd-duration-fast: 150ms;
+  --pd-duration-sheet: 200ms;
+}
+
+body {
+  background-color: var(--pd-color-bg);
+  color: var(--pd-color-text);
+  word-break: keep-all;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 명조: 워드마크, 홈 섹션 대제목, 판매자 상점명에만. Noto Serif KR 700은 index.html에서 불러온다 */
+.pd-serif {
+  font-family: var(--pd-font-serif);
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+/* 숫자·금액 */
+.pd-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-won {
+  font-size: 0.85em;
+}
+
+/*
+ * Mantine 전역 덮어쓰기. 컴포넌트별 크기·상태는 shared/styles/components/*.module.css (theme classNames).
+ * Mantine CSS는 @layer mantine 안에 있어서, 레이어 밖인 이 규칙이 우선한다.
+ */
+
+/* 포커스 링: 2px #1F6FD1 + 간격 2px. 직접 만든 링크·버튼의 기본값(:where라 컴포넌트 규칙이 우선) */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* Mantine 컴포넌트 (Mantine 기본은 primary 색) */
+.mantine-focus-auto:focus-visible,
+.mantine-focus-always:focus {
+  outline: 2px solid var(--pd-color-focus);
+  outline-offset: 2px;
+}
+
+/* 토스트 위치: 하단 중앙 16. 모바일에서 하단 탭·CTA 바가 있으면 그 위 16 */
+.mantine-Notifications-root[data-position="bottom-center"] {
+  bottom: calc(var(--pd-toast-offset, 1rem) + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 63.99em) {
+  :root:has(nav[aria-label="하단 메뉴"]) {
+    --pd-toast-offset: calc(var(--pd-tabbar-height) + 1rem);
+  }
+
+  :root:has([data-cta-bar="fixed"]) {
+    --pd-toast-offset: calc(var(--pd-cta-bar-height) + 1rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: 동작 줄이기 설정은 모든 애니메이션보다 우선해야 한다 */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 동작 줄이기 설정은 모든 애니메이션보다 우선해야 한다 */
+    animation-duration: 0.01ms !important;
+  }
+}

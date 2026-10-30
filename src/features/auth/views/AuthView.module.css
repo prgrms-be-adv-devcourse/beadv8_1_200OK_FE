@@ -1,0 +1,131 @@
+/* 로그인·가입·계정 찾기 공통. AuthLayout 카드 안(데스크톱) / 화면 바로(모바일) */
+
+.lead {
+  margin: 0.25rem 0 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.375rem;
+
+  @media (max-width: 63.99em) {
+    margin-top: var(--mantine-spacing-md);
+  }
+}
+
+.mobileLogo {
+  margin-top: var(--mantine-spacing-xl);
+
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.form {
+  margin-top: var(--mantine-spacing-lg);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mantine-spacing-sm);
+  margin-top: var(--mantine-spacing-md);
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+
+  & a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--pd-touch-min);
+    color: var(--pd-color-text-secondary);
+  }
+}
+
+.help {
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+/* 약관 동의 */
+.agreements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+}
+
+.agreeAll {
+  padding-bottom: var(--mantine-spacing-sm);
+  border-bottom: 1px solid var(--pd-color-divider);
+  font-weight: 600;
+}
+
+.agreeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+}
+
+/* 결과 · 완료 */
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  padding-top: var(--mantine-spacing-lg);
+  text-align: center;
+}
+
+.resultTitle {
+  margin: 0;
+  font-size: 1.375rem;
+  line-height: 1.875rem;
+  font-weight: 700;
+}
+
+.resultText {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+  gap: var(--mantine-spacing-xs);
+  width: 100%;
+  margin-top: var(--mantine-spacing-md);
+}
+
+/* 결과 표 (아이디·이메일 등) */
+.facts {
+  width: 100%;
+  margin: 0;
+  padding: var(--mantine-spacing-xs) 1.25rem;
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface-subtle);
+  text-align: start;
+
+  & > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--mantine-spacing-md);
+    padding: 0.625rem 0;
+  }
+
+  & > div:not(:first-child) {
+    border-top: 1px dashed var(--pd-color-border);
+  }
+
+  & dt {
+    color: var(--pd-color-text-secondary);
+  }
+
+  & dd {
+    margin: 0;
+    font-weight: 600;
+  }
+}

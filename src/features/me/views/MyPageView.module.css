@@ -1,0 +1,167 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+
+  @media (min-width: 48em) {
+    padding: var(--mantine-spacing-lg);
+  }
+}
+
+.profile {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--mantine-spacing-md);
+}
+
+.profileBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+}
+
+.nickname {
+  font-size: var(--mantine-font-size-lg);
+}
+
+.help {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.twoCol {
+  display: grid;
+  gap: var(--mantine-spacing-md);
+
+  @media (min-width: 48em) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cardLabel {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-md);
+  font-weight: 600;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.buttons {
+  display: flex;
+  gap: var(--mantine-spacing-xs);
+  margin-top: var(--mantine-spacing-xs);
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: var(--mantine-spacing-xs) 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--pd-color-bg);
+}
+
+.stripItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding: var(--mantine-spacing-sm) 0;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--pd-font-caption);
+  text-decoration: none;
+
+  & strong {
+    color: var(--pd-color-text);
+    font-size: 1.375rem;
+    line-height: 1.875rem;
+  }
+}
+
+/* 바로가기: 데스크톱만 (모바일은 MyPageLayout의 메뉴 목록에 같은 항목이 있다) */
+.shortcuts {
+  display: none;
+
+  @media (min-width: 64em) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--mantine-spacing-md);
+  }
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+  min-height: 3.5rem;
+  padding: 0 var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+  color: var(--pd-color-text);
+  text-decoration: none;
+
+  &:hover {
+    background-color: var(--pd-color-bg);
+  }
+}
+
+.shortcutValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--pd-color-text-muted);
+
+  & strong {
+    color: var(--pd-color-text);
+  }
+}
+
+.seller {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  background-color: var(--pd-color-surface-subtle);
+}
+
+.sellerDesc {
+  margin: 0.25rem 0 0;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+}

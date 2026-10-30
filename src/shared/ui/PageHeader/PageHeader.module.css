@@ -1,0 +1,116 @@
+/* ─── 공통 ─── */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.breadcrumbs li {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+
+  &:not(:last-child)::after {
+    content: "›";
+    color: var(--pd-color-text-muted);
+  }
+
+  & a {
+    color: var(--pd-color-text-muted);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  & [aria-current] {
+    color: var(--pd-color-text-secondary);
+  }
+}
+
+/* ─── 모바일: 상단 56 바 (흰 배경, 아래 divider), 경로 숨김 ─── */
+
+.root[data-layout="mobile"] {
+  /* 레이아웃 본문 여백(--pd-page-*)을 거슬러 화면 끝까지 붙고, 스크롤해도 위에 남는다 */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin: calc(var(--pd-page-top, 0px) * -1) calc(var(--pd-page-gutter, 0px) * -1)
+    var(--pd-page-top, 0px);
+
+  .breadcrumbs {
+    display: none;
+  }
+
+  .bar {
+    height: 3.5rem;
+    padding: 0 1rem 0 0.25rem;
+    background-color: var(--pd-color-surface);
+    border-bottom: 1px solid var(--pd-color-divider);
+  }
+
+  .title {
+    font-size: var(--mantine-font-size-lg);
+    line-height: 1.5rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bar:not(:has(.back)) {
+    padding-inline-start: 1rem;
+  }
+}
+
+/* ─── 데스크톱: 경로 + H1 28/38 + 오른쪽 액션, 뒤로 숨김 ─── */
+
+.root[data-layout="desktop"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  .back {
+    display: none;
+  }
+
+  .bar {
+    gap: var(--mantine-spacing-md);
+  }
+
+  .title {
+    font-size: 1.75rem;
+    line-height: 2.375rem;
+    font-weight: 700;
+  }
+}
