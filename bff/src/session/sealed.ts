@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
-// 세션은 백엔드와 같이 쓰는 데이터용 Redis(AOF)에 들어간다. 디스크·백업·다른 계정에는 암호문만 남게 한다 (ADR-0007)
+// ⚠️ 만들어 두고 쓰지 않는 Redis 세션 코드의 일부다. 이유와 되살리는 법은 redis.ts 맨 위 (ADR-0009)
+// 세션을 백엔드와 같이 쓰는 데이터용 Redis(AOF)에 넣을 때, 디스크·백업·다른 계정에는 암호문만 남게 하려던 것이다 (ADR-0007)
 // 앞의 버전은 나중에 키를 여러 개 받게 될 때 어떤 키로 잠갔는지 가리키는 자리다
 const VERSION = 'v1'
 const ALGORITHM = 'aes-256-gcm'

@@ -1,6 +1,6 @@
 import { createMiddleware } from 'hono/factory'
 import { problem, problemDetail } from './problem.ts'
-import type { SessionCookie } from './session/cookie.ts'
+import type { TokenCookies } from './session/cookie.ts'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 const LOCALHOST_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
@@ -12,14 +12,14 @@ const LOCALHOST_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
 export function originGuard(deps: {
   allowedOrigins: string[]
   allowAnyLocalhostOrigin: boolean
-  cookie: SessionCookie
+  cookies: TokenCookies
 }) {
   const allowed = new Set(deps.allowedOrigins)
   const isAllowed = (origin: string) =>
     allowed.has(origin) || (deps.allowAnyLocalhostOrigin && LOCALHOST_ORIGIN.test(origin))
   return createMiddleware(async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next()
-    const hasCookie = deps.cookie.read(c) !== null
+    const hasCookie = deps.cookies.present(c)
     if (!hasCookie && c.req.path.startsWith('/api/')) return next()
     const origin = c.req.header('Origin')
     const rejected = origin ? !isAllowed(origin) : hasCookie

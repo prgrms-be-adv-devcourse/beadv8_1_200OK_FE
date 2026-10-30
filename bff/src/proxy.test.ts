@@ -14,7 +14,9 @@ describe('/api/v1 프록시', () => {
       }),
     )
 
-    const response = await request('/api/v1/products?page=0&size=20', { cookie: 'paldo_sid=abc' })
+    const response = await request('/api/v1/products?page=0&size=20', {
+      cookie: 'theme=dark; paldo_at=abc',
+    })
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ content: [], page: 0 })
@@ -36,9 +38,9 @@ describe('/api/v1 프록시', () => {
     expect(authorization).toBe('Bearer browser-token')
   })
 
-  it('세션 쿠키가 있으면 세션 토큰을 붙인다', async () => {
+  it('access 쿠키가 있으면 Bearer로 붙인다', async () => {
     const { request, login, authenticate } = setup()
-    const { cookie } = await login()
+    const { jar } = await login()
     server.use(
       http.get(`${BACKEND}/api/v1/members/me`, ({ request }) =>
         authenticate(request) === 'ok'
@@ -47,65 +49,35 @@ describe('/api/v1 프록시', () => {
       ),
     )
 
-    const response = await request('/api/v1/members/me', { cookie })
+    const response = await request('/api/v1/members/me', { jar })
 
     expect(response.status).toBe(200)
   })
 
-  it('access가 만료된 채 동시에 온 요청 5개는 재발급을 한 번만 한다', async () => {
-    const { request, login, authenticate, clock, calls, ACCESS_MS } = setup()
-    const { cookie } = await login()
+  it('백엔드가 만료로 거절하면 재발급하지 않고 401을 그대로 돌려준다 — 프론트가 재발급한다', async () => {
+    const { request, login, calls } = setup()
+    const { jar } = await login()
+    // BFF 쿠키는 아직 남았지만 백엔드 시계로는 만료된 경우(서버 간 시계 차이)
     server.use(
-      http.get(`${BACKEND}/api/v1/orders`, ({ request }) =>
-        authenticate(request) === 'ok' ? HttpResponse.json([]) : problemJson(401, '만료'),
-      ),
+      http.post(`${BACKEND}/api/v1/cart/items`, () => problemJson(401, '토큰이 만료되었습니다.')),
     )
-    clock.now += ACCESS_MS + 1
-
-    const responses = await Promise.all(
-      Array.from({ length: 5 }, () => request('/api/v1/orders', { cookie })),
-    )
-
-    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200, 200])
-    expect(calls.reissue).toBe(1)
-  })
-
-  it('백엔드가 만료로 거절하면 재발급 뒤 같은 요청을 본문째 다시 보낸다', async () => {
-    const { request, login, authenticate, calls } = setup()
-    const { cookie } = await login()
-    const bodies: unknown[] = []
-    // BFF는 아직 남았다고 보지만 백엔드 시계로는 만료된 경우(서버 간 시계 차이)
-    let backendSaysExpired = true
-    server.use(
-      http.post(`${BACKEND}/api/v1/cart/items`, async ({ request }) => {
-        bodies.push(await request.json())
-        if (backendSaysExpired) {
-          backendSaysExpired = false
-          return problemJson(401, '토큰이 만료되었습니다.')
-        }
-        return authenticate(request) === 'ok'
-          ? HttpResponse.json({ ok: true }, { status: 201 })
-          : problemJson(401, '유효하지 않은 토큰입니다.')
-      }),
-    )
-    const item = { productOptionId: 3, quantity: 1 }
 
     const response = await request('/api/v1/cart/items', {
       method: 'POST',
-      cookie,
+      jar,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
+      body: JSON.stringify({ productOptionId: 3, quantity: 1 }),
     })
 
-    expect(response.status).toBe(201)
-    expect(calls.reissue).toBe(1)
-    expect(bodies).toEqual([item, item])
-    expect(response.headers.getSetCookie().join()).toContain('paldo_sid=')
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({ detail: '토큰이 만료되었습니다.' })
+    expect(calls.reissue).toBe(0)
+    expect(response.headers.getSetCookie()).toEqual([])
   })
 
-  it('만료가 아닌 401이면 세션을 끝내고 토큰 없이 한 번 더 보낸다', async () => {
+  it('만료가 아닌 401이면 쿠키를 지우고 토큰 없이 한 번 더 보낸다', async () => {
     const { request, login } = setup()
-    const { cookie } = await login()
+    const { jar } = await login()
     const sent: (string | null)[] = []
     server.use(
       http.get(`${BACKEND}/api/v1/products/1`, ({ request }) => {
@@ -117,11 +89,11 @@ describe('/api/v1 프록시', () => {
       }),
     )
 
-    const response = await request('/api/v1/products/1', { cookie })
+    const response = await request('/api/v1/products/1', { jar })
 
     expect(response.status).toBe(200)
     expect(sent).toEqual([expect.stringMatching(/^Bearer /), null])
-    expect(response.headers.getSetCookie().join()).toContain('Max-Age=0')
+    expect(jar.names()).toEqual([])
   })
 
   it('업로드는 multipart 본문과 Content-Type을 그대로 흘려보낸다', async () => {

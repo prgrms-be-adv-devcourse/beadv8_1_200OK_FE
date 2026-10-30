@@ -4,6 +4,14 @@ import { seal, unseal } from './sealed.ts'
 import type { Session } from './session.ts'
 import { type ReleaseLock, type SessionStore, SessionStoreUnavailable } from './store.ts'
 
+// ⚠️ 만들어 두고 쓰지 않는 코드다 (ADR-0009, 2026-10-30).
+// BFF가 운영에 한 대뿐이라 세션을 여러 서버가 나눠 볼 일이 없어, 세션 저장소 대신 토큰을 HttpOnly 쿠키에 담기로 했다
+// (session/cookie.ts·refresher.ts). Redis를 두면 ACL·암호화 키·백엔드 Redis 결정 대기 같은 운영 부담만 생긴다.
+// BFF가 여러 대가 되거나 서버에서 세션을 끊어야 하면(강제 로그아웃) 이 코드를 되살린다:
+// store.ts(저장소·재발급 락), manager.ts(재발급), sealed.ts(세션 암호화), 이 파일(Redis 구현).
+// 앱에 연결돼 있던 모습(설정 REDIS_URL·SESSION_ENCRYPTION_KEY, main.ts 연결, 503 처리, 앱 수준 테스트)은 커밋 f802724에 있다.
+// 테스트는 pnpm --filter @paldo/bff test:redis (Docker 필요)
+
 export type RedisConnection = ReturnType<typeof createRedisClient>
 
 const createRedisClient = (url: string) =>

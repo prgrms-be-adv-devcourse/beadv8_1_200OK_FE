@@ -27,7 +27,7 @@ describe('GET /bff/products/:id/detail', () => {
 
   it('로그인했으면 내 리뷰도 세션 토큰으로 불러 합친다', async () => {
     const { request, login, authenticate } = setup()
-    const { cookie } = await login()
+    const { jar } = await login()
     server.use(
       http.get(`${BACKEND}/api/v1/products/1`, () => HttpResponse.json(product)),
       http.get(`${BACKEND}/api/v1/products/1/reviews`, () => HttpResponse.json(reviews)),
@@ -38,7 +38,7 @@ describe('GET /bff/products/:id/detail', () => {
       ),
     )
 
-    const response = await request('/bff/products/1/detail', { cookie })
+    const response = await request('/bff/products/1/detail', { jar })
 
     expect(await response.json()).toMatchObject({ myReviews: [{ reviewId: 3 }] })
   })

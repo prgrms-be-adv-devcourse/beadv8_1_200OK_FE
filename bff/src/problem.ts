@@ -25,7 +25,6 @@ export const problemDetail = {
   forbiddenOrigin: '허용되지 않은 곳에서 보낸 요청이에요. 페이지를 새로 고친 뒤 다시 시도해 주세요',
   upstreamUnreachable: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요',
   upstreamTimeout: '서버 응답이 늦어지고 있어요. 잠시 뒤 다시 시도해 주세요',
-  sessionUnavailable: '로그인 정보를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요',
   notFound: '찾는 정보가 없어요',
   internal: '서버에 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요',
 } as const

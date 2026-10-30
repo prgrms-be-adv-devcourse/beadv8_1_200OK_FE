@@ -1,7 +1,6 @@
 import { HttpResponse, http } from 'msw'
 import { createApp } from '../app.ts'
 import { loadConfig } from '../config.ts'
-import { MemorySessionStore, type SessionStore } from '../session/store.ts'
 import { server } from './server.ts'
 
 export const BACKEND = 'http://backend.test'
@@ -25,9 +24,7 @@ export const fakeJwt = (claims: { sub: string; roles: string[]; n: number }) =>
  * 시계를 움직일 수 있는 BFF + 1회용 refresh를 흉내 내는 가짜 인증 서버.
  * 백엔드처럼 access 30분·refresh 14일, 쓴 refresh는 다시 쓰면 401이다
  */
-export function setup(
-  options: { roles?: string[]; store?: (now: () => number) => SessionStore } = {},
-) {
+export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}) {
   const clock = { now: Date.parse('2026-10-27T00:00:00Z') }
   const roles = options.roles ?? ['BUYER']
   let issued = 0
@@ -79,43 +76,86 @@ export function setup(
     }),
   )
 
-  const now = () => clock.now
-  const store = options.store?.(now) ?? new MemorySessionStore(now)
-  const config = loadConfig({ NODE_ENV: 'test', BACKEND_URL: BACKEND, ALLOWED_ORIGINS: ORIGIN })
-  const app = createApp({ config, store, now })
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    BACKEND_URL: BACKEND,
+    ALLOWED_ORIGINS: ORIGIN,
+    COOKIE_SECURE: String(options.cookieSecure ?? false),
+  })
+  const app = createApp({ config, now: () => clock.now })
 
-  /** 브라우저처럼 같은 오리진에서 보낸다 */
-  const requestTo =
-    (target: typeof app) =>
-    (path: string, init: RequestInit & { cookie?: string | null } = {}) => {
-      const { cookie, ...rest } = init
-      const headers = new Headers(rest.headers)
-      if (cookie) headers.set('Cookie', cookie)
-      if (rest.method && rest.method !== 'GET' && !headers.has('Origin')) {
-        headers.set('Origin', ORIGIN)
-      }
-      return target.request(`http://localhost:8787${path}`, { ...rest, headers })
+  /** 브라우저처럼 같은 오리진에서 보낸다. jar를 주면 경로·만료가 맞는 쿠키를 싣고 받은 Set-Cookie를 담는다 */
+  const request = async (
+    path: string,
+    init: RequestInit & { jar?: CookieJar; cookie?: string } = {},
+  ) => {
+    const { jar, cookie, ...rest } = init
+    const headers = new Headers(rest.headers)
+    const sent = cookie ?? jar?.header(path)
+    if (sent) headers.set('Cookie', sent)
+    if (rest.method && rest.method !== 'GET' && !headers.has('Origin')) {
+      headers.set('Origin', ORIGIN)
     }
-  const request = requestTo(app)
-  /** 같은 세션 저장소를 쓰는 BFF 한 대를 더 띄운다. 프로세스 안의 재발급 중복 막기는 공유하지 않는다 */
-  const anotherInstance = () => requestTo(createApp({ config, store, now }))
+    const response = await app.request(`http://localhost:8787${path}`, { ...rest, headers })
+    jar?.store(response)
+    return response
+  }
 
+  /** 로그인한 브라우저 하나. 탭은 같은 jar를 나눠 쓴다 */
   const login = async () => {
+    const jar = new CookieJar(() => clock.now)
     const response = await request('/bff/session/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ loginId: 'buyer01', password: 'pass1234!' }),
+      jar,
     })
-    return { response, cookie: sessionCookie(response) }
+    return { response, jar }
   }
 
-  return { app, clock, calls, request, anotherInstance, login, authenticate, ACCESS_MS }
+  return { app, clock, calls, request, login, authenticate, ACCESS_MS, REFRESH_MS }
 }
 
-/** Set-Cookie에서 Cookie 헤더로 보낼 "이름=값". 지우는 쿠키면 null */
-export function sessionCookie(response: Response): string | null {
-  const header = response.headers.getSetCookie().find((value) => value.includes('paldo_sid='))
-  if (!header) return null
-  const pair = header.split(';')[0] ?? ''
-  return pair.endsWith('=') ? null : pair
+/** 브라우저 쿠키 저장소. Path가 요청 경로의 접두어이고 Max-Age가 남은 쿠키만 보낸다 */
+export class CookieJar {
+  readonly #cookies = new Map<string, { value: string; path: string; expiresAt: number }>()
+  readonly #now: () => number
+
+  constructor(now: () => number) {
+    this.#now = now
+  }
+
+  store(response: Response): void {
+    for (const header of response.headers.getSetCookie()) {
+      const [pair = '', ...attributes] = header.split(';').map((part) => part.trim())
+      const [name = '', value = ''] = pair.split('=')
+      const attribute = (key: string) =>
+        attributes.find((item) => item.toLowerCase().startsWith(`${key}=`))?.split('=')[1]
+      const maxAge = Number(attribute('max-age') ?? Number.POSITIVE_INFINITY)
+      if (maxAge <= 0) this.#cookies.delete(name)
+      else {
+        this.#cookies.set(name, {
+          value,
+          path: attribute('path') ?? '/',
+          expiresAt: this.#now() + maxAge * 1000,
+        })
+      }
+    }
+  }
+
+  header(path: string): string | undefined {
+    const sent = [...this.#cookies]
+      .filter(([, cookie]) => cookie.expiresAt > this.#now() && pathMatches(path, cookie.path))
+      .map(([name, cookie]) => `${name}=${cookie.value}`)
+    return sent.length ? sent.join('; ') : undefined
+  }
+
+  names(): string[] {
+    return [...this.#cookies.keys()]
+  }
 }
+
+const pathMatches = (requestPath: string, cookiePath: string) =>
+  requestPath === cookiePath ||
+  requestPath.startsWith(cookiePath.endsWith('/') ? cookiePath : `${cookiePath}/`) ||
+  requestPath.startsWith(`${cookiePath}?`)

@@ -1,9 +1,10 @@
 import type { Session } from './session.ts'
 
+// ⚠️ 만들어 두고 쓰지 않는 Redis 세션 코드의 일부다. 이유와 되살리는 법은 redis.ts 맨 위 (ADR-0009)
+
 /** 재발급 락을 푼다. 이미 만료돼 남이 잡았으면 아무것도 하지 않는다 */
 export type ReleaseLock = () => Promise<void>
 
-// 운영은 Redis(redis.ts, 백엔드 데이터용 Redis에 암호화해서), 개발·테스트는 메모리 (ADR-0006, ADR-0007).
 // 구현은 만료가 지난 세션을 돌려주지 않아야 한다
 export interface SessionStore {
   get(id: string): Promise<Session | null>

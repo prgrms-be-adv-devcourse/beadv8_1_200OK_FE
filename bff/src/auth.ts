@@ -1,105 +1,92 @@
 import { createMiddleware } from 'hono/factory'
-import type { SessionCookie } from './session/cookie.ts'
-import type { SessionManager } from './session/manager.ts'
-import type { Session } from './session/session.ts'
+import type { CookieTokens, TokenCookies } from './session/cookie.ts'
+import type { TokenRefresher } from './session/refresher.ts'
+import { type Session, type SessionView, viewOfAccessToken } from './session/session.ts'
 
 /** 요청 하나가 백엔드에 무엇으로 인증하는지. 끝나면 쿠키를 새로 쓰거나 지운다 */
 export class RequestAuth {
-  readonly #sessions: SessionManager
+  readonly #refresher: TokenRefresher
   // TODO(bff-2단계): 프론트가 쿠키 세션으로 바뀌면 브라우저 Authorization 통과를 없앤다 (ADR-0006)
   #passthrough: string | null = null
-  #sessionId: string | null = null
-  #session: Session | null = null
-  #cookie: 'keep' | 'write' | 'clear' = 'keep'
+  #accessToken: string | null
+  readonly #refreshToken: string | null
+  #cookie: { kind: 'keep' } | { kind: 'clear' } | { kind: 'write'; session: Session } = {
+    kind: 'keep',
+  }
 
-  constructor(sessions: SessionManager) {
-    this.#sessions = sessions
+  constructor(refresher: TokenRefresher, tokens: CookieTokens) {
+    this.#refresher = refresher
+    this.#accessToken = tokens.accessToken
+    this.#refreshToken = tokens.refreshToken
   }
 
   get authorization(): string | null {
     if (this.#passthrough) return this.#passthrough
-    return this.#session ? `Bearer ${this.#session.accessToken}` : null
+    return this.#accessToken ? `Bearer ${this.#accessToken}` : null
   }
 
-  /** 세션 토큰을 붙였는지. 브라우저가 보낸 토큰이면 BFF가 재발급하지 않는다 */
-  get usesSession(): boolean {
-    return this.#passthrough === null && this.#session !== null
+  /** 쿠키의 access를 붙였는지. 브라우저가 보낸 토큰이면 BFF가 쿠키를 건드리지 않는다 */
+  get usesCookie(): boolean {
+    return this.#passthrough === null && this.#accessToken !== null
   }
 
-  get session(): Session | null {
-    return this.#session
+  /** 쿠키의 access로 본 회원 정보. access가 없거나 형식이 틀리면 null */
+  get view(): SessionView | null {
+    return this.#accessToken ? viewOfAccessToken(this.#accessToken) : null
   }
 
-  get cookieChange(): { kind: 'keep' | 'clear' } | { kind: 'write'; id: string; session: Session } {
-    if (this.#cookie === 'write' && this.#sessionId && this.#session) {
-      return { kind: 'write', id: this.#sessionId, session: this.#session }
-    }
-    return { kind: this.#cookie === 'write' ? 'keep' : this.#cookie }
+  get cookieChange() {
+    return this.#cookie
   }
 
   passthrough(header: string): void {
     this.#passthrough = header
   }
 
-  use(id: string, session: Session, rotated: boolean): void {
-    this.#passthrough = null
-    this.#sessionId = id
-    this.#session = session
-    if (rotated) this.#cookie = 'write'
-  }
-
-  /** 쿠키는 있는데 세션이 끝났다 */
-  expired(): void {
-    this.#cookie = 'clear'
+  /** 로그인·재발급으로 받은 새 토큰을 이 요청에 쓰고 쿠키에 쓴다 */
+  replaceTokens(session: Session): void {
+    this.#accessToken = session.accessToken
+    this.#cookie = { kind: 'write', session }
   }
 
   /**
-   * 재발급되면 true. staleOnly는 백엔드가 "토큰이 만료되었습니다."로 거절했을 때 쓴다:
-   * 다른 요청이 이미 바꿨으면 그 토큰을 쓴다. 판매자 승인처럼 권한이 바뀐 뒤에는 staleOnly 없이 부른다
+   * refresh 쿠키로 새 토큰을 받는다. 재발급되면 true. refresh가 거절되면 두 쿠키를 지운다.
+   * refresh 쿠키는 /bff/session 경로에만 실린다. 그 밖의 경로에서 부르면 access 쿠키를 지우게 되니 부르지 않는다
    */
-  async refresh(options: { staleOnly: boolean }): Promise<boolean> {
-    if (!this.#sessionId || !this.#session) return false
-    const next = await this.#sessions.refresh(
-      this.#sessionId,
-      options.staleOnly ? this.#session.accessToken : undefined,
-    )
-    if (!next) {
-      this.#session = null
-      this.#cookie = 'clear'
+  async refresh(): Promise<boolean> {
+    if (!this.#refreshToken) {
+      // 쓸 수 없는 access만 남았으면 지운다
+      if (this.#accessToken) this.end()
       return false
     }
-    this.#session = next
-    this.#cookie = 'write'
+    const session = await this.#refresher.refresh(this.#refreshToken)
+    if (!session) {
+      this.end()
+      return false
+    }
+    this.replaceTokens(session)
     return true
   }
 
-  async end(): Promise<void> {
-    if (this.#sessionId) await this.#sessions.destroy(this.#sessionId)
-    this.#session = null
-    this.#cookie = 'clear'
+  end(): void {
+    this.#accessToken = null
+    this.#cookie = { kind: 'clear' }
   }
 }
 
 export type AppEnv = { Variables: { auth: RequestAuth } }
 
-export function authMiddleware(deps: { sessions: SessionManager; cookie: SessionCookie }) {
+export function authMiddleware(deps: { refresher: TokenRefresher; cookies: TokenCookies }) {
   return createMiddleware<AppEnv>(async (c, next) => {
-    const auth = new RequestAuth(deps.sessions)
+    const auth = new RequestAuth(deps.refresher, deps.cookies.read(c))
     const header = c.req.header('Authorization')
-    const sessionId = deps.cookie.read(c)
-    if (header) {
-      auth.passthrough(header)
-    } else if (sessionId) {
-      const found = await deps.sessions.get(sessionId)
-      if (found) auth.use(sessionId, found.session, found.rotated)
-      else auth.expired()
-    }
+    if (header) auth.passthrough(header)
     c.set('auth', auth)
 
     await next()
 
     const change = auth.cookieChange
-    if (change.kind === 'write') deps.cookie.write(c, change.id, change.session)
-    if (change.kind === 'clear') deps.cookie.clear(c)
+    if (change.kind === 'write') deps.cookies.write(c, change.session)
+    if (change.kind === 'clear') deps.cookies.clear(c)
   })
 }

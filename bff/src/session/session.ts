@@ -7,7 +7,7 @@ export type TokenResponse = {
   refreshTokenExpiresAt: string
 }
 
-/** BFF 세션 저장소에만 있는 값. 토큰은 브라우저로 보내지 않는다 */
+/** 백엔드 토큰과 거기서 읽은 회원 정보. 토큰은 HttpOnly 쿠키로만 브라우저에 둔다(응답 본문에는 싣지 않는다) */
 export type Session = {
   memberId: number
   roles: string[]
@@ -25,7 +25,8 @@ export const toSessionView = (session: Session): SessionView => ({
   roles: session.roles,
 })
 
-// 서명 검증은 백엔드가 한다. BFF는 방금 백엔드에게 받은 토큰에서 회원 번호와 역할만 읽는다
+// 서명 검증은 백엔드가 한다. BFF는 토큰에서 회원 번호와 역할만 읽는다.
+// 쿠키로 받은 토큰은 검증하지 않은 값이라 화면 표시에만 쓴다. 권한은 백엔드가 API마다 확인한다
 function readClaims(accessToken: string): { memberId: number; roles: string[] } {
   const payload = accessToken.split('.')[1]
   if (!payload) throw new Error('access 토큰 형식이 아니다')
@@ -35,6 +36,15 @@ function readClaims(accessToken: string): { memberId: number; roles: string[] } 
   const roles = 'roles' in claims && Array.isArray(claims.roles) ? claims.roles : []
   if (!Number.isInteger(memberId)) throw new Error('access 토큰에 회원 번호(sub)가 없다')
   return { memberId, roles: roles.filter((role): role is string => typeof role === 'string') }
+}
+
+/** 쿠키로 받은 access에서 회원 정보를 읽는다. 브라우저가 보낸 값이라 형식이 틀리면 null */
+export function viewOfAccessToken(accessToken: string): SessionView | null {
+  try {
+    return readClaims(accessToken)
+  } catch {
+    return null
+  }
 }
 
 export function sessionFromTokens(tokens: TokenResponse): Session {

@@ -5,23 +5,17 @@ import { originGuard } from './originGuard.ts'
 import { problem, problemDetail } from './problem.ts'
 import { proxyRoutes } from './proxy.ts'
 import { productDetailRoutes } from './screens/productDetail.ts'
-import { SessionCookie } from './session/cookie.ts'
-import { SessionManager } from './session/manager.ts'
+import { TokenCookies } from './session/cookie.ts'
+import { TokenRefresher } from './session/refresher.ts'
 import { sessionRoutes } from './session/routes.ts'
-import { MemorySessionStore, type SessionStore, SessionStoreUnavailable } from './session/store.ts'
 import { Upstream, UpstreamError } from './upstream.ts'
 
-export function createApp(options: { config: Config; store?: SessionStore; now?: () => number }) {
+export function createApp(options: { config: Config; now?: () => number }) {
   const { config } = options
   const now = options.now ?? Date.now
   const upstream = new Upstream(config)
-  const sessions = new SessionManager({
-    store: options.store ?? new MemorySessionStore(now),
-    upstream,
-    timeoutMs: config.timeouts.upstream,
-    now,
-  })
-  const cookie = new SessionCookie(config.cookieSecure, now)
+  const refresher = new TokenRefresher({ upstream, timeoutMs: config.timeouts.upstream, now })
+  const cookies = new TokenCookies(config.cookieSecure, now)
 
   const app = new Hono<AppEnv>()
     .get('/health', (c) => c.json({ status: 'UP' }))
@@ -29,12 +23,12 @@ export function createApp(options: { config: Config; store?: SessionStore; now?:
       originGuard({
         allowedOrigins: config.allowedOrigins,
         allowAnyLocalhostOrigin: config.allowAnyLocalhostOrigin,
-        cookie,
+        cookies,
       }),
     )
-    .use('/api/*', authMiddleware({ sessions, cookie }))
-    .use('/bff/*', authMiddleware({ sessions, cookie }))
-    .route('/', sessionRoutes({ upstream, sessions, timeoutMs: config.timeouts.upstream }))
+    .use('/api/*', authMiddleware({ refresher, cookies }))
+    .use('/bff/*', authMiddleware({ refresher, cookies }))
+    .route('/', sessionRoutes({ upstream, timeoutMs: config.timeouts.upstream }))
     .route('/', productDetailRoutes({ upstream, timeouts: config.timeouts }))
     .route('/', proxyRoutes({ upstream, config }))
 
@@ -44,11 +38,6 @@ export function createApp(options: { config: Config; store?: SessionStore; now?:
       return error.kind === 'timeout'
         ? problem(504, problemDetail.upstreamTimeout, c.req.path)
         : problem(502, problemDetail.upstreamUnreachable, c.req.path)
-    }
-    // 쿠키는 그대로 둔다. 저장소가 돌아오면 같은 세션으로 이어 쓴다 (ADR-0007)
-    if (error instanceof SessionStoreUnavailable) {
-      console.error(error)
-      return problem(503, problemDetail.sessionUnavailable, c.req.path)
     }
     console.error(error)
     return problem(500, problemDetail.internal, c.req.path)

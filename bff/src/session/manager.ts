@@ -3,6 +3,8 @@ import { type Upstream, UpstreamError } from '../upstream.ts'
 import { type Session, sessionFromTokens, type TokenResponse } from './session.ts'
 import { type SessionStore, SessionStoreUnavailable } from './store.ts'
 
+// ⚠️ 만들어 두고 쓰지 않는 Redis 세션 코드의 일부다. 이유와 되살리는 법은 redis.ts 맨 위 (ADR-0009)
+
 // access 만료 직전에 보낸 요청이 백엔드에 닿을 때쯤 만료되지 않도록 미리 재발급한다
 const EXPIRY_SKEW_MS = 30_000
 // 다른 인스턴스가 재발급하는 동안 세션이 바뀌었는지 다시 보는 간격
