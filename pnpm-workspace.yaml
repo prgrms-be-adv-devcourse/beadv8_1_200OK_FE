@@ -1,2 +1,10 @@
 packages:
   - bff
+
+# 설치 스크립트를 실행하지 않는다고 정한 의존성. 정하지 않으면 pnpm이 설치를 멈춘다(ERR_PNPM_IGNORED_BUILDS).
+# 모두 BFF 테스트의 Testcontainers가 끌고 온 것이다: ssh2·cpu-features는 선택적 네이티브 가속,
+# protobufjs는 버전 확인용이라 없어도 동작한다
+allowBuilds:
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
