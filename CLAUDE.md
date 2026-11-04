@@ -69,7 +69,7 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.
 - 이미지: `docker build -f bff/Dockerfile .`(컨텍스트는 저장소 루트). `main`에 `bff/`나 의존성 파일이 바뀌어 push되면(또는 수동 실행) `.github/workflows/bff-image.yml`이 GHCR `paldo-gotgan-bff`(`latest`·SHA 7자리)에 올려요. 이미지에는 `org.opencontainers.image.revision` 라벨이 붙어요.
 - 운영 배치는 `deploy/`예요(ADR-0010): 백엔드와 같은 EC2에 별도 compose 프로젝트(`/opt/paldo-gotgan-bff`)로 띄우고, 백엔드 compose가 만드는 `paldo-edge` 네트워크로 nginx·app과 이어요. 호스트 포트는 없어요. 배포는 서버에서 `./deploy.sh`, 롤백은 `.env`의 `BFF_IMAGE_TAG`를 SHA 태그로 바꾼 뒤 다시 `./deploy.sh`예요. 절차는 `deploy/README.md`예요.
-  - nginx(`/bff/`·`API_UPSTREAM`)와 `paldo-edge` 네트워크는 백엔드 레포에 있어요. 네트워크 이름은 두 레포의 계약이라 한쪽만 바꾸면 BFF가 끊겨요.
+  - nginx와 `paldo-edge` 네트워크는 백엔드 레포에 있어요. nginx는 `/api/v1/`·`/bff/`를 모두 BFF로 보내요(앱 직결 스위치 없음, ADR-0010). 그래서 BFF가 죽으면 API 전체가 502예요. 네트워크 이름은 두 레포의 계약이라 한쪽만 바꾸면 BFF가 끊겨요.
 
 ## API가 없는 곳
 

@@ -4,11 +4,12 @@ BFF는 백엔드와 같은 EC2에서 돌지만, 프론트가 맡는 별도 compo
 
 - 이미지는 `main`에 `bff/`가 바뀌면 `.github/workflows/bff-image.yml`이 GHCR `paldo-gotgan-bff`에 `latest`와 커밋 SHA 7자리로 올려요.
 - 서버는 GHCR에서 이미지를 받아요. 배포는 손으로 해요(`scp` 후 `./deploy.sh`). 나중에 자동 배포도 같은 스크립트를 불러요.
-- BFF는 호스트 포트를 열지 않아요. 백엔드 nginx가 `paldo-edge` 네트워크에서 `bff:8787`로 보내고, BFF는 같은 네트워크에서 `app:8080`으로 백엔드를 불러요.
+- BFF는 호스트 포트를 열지 않아요. 백엔드 nginx가 `/api/v1/`과 `/bff/`를 모두 `paldo-edge` 네트워크의 `bff:8787`로 보내고, BFF는 같은 네트워크에서 `app:8080`으로 백엔드를 불러요.
+- 그래서 BFF가 죽으면 API 전체가 502예요. 서비스 운영 전이라 nginx에 앱 직결로 돌리는 스위치는 두지 않았어요(ADR-0010). 이상하면 아래 '롤백'으로 이미지를 되돌려요.
 
 ## 먼저 있어야 하는 것
 
-- 백엔드 쪽 nginx `/bff/` 경로와 `paldo-edge` 네트워크가 배포돼 있어야 해요. 네트워크가 없으면 `deploy.sh`가 아무것도 바꾸지 않고 멈춰요.
+- 백엔드 쪽 nginx 경로와 `paldo-edge` 네트워크가 배포돼 있어야 해요. 네트워크가 없으면 `deploy.sh`가 아무것도 바꾸지 않고 멈춰요.
 - 서버의 GHCR pull 토큰이 `paldo-gotgan-bff` 패키지를 읽을 수 있어야 해요. 백엔드용 토큰(`read:packages`)을 같이 써도 되지만, 패키지가 비공개면 그 계정이 이 패키지에 접근할 수 있는지 확인해요.
 
 ## 처음 설정 (서버당 1회)
@@ -55,11 +56,11 @@ sed -i 's/^BFF_IMAGE_TAG=.*/BFF_IMAGE_TAG=<이전 SHA 7자리>/' .env
 docker compose -f compose.prod.yml ps            # bff가 healthy인지
 docker compose -f compose.prod.yml logs -f bff   # 로그
 curl -s -o /dev/null -w '%{http_code}\n' localhost/bff/session   # 쿠키 없이 401이면 nginx → BFF 경로가 살아 있어요
+curl -s -o /dev/null -w '%{http_code}\n' localhost/api/v1/products   # 200이면 nginx → BFF → app 경로가 살아 있어요
 ```
 
 ## 처음 올릴 때 순서
 
-1. 백엔드의 nginx·네트워크 변경을 배포해요. 여기서 `paldo-edge`가 생기고 nginx에 `/bff/` 경로가 붙어요.
-2. 이 문서대로 BFF를 배포해요.
-3. Vercel 주소를 거쳐 `/bff/session/login`을 curl로 불러, 로그인 응답에 토큰 쿠키가 실리는지 확인해요.
-4. 백엔드 `.env`의 `API_UPSTREAM`을 `http://bff:8787`로 바꿔 `/api`도 BFF를 거치게 해요. 되돌릴 때는 값을 원래대로 바꾸고 nginx만 다시 띄워요.
+1. 백엔드의 nginx·네트워크 변경을 배포해요. 여기서 `paldo-edge`가 생기고 nginx가 BFF를 가리켜요. BFF를 올릴 때까지 `/api/v1/`이 502예요.
+2. 바로 이어서 이 문서대로 BFF를 배포해요.
+3. Vercel 주소를 거쳐 화면이 평소처럼 동작하는지, `/bff/session/login`을 curl로 불러 로그인 응답에 토큰 쿠키가 실리는지 확인해요.
