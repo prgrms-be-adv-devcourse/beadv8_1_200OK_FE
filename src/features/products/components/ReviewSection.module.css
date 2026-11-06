@@ -32,6 +32,21 @@
   gap: var(--mantine-spacing-sm);
 }
 
+.keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-xs);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.keywordLabel {
+  min-height: 44px;
+  height: auto;
+}
+
 .average {
   font-size: 1.625rem;
   line-height: 2.125rem;

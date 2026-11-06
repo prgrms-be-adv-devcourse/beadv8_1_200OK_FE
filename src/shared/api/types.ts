@@ -75,6 +75,17 @@ export enum ReviewMediaType {
   VIDEO = 'VIDEO',
 }
 
+/** 리뷰 키워드가 말하는 상품의 면 */
+export enum ReviewKeywordAspect {
+  TASTE = 'TASTE',
+  FRESHNESS = 'FRESHNESS',
+  CONDITION = 'CONDITION',
+  PACKAGING = 'PACKAGING',
+  DELIVERY = 'DELIVERY',
+  PRICE = 'PRICE',
+  OTHER = 'OTHER',
+}
+
 export enum PayoutEventType {
   SALE_AMOUNT = 'SALE_AMOUNT',
   SALE_SHIPPING_FEE = 'SALE_SHIPPING_FEE',
@@ -721,6 +732,20 @@ export type ProductReview = {
   media: { type: ReviewMediaType; url: string }[]
   createdAt: string
   updatedAt: string
+}
+
+/** 여러 구매자가 반복해 칭찬한 장점. keywordId는 리뷰 목록의 keyword 파라미터로 보낸다 */
+export type ReviewKeyword = {
+  keywordId: string
+  phrase: string // "달아요" 같은 짧은 긍정 표현
+  aspect: ReviewKeywordAspect
+  reviewCount: number // 이 키워드를 표현한 리뷰 수 = 키워드로 거른 목록의 totalElements
+}
+
+// 분석한 리뷰가 10개 미만이면 keywords는 빈 배열. 리뷰 3개 이상이 표현한 것만, 많은 순 최대 10개
+export type ProductReviewKeywords = {
+  analyzedReviewCount: number
+  keywords: ReviewKeyword[]
 }
 
 // ─── 판매자 신청 ─────────────────────────────────────────

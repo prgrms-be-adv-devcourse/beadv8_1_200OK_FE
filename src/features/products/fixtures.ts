@@ -5,8 +5,10 @@ import {
   type ProductOption,
   ProductRegion,
   type ProductReview,
+  type ProductReviewKeywords,
   ProductStatus,
   type ProductSummary,
+  ReviewKeywordAspect,
   ReviewMediaType,
   type SellerProfile,
 } from '@/shared/api/types'
@@ -343,3 +345,43 @@ export const appleReviews: ProductReview[] = [
     updatedAt: '2026-10-11T19:40:00Z',
   },
 ]
+
+// ─── 리뷰 키워드 (많은 순) ───────────────────────────────
+
+export const appleReviewKeywords: ProductReviewKeywords = {
+  analyzedReviewCount: 42,
+  keywords: [
+    { keywordId: 'C02', phrase: '달아요', aspect: ReviewKeywordAspect.TASTE, reviewCount: 17 },
+    {
+      keywordId: 'C05',
+      phrase: '아삭해요',
+      aspect: ReviewKeywordAspect.FRESHNESS,
+      reviewCount: 12,
+    },
+    {
+      keywordId: 'C11',
+      phrase: '크기가 고르게 왔어요',
+      aspect: ReviewKeywordAspect.CONDITION,
+      reviewCount: 8,
+    },
+    {
+      keywordId: 'C14',
+      phrase: '포장이 꼼꼼해요',
+      aspect: ReviewKeywordAspect.PACKAGING,
+      reviewCount: 6,
+    },
+    {
+      keywordId: 'C20',
+      phrase: '배송이 빨라요',
+      aspect: ReviewKeywordAspect.DELIVERY,
+      reviewCount: 4,
+    },
+  ],
+}
+
+/** MSW가 keyword로 거를 때 쓰는 리뷰 ID → 표현한 키워드 ID. 서버는 리뷰 응답에 키워드를 싣지 않는다 */
+export const appleReviewKeywordIds: Record<number, string[]> = {
+  5003: ['C02', 'C05', 'C11'],
+  5002: ['C14'],
+  5001: [],
+}
