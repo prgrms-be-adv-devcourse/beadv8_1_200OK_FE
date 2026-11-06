@@ -4,12 +4,27 @@ import {
   PayoutEventType,
   type PayoutItem,
   type PayoutSummary,
+  ProductCategory,
+  ProductCategoryGroup,
+  type ProductDetail,
+  ProductRegion,
+  ProductStatus,
+  type ProductSummary,
+  ReviewKeywordAspect,
   type SellerApplicationAdminDetail,
   type SellerApplicationAdminSummary,
 } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
-import type { AdjustTarget, PayoutFilter, PayoutRunResult } from './types'
+import {
+  type AdjustTarget,
+  type KeywordAnalysis,
+  type PayoutFilter,
+  type PayoutRunResult,
+  ReviewAspect,
+  ReviewSentiment,
+  type SentimentAnalysis,
+} from './types'
 
 // 서버 응답 모양 그대로 둔 샘플 데이터 (previews · 테스트 · MSW 기본 응답).
 // 신청 번호·회원 번호 7~11은 products·farms fixtures와 같은 농가, 청송 햇살농원(7)의 정산은 seller fixtures와 같다.
@@ -469,4 +484,129 @@ export const sampleAdjustTarget: AdjustTarget = {
   currentAmount: 26183,
   priorAdjustmentCount: 0,
   priorAdjustmentTotal: 0,
+}
+
+// ─── 리뷰 분석 테스트 ────────────────────────────────────
+
+const analysisProduct = (
+  productId: number,
+  name: string,
+  options: { optionId: number; name: string; salePrice: number }[],
+): ProductDetail => ({
+  productId,
+  name,
+  descriptionHtml: '<p>샘플 상품이에요.</p>',
+  categoryGroup: ProductCategoryGroup.AGRICULTURE,
+  category: ProductCategory.FRUIT,
+  region: ProductRegion.GYEONGBUK,
+  status: ProductStatus.ON_SALE,
+  minSalePrice: Math.min(...options.map((o) => o.salePrice)),
+  minPriceListPrice: Math.min(...options.map((o) => o.salePrice)),
+  discountRate: 0,
+  soldOut: false,
+  reviewCount: 0,
+  averageRating: 0,
+  imageUrls: [],
+  options: options.map((o) => ({ ...o, listPrice: o.salePrice, discountRate: 0, soldOut: false })),
+  createdAt: '2026-10-01T09:00:00',
+  updatedAt: '2026-10-01T09:00:00',
+})
+
+/** 옵션이 둘인 상품. 고르면 첫 옵션(1011)이 기본이다 */
+export const analysisApple = analysisProduct(101, '청송 꿀사과 부사', [
+  { optionId: 1011, name: '가정용 3kg', salePrice: 23900 },
+  { optionId: 1012, name: '선물용 5kg', salePrice: 39900 },
+])
+
+/** 상품 고르기 목록 · 상세 (상품 목록 API 응답 모양) */
+export const analysisProductDetails: ProductDetail[] = [
+  analysisApple,
+  analysisProduct(102, '성주 참외', [{ optionId: 1021, name: '2kg', salePrice: 19900 }]),
+]
+
+export const analysisProductSummaries: ProductSummary[] = analysisProductDetails.map((d) => ({
+  productId: d.productId,
+  name: d.name,
+  thumbnailUrl: '',
+  minSalePrice: d.minSalePrice,
+  minPriceListPrice: d.minPriceListPrice,
+  discountRate: d.discountRate,
+  category: d.category,
+  region: d.region,
+  status: d.status,
+  soldOut: d.soldOut,
+  reviewCount: d.reviewCount,
+  averageRating: d.averageRating,
+}))
+
+/** 확률 순서가 아닌 채로 둔다 (화면이 다시 정렬하는지 본다) */
+export const keywordAnalysis: KeywordAnalysis = {
+  analyzed: true,
+  keywordVersion: '0.3',
+  model: 'jev-keyword-2026-10',
+  keywords: [
+    {
+      keywordId: 'C05',
+      phrase: '포장이 꼼꼼해요',
+      aspect: ReviewKeywordAspect.PACKAGING,
+      probability: 0.42,
+      expressed: false,
+      excludedByTextureRule: false,
+    },
+    {
+      keywordId: 'C02',
+      phrase: '달아요',
+      aspect: ReviewKeywordAspect.TASTE,
+      probability: 0.97,
+      expressed: true,
+      excludedByTextureRule: false,
+    },
+    {
+      keywordId: 'C07',
+      phrase: '아삭해요',
+      aspect: ReviewKeywordAspect.TASTE,
+      probability: 0.93,
+      expressed: false,
+      excludedByTextureRule: true,
+    },
+    {
+      keywordId: 'C11',
+      phrase: '배송이 빨라요',
+      aspect: ReviewKeywordAspect.DELIVERY,
+      probability: 0.08,
+      expressed: false,
+      excludedByTextureRule: false,
+    },
+  ],
+}
+
+export const sentimentAnalysis: SentimentAnalysis = {
+  analyzed: true,
+  criteriaVersion: '2026-10-a',
+  model: 'jev-sentiment-2026-10',
+  overall: ReviewSentiment.MIXED,
+  aspects: {
+    [ReviewAspect.TASTE]: ReviewSentiment.POSITIVE,
+    [ReviewAspect.FRESHNESS]: ReviewSentiment.NOT_MENTIONED,
+    [ReviewAspect.CONDITION]: ReviewSentiment.NOT_MENTIONED,
+    [ReviewAspect.PACKAGING]: ReviewSentiment.NEUTRAL,
+    [ReviewAspect.DELIVERY]: ReviewSentiment.NEGATIVE,
+    [ReviewAspect.PRICE]: ReviewSentiment.NOT_MENTIONED,
+  },
+}
+
+/** 글자 없는 본문(예: "!!!")을 보냈을 때 */
+export const keywordNotAnalyzed: KeywordAnalysis = {
+  analyzed: false,
+  keywordVersion: null,
+  model: null,
+  keywords: [],
+}
+
+export const sentimentNotAnalyzed: SentimentAnalysis = {
+  analyzed: false,
+  criteriaVersion: null,
+  model: null,
+  overall: null,
+  aspects: {},
 }
