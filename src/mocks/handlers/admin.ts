@@ -5,12 +5,14 @@ import {
   adminPayouts,
   findApplication,
   findPayoutDetail,
+  keywordAnalysis,
   sellerApplicationSummaries,
+  sentimentAnalysis,
 } from '@/features/admin/fixtures'
 import { SellerApplicationStatus } from '@/shared/api/types'
 import { pageOf, problem } from './_shared'
 
-// 관리자 판매자 심사·정산 기본 응답 (admin fixtures). 실패 시나리오는 테스트에서 server.use(...)로 덮는다.
+// 관리자 판매자 심사·정산·리뷰 분석 기본 응답 (admin fixtures). 실패 시나리오는 테스트에서 server.use(...)로 덮는다.
 // 처리(review·approve·reject)는 상태를 저장하지 않고 ‘처리 뒤 상세’ 모양만 돌려준다.
 
 const applications = '*/api/v1/admin/seller-applications'
@@ -111,4 +113,8 @@ export const adminHandlers = [
     if (!items) return problem(404, '정산을 찾을 수 없습니다.')
     return HttpResponse.json(pageOf(items, new URL(request.url).searchParams))
   }),
+
+  // ─── 리뷰 분석 테스트 ──────────────────────────────────
+  http.post('*/api/v1/admin/review-analysis/keywords', () => HttpResponse.json(keywordAnalysis)),
+  http.post('*/api/v1/admin/review-analysis/sentiment', () => HttpResponse.json(sentimentAnalysis)),
 ]

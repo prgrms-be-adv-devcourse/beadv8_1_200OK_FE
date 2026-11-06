@@ -2,7 +2,7 @@ import { ActionIcon, Alert, Box, Button, Drawer, Group, Skeleton, Stack, Text } 
 import { CircleAlert, Heart, Info, PackageX, Truck } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import type { ProductDetail, ProductReview, SellerProfile } from '@/shared/api/types'
+import type { ProductDetail, ProductReview, ReviewKeyword, SellerProfile } from '@/shared/api/types'
 import { formatAmount } from '@/shared/lib/format'
 import { categoryLabels } from '@/shared/lib/labels'
 import {
@@ -63,6 +63,11 @@ export type ProductDetailViewProps = {
   hasMoreReviews?: boolean
   loadingMoreReviews?: boolean
   onLoadMoreReviews?: () => void
+  /** 리뷰 키워드 칩. 비었거나 onSelectReviewKeyword가 없으면 칩 영역을 숨긴다 */
+  reviewKeywords?: ReviewKeyword[]
+  selectedReviewKeywordId?: string
+  /** 고른 칩의 keywordId. 고른 칩을 다시 누르면 undefined(선택 풀기) */
+  onSelectReviewKeyword?: (keywordId: string | undefined) => void
   currentMemberId?: number
   /** 처음 골라 둘 옵션 (없으면 품절 아닌 첫 옵션) */
   defaultOptionId?: number
@@ -154,6 +159,9 @@ export function ProductDetailView({
   hasMoreReviews,
   loadingMoreReviews,
   onLoadMoreReviews,
+  reviewKeywords,
+  selectedReviewKeywordId,
+  onSelectReviewKeyword,
   currentMemberId,
   defaultOptionId,
   defaultQuantity = 1,
@@ -486,6 +494,9 @@ export function ProductDetailView({
             hasMore={hasMoreReviews}
             loadingMore={loadingMoreReviews}
             onLoadMore={onLoadMoreReviews}
+            keywords={reviewKeywords}
+            selectedKeywordId={selectedReviewKeywordId}
+            onSelectKeyword={onSelectReviewKeyword}
             onDeleteReview={onDeleteReview}
           />
         </section>

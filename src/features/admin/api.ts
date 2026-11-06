@@ -9,11 +9,13 @@ import type {
   PayoutItem,
   PayoutRunResponse,
   PayoutSummary,
+  ProductSummary,
   SellerApplicationAdminDetail,
   SellerApplicationAdminSummary,
   SellerApplicationListParams,
   SellerApplicationRejectRequest,
 } from '@/shared/api/types'
+import type { KeywordAnalysis, ReviewAnalysisRequest, SentimentAnalysis } from './types'
 
 // 관리자 콘솔 요청. 모두 Bearer(ADMIN 권한). 토큰 없으면 401, 관리자가 아니면 403.
 // 오류는 서버 detail을 그대로 보여 준다(errors.ts에서 501·404 문구만 바꾼다).
@@ -138,4 +140,34 @@ export async function runPayoutForOrderItem(orderItemId: number): Promise<void> 
 // 422(금액 0 · 사유 공백·255자 초과 · 항목 종류)가 501보다 먼저 온다
 export async function createPayoutAdjustment(body: PayoutAdjustmentCreateRequest): Promise<void> {
   await apiClient.post(`${payouts}/adjustments`, body)
+}
+
+// ─── 리뷰 분석 테스트 ────────────────────────────────────
+
+/** 상품 목록 API가 받는 가장 큰 size */
+export const PRODUCT_CHOICE_LIMIT = 100
+
+// ✅ GET /api/v1/products?page=0&size=100 → 노출 상품 최신순. 검색 파라미터가 없어 이름 검색은 화면에서 한다
+export async function getProductChoices(): Promise<PageResponse<ProductSummary>> {
+  const { data } = await apiClient.get<PageResponse<ProductSummary>>('/api/v1/products', {
+    params: { page: 0, size: PRODUCT_CHOICE_LIMIT },
+  })
+  return data
+}
+
+const reviewAnalysis = '/api/v1/admin/review-analysis'
+
+// POST /api/v1/admin/review-analysis/keywords { productId, optionId, content } (BE #471, dev 반영 전).
+// 404 상품 없음 · 400 다른 상품의 옵션 · 422 본문 비었거나 2,000자 초과 · 503 분석기 인증 거절 · 502 그 밖의 분석기 실패
+export async function analyzeReviewKeywords(body: ReviewAnalysisRequest): Promise<KeywordAnalysis> {
+  const { data } = await apiClient.post<KeywordAnalysis>(`${reviewAnalysis}/keywords`, body)
+  return data
+}
+
+// POST /api/v1/admin/review-analysis/sentiment. 요청 · 오류는 keywords와 같다
+export async function analyzeReviewSentiment(
+  body: ReviewAnalysisRequest,
+): Promise<SentimentAnalysis> {
+  const { data } = await apiClient.post<SentimentAnalysis>(`${reviewAnalysis}/sentiment`, body)
+  return data
 }

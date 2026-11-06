@@ -1,6 +1,8 @@
 import { ProductCategory, ProductRegion, ProductStatus } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
+  appleReviewKeywordIds,
+  appleReviewKeywords,
   appleReviews,
   categoryOptions,
   farmItems,
@@ -62,6 +64,8 @@ const detail = (props: Partial<ProductDetailViewProps> = {}) => (
     harvestDate="2026-10-08"
     reviews={appleReviews}
     hasMoreReviews
+    reviewKeywords={appleReviewKeywords.keywords}
+    onSelectReviewKeyword={noop}
     currentMemberId={MY_MEMBER_ID}
     onAddToCart={noop}
     onToggleLike={noop}
@@ -238,6 +242,22 @@ export const productPreviews: ScreenPreview[] = [
         id: 'max-quantity',
         label: '수량 한도',
         render: () => detail({ defaultQuantity: 99 }),
+      },
+      { id: 'review-keywords', label: '리뷰 키워드 칩', render: () => detail() },
+      {
+        id: 'review-keyword-selected',
+        label: '리뷰 키워드 고름',
+        render: () =>
+          detail({
+            selectedReviewKeywordId: 'C02',
+            reviews: appleReviews.filter((r) => appleReviewKeywordIds[r.reviewId]?.includes('C02')),
+            hasMoreReviews: false,
+          }),
+      },
+      {
+        id: 'review-keywords-empty',
+        label: '리뷰 키워드 없음',
+        render: () => detail({ reviewKeywords: [] }),
       },
       {
         id: 'no-review',

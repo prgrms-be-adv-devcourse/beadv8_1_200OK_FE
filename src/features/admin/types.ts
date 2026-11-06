@@ -1,4 +1,4 @@
-import type { PayoutEventType } from '@/shared/api/types'
+import type { PayoutEventType, ReviewKeywordAspect } from '@/shared/api/types'
 
 // 운영 관리자 콘솔 화면 전용 타입 (DECISIONS.md B-2). 서버 응답 타입은 shared/api/types.ts를 그대로 쓴다.
 
@@ -93,3 +93,74 @@ export type AdjustmentLog = {
 
 /** 방금 저장한 조정. 조정 전후 금액은 API가 주지 않아 입력값만 보여 준다 */
 export type AdjustmentResult = AdjustmentInput
+
+// ─── 리뷰 분석 테스트 ────────────────────────────────────
+// POST /api/v1/admin/review-analysis/keywords · /sentiment (BE #471, 백엔드 PR #462).
+// 아직 dev에 들어가지 않은 계약이라 필드 이름이 바뀔 수 있다. 이 화면만 써서 shared가 아니라 여기에 둔다.
+
+/** 감성을 나눠 보는 6개 항목. 화면 순서 그대로 */
+export enum ReviewAspect {
+  TASTE = 'TASTE',
+  FRESHNESS = 'FRESHNESS',
+  CONDITION = 'CONDITION',
+  PACKAGING = 'PACKAGING',
+  DELIVERY = 'DELIVERY',
+  PRICE = 'PRICE',
+}
+
+export enum ReviewSentiment {
+  POSITIVE = 'POSITIVE',
+  NEGATIVE = 'NEGATIVE',
+  NEUTRAL = 'NEUTRAL',
+  MIXED = 'MIXED',
+  NOT_MENTIONED = 'NOT_MENTIONED',
+}
+
+/** 전체 감성에는 ‘언급 없음’이 오지 않는다 */
+export type OverallSentiment = Exclude<ReviewSentiment, ReviewSentiment.NOT_MENTIONED>
+
+export type ReviewAnalysisRequest = {
+  productId: number
+  optionId: number
+  /** 2,000자 이하 */
+  content: string
+}
+
+export type AnalyzedKeyword = {
+  keywordId: string
+  phrase: string
+  aspect: ReviewKeywordAspect
+  /** 0~1 */
+  probability: number
+  /** 확률 0.9 이상이고 식감 규칙으로 빠지지 않은 키워드 */
+  expressed: boolean
+  excludedByTextureRule: boolean
+}
+
+/** 글자가 없는 본문이면 analyzed: false로 분석하지 않는다 */
+export type KeywordAnalysis =
+  | { analyzed: true; keywordVersion: string; model: string; keywords: AnalyzedKeyword[] }
+  | { analyzed: false; keywordVersion: null; model: null; keywords: [] }
+
+export type SentimentAnalysis =
+  | {
+      analyzed: true
+      criteriaVersion: string
+      model: string
+      overall: OverallSentiment
+      aspects: Record<ReviewAspect, ReviewSentiment>
+    }
+  | {
+      analyzed: false
+      criteriaVersion: null
+      model: null
+      overall: null
+      aspects: Partial<Record<ReviewAspect, never>>
+    }
+
+/** 분석 패널 하나의 표시 상태 */
+export type AnalysisPanel<T> =
+  | { status: 'idle' }
+  | { status: 'pending' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; data: T }

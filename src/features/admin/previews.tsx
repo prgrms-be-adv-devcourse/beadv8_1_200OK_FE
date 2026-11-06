@@ -6,15 +6,21 @@ import {
   ADMIN_MEMBER_ID,
   adminPayoutItems,
   adminPayouts,
+  analysisApple,
+  analysisProductSummaries,
   applicationCounts,
   defaultPayoutFilter,
   filterPayouts,
   findPayoutDetail,
+  keywordAnalysis,
+  keywordNotAnalyzed,
   runResults,
   sampleAdjustment,
   sampleAdjustTarget,
   sellerApplicationSummaries,
   sellerApplications,
+  sentimentAnalysis,
+  sentimentNotAnalyzed,
 } from './fixtures'
 import { type AdjustLookup, SellerReviewAction } from './types'
 import { AdminPayoutsView, type AdminPayoutsViewProps, payeeNameOf } from './views/AdminPayoutsView'
@@ -23,6 +29,10 @@ import {
   type AdminSellerDetailViewProps,
 } from './views/AdminSellerDetailView'
 import { AdminSellersView, type AdminSellersViewProps } from './views/AdminSellersView'
+import {
+  ReviewAnalysisTestView,
+  type ReviewAnalysisTestViewProps,
+} from './views/ReviewAnalysisTestView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 관리자 레이아웃 안에서 그린다.
 
@@ -162,6 +172,25 @@ const detailOf = (payoutId: number): AdminPayoutsViewProps['detail'] => {
     payeeName: detail ? payeeNameOf(detail) : undefined,
   }
 }
+
+// ─── 리뷰 분석 테스트 ────────────────────────────────────
+
+const analysisView = (props: Partial<ReviewAnalysisTestViewProps> = {}) => (
+  <ReviewAnalysisTestView
+    products={{ status: 'success', items: analysisProductSummaries, truncated: false }}
+    productId={analysisApple.productId}
+    onProductChange={noop}
+    options={{ status: 'success', items: analysisApple.options }}
+    optionId={analysisApple.options[0]?.optionId ?? null}
+    onOptionChange={noop}
+    content="달고 맛있는데 배송이 하루 늦었어요"
+    onContentChange={noop}
+    onAnalyze={noop}
+    keywords={{ status: 'success', data: keywordAnalysis }}
+    sentiment={{ status: 'success', data: sentimentAnalysis }}
+    {...props}
+  />
+)
 
 export const adminPreviews: ScreenPreview[] = [
   {
@@ -429,6 +458,61 @@ export const adminPreviews: ScreenPreview[] = [
             status: 'error',
             onRetry: noop,
             errorMessage: '기간은 최대 1년까지 조회할 수 있습니다.',
+          }),
+      },
+    ],
+  },
+  {
+    id: 'admin-review-analysis-test',
+    title: 'M-04 리뷰 분석 테스트',
+    pageTitle: '리뷰 분석 테스트',
+    layout: 'admin',
+    path: '/admin/review-analysis-test',
+    states: [
+      { id: 'result', label: '결과 있음', render: () => analysisView() },
+      {
+        id: 'keyword-failed',
+        label: '한쪽 실패 (키워드 502)',
+        render: () =>
+          analysisView({
+            keywords: { status: 'error', message: '키워드 분석기 응답을 받지 못했습니다.' },
+          }),
+      },
+      {
+        id: 'not-analyzed',
+        label: '분석 안 함 (글자 없는 본문)',
+        render: () =>
+          analysisView({
+            content: '!!!',
+            keywords: { status: 'success', data: keywordNotAnalyzed },
+            sentiment: { status: 'success', data: sentimentNotAnalyzed },
+          }),
+      },
+      {
+        id: 'analyzing',
+        label: '분석 중',
+        render: () =>
+          analysisView({ keywords: { status: 'pending' }, sentiment: { status: 'pending' } }),
+      },
+      {
+        id: 'idle',
+        label: '처음 (상품 고르기 전)',
+        render: () =>
+          analysisView({
+            productId: null,
+            options: { status: 'idle' },
+            optionId: null,
+            content: '',
+            keywords: { status: 'idle' },
+            sentiment: { status: 'idle' },
+          }),
+      },
+      {
+        id: 'many-products',
+        label: '상품 100개 넘음',
+        render: () =>
+          analysisView({
+            products: { status: 'success', items: analysisProductSummaries, truncated: true },
           }),
       },
     ],
