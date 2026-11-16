@@ -29,7 +29,7 @@ export async function agreeWalletTerms(body: TermsAgreeRequest): Promise<void> {
 }
 
 // ✅ POST /api/v1/wallets/me/charges → 201 { chargeNo, amount }. chargeNo를 토스 결제창 orderId로 넘긴다.
-// 오류: 409 필수 약관 미동의·잔액 보유 한도 초과, 422 금액 규칙(10,000원 이상·단위) 위반
+// 오류: 409 필수 약관 미동의·잔액 보유 한도 초과, 422 금액 규칙(10,000원 이상) 위반
 export async function requestCharge(body: WalletChargeRequest): Promise<WalletChargeResponse> {
   const { data } = await apiClient.post<WalletChargeResponse>('/api/v1/wallets/me/charges', body)
   return data

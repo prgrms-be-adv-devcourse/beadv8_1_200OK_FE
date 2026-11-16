@@ -32,12 +32,12 @@ describe('ChargeView', () => {
     expect(screen.getByRole('button', { name: '충전하기' })).toBeDisabled()
   })
 
-  it('10,000원 단위가 아니면 막는다', async () => {
-    const { user } = renderCharge()
-    await user.type(screen.getByLabelText('충전 금액'), '15000')
+  it('10,000원 이상이면 원 단위 금액도 충전한다', async () => {
+    const { user, onCharge } = renderCharge()
+    await user.type(screen.getByLabelText('충전 금액'), '12345')
 
-    expect(screen.getByText('10,000원 단위로 입력해 주세요')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '충전하기' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '12,345원 충전하기' }))
+    expect(onCharge).toHaveBeenCalledWith({ amount: 12345 })
   })
 
   it('보유 한도를 넘으면 막고 남은 한도를 알려 준다', async () => {
@@ -50,7 +50,7 @@ describe('ChargeView', () => {
     expect(screen.getByRole('button', { name: '충전하기' })).toBeDisabled()
   })
 
-  it('주문서에서 오면 부족 금액을 10,000원 단위로 올려 둔다', async () => {
+  it('주문서에서 오면 최소 금액보다 적은 부족 금액은 10,000원으로 올려 둔다', async () => {
     const { user, onCharge } = renderCharge({
       balance: BALANCE_SHORT,
       shortfall: 7800,
@@ -60,11 +60,24 @@ describe('ChargeView', () => {
     expect(screen.getByText('주문하려면 7,800원이 더 필요해요')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '부족한 금액만큼' }))
     expect(
-      screen.getByText('부족한 7,800원을 10,000원 단위로 맞춰 10,000원으로 정했어요'),
+      screen.getByText('최소 충전 금액에 맞춰 부족한 7,800원 대신 10,000원으로 정했어요'),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '10,000원 충전하기' }))
     expect(onCharge).toHaveBeenCalledWith({ amount: 10000 })
+  })
+
+  it('최소 금액 이상인 부족 금액은 그대로 채운다', async () => {
+    const { user, onCharge } = renderCharge({
+      balance: BALANCE_SHORT,
+      shortfall: 12_300,
+      returnTo: '/checkout',
+    })
+
+    await user.click(screen.getByRole('button', { name: '부족한 금액만큼' }))
+    expect(screen.queryByText(/최소 충전 금액에 맞춰/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '12,300원 충전하기' }))
+    expect(onCharge).toHaveBeenCalledWith({ amount: 12_300 })
   })
 
   it('첫 충전이면 약관에 모두 동의해야 충전한다', async () => {
