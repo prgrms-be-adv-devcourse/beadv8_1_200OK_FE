@@ -6,7 +6,7 @@ import { productDetailQueryOptions } from '@/shared/api/productDetail'
 import type { PayoutAdjustmentCreateRequest } from '@/shared/api/types'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { showToast } from '@/shared/ui'
-import { adminErrorMessage, isConflict } from '../errors'
+import { adminErrorMessage, isConflict, payoutRunErrorMessage } from '../errors'
 import { defaultPayoutFilter } from '../payoutFilter'
 import {
   useAdminPayout,
@@ -181,12 +181,14 @@ export function AdminPayoutsPage() {
           ? 'pending'
           : 'success'
 
-  const runWith = (mutation: typeof run, skipWait: boolean) => () => {
+  const runWith = (mutation: typeof run, kind: 'run' | 'skipWait') => () => {
     setRunResult(null)
     return mutation
       .mutateAsync()
-      .then((result) => setRunResult({ kind: 'ok', ...result, skipWait }))
-      .catch((error) => setRunResult({ kind: 'error', message: adminErrorMessage(error) }))
+      .then((result) => setRunResult({ kind: 'ok', ...result, skipWait: kind === 'skipWait' }))
+      .catch((error) =>
+        setRunResult({ kind: 'error', message: payoutRunErrorMessage(error, kind) }),
+      )
   }
 
   const adjustFieldErrors =
@@ -200,8 +202,8 @@ export function AdminPayoutsPage() {
         pendingCandidateCount: pendingCandidates.data,
         running: run.isPending || runSkipWait.isPending,
         result: runResult,
-        onRun: runWith(run, false),
-        onRunSkipWait: runWith(runSkipWait, true),
+        onRun: runWith(run, 'run'),
+        onRunSkipWait: runWith(runSkipWait, 'skipWait'),
       }}
       single={{
         running: single.isPending,

@@ -8,6 +8,7 @@ import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
+import { PAYOUT_RUNNING_MESSAGE, SKIP_WAIT_DISABLED_MESSAGE } from '../errors'
 import { adminPayouts } from '../fixtures'
 import { AdminPayoutsPage } from './AdminPages'
 
@@ -126,6 +127,40 @@ describe('AdminPayoutsPage', () => {
       within(await screen.findByRole('dialog')).getByRole('button', { name: '정산 실행' }),
     )
     expect(await screen.findByText('정산 배치 실행에 실패했습니다.')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['정산 지금 실행', '정산 실행', 'run', '정산이 이미 실행 중입니다.', PAYOUT_RUNNING_MESSAGE],
+    [
+      '대기 건너뛰고 실행 (테스트용)',
+      '건너뛰고 실행',
+      'run/skip-wait',
+      '정산이 이미 실행 중입니다.',
+      PAYOUT_RUNNING_MESSAGE,
+    ],
+    [
+      '대기 건너뛰고 실행 (테스트용)',
+      '건너뛰고 실행',
+      'run/skip-wait',
+      '정산 대기 건너뛰기 실행이 꺼져 있습니다.',
+      SKIP_WAIT_DISABLED_MESSAGE,
+    ],
+  ])('%s 409(%s)는 해요체 안내로 바꾼다', async (open, confirm, path, detail, message) => {
+    server.use(
+      http.post(`${base}/${path}`, () =>
+        HttpResponse.json(
+          { type: 'about:blank', title: 'Conflict', status: 409, detail, instance: '/x' },
+          { status: 409 },
+        ),
+      ),
+    )
+    const user = renderAt()
+    await screen.findByRole('table', { name: '정산 목록' })
+    await user.click(screen.getByRole('button', { name: open }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: confirm }),
+    )
+    expect(await screen.findByText(message)).toBeInTheDocument()
   })
 
   it('1건 정산은 서버 501이라 미지원 안내를 입력 아래에 보여 준다', async () => {
