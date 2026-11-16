@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   ThemeIcon,
+  VisuallyHidden,
 } from '@mantine/core'
 import { CircleAlert, CircleX, Info, MapPin, RefreshCw, Wallet } from 'lucide-react'
 import { useState } from 'react'
@@ -36,8 +37,8 @@ import classes from './CheckoutView.module.css'
 // B-04 주문서. 시안: b2c/Checkout, CheckoutMobile
 // 결제는 예치금으로만 한다(B-1 확정). 잔액이 부족하면 결제를 막고 부족한 만큼 충전하러 보냈다가 주문서로 돌아온다.
 // API 기준으로 더한 것: 판매자 정보 제공 동의(필수), 409 ‘주문 금액이 바뀌었어요’ 안내(A-6).
-// 배송비는 주문서 API 값(판매자별 기본 배송비). 배송지 우편번호로 ✅ 배송비 견적(fee-quotes)을 받으면 도서산간 추가 운임·도착 예정일을
-// 더해 보여 주고, 최종 금액(expectedTotalAmount)에 추가 운임을 더한다. 견적을 받는 동안은 결제를 기다리게 한다.
+// 주문서 API는 상품 금액만 준다. 배송비(도서산간 추가 운임 포함)·도착 예정일은 배송지 우편번호로 받은 ✅ 배송비 견적(fee-quotes)으로만 그리고,
+// 최종 금액(expectedTotalAmount) = 상품 금액 + 견적 배송비 합계. 견적이 없으면(배송지 없음·계산 중·실패) 배송비·합계를 ‘–’로 두고 결제를 막는다.
 // TODO(api): 상품 사진·농가 이름은 주문서 API에 없어 따로 받는다(sellerNames).
 
 export type CheckoutViewProps = {
@@ -51,9 +52,11 @@ export type CheckoutViewProps = {
   defaultAddress?: ShippingAddress | null
   /** 배송지 모달에서 ‘이번 주문에 적용’을 눌렀을 때 (초안 저장 · 견적용 우편번호) */
   onAddressSave?: (address: ShippingAddress) => void
-  /** 배송지 우편번호로 받은 배송비 견적. 없으면 주문서 배송비만 보여 준다 */
+  /** 배송지 우편번호로 받은 배송비 견적. feeQuoteStatus가 success일 때만 쓴다 */
   feeQuote?: ShippingFeeQuote
   feeQuoteStatus?: FeeQuoteStatus
+  /** 견적을 다시 받는다 (견적 실패 때) */
+  onFeeQuoteRetry?: () => void
   paymentState?: PaymentState
   /** 409로 주문서를 다시 불러왔을 때 이전 금액 */
   previousTotal?: number | null
@@ -74,6 +77,16 @@ function CheckoutSkeleton() {
       </Stack>
       <Skeleton h={300} radius="md" />
     </div>
+  )
+}
+
+/** 배송비 견적 전이라 모르는 금액 자리. 화면엔 ‘–’ */
+function UnknownPrice() {
+  return (
+    <span className="pd-num">
+      <span aria-hidden="true">–</span>
+      <VisuallyHidden>배송비 확인 전</VisuallyHidden>
+    </span>
   )
 }
 
@@ -104,6 +117,7 @@ export function CheckoutView({
   onAddressSave,
   feeQuote,
   feeQuoteStatus = 'idle',
+  onFeeQuoteRetry,
   onPay,
   onRetry,
 }: CheckoutViewProps) {
@@ -136,10 +150,12 @@ export function CheckoutView({
     )
   }
 
-  const quoteOf = (sellerId: number) => feeQuote?.sellers.find((s) => s.sellerId === sellerId)
-  const surcharge = feeQuote?.sellers.reduce((sum, s) => sum + s.regionSurcharge, 0) ?? 0
-  const total = checkout.totalAmount + surcharge
-  const shortfall = Math.max(0, total - balance)
+  // 견적이 있어야 배송비·최종 금액을 안다. 없으면 null(‘–’)
+  const quote = feeQuoteStatus === 'success' ? feeQuote : undefined
+  const quoteOf = (sellerId: number) => quote?.sellers.find((s) => s.sellerId === sellerId)
+  const surcharge = quote?.sellers.reduce((sum, s) => sum + s.regionSurcharge, 0) ?? 0
+  const total = quote ? checkout.totalProductAmount + quote.totalShippingFee : null
+  const shortfall = total === null ? 0 : Math.max(0, total - balance)
   const itemCount = checkout.sellerGroups.reduce((sum, group) => sum + group.items.length, 0)
   const chargePath = `/wallet/charge?shortfall=${shortfall}&returnTo=${encodeURIComponent('/checkout')}`
   // 상세주소는 주문에 필수다. 예전에 적어 둔 초안에는 없을 수 있다
@@ -152,14 +168,18 @@ export function CheckoutView({
     ? addressReason
     : feeQuoteStatus === 'pending'
       ? '배송비를 계산하고 있어요'
-      : shortfall > 0
-        ? '예치금이 부족해 결제할 수 없어요'
-        : !agreed
-          ? '판매자 정보 제공에 동의해 주세요'
-          : null
+      : feeQuoteStatus === 'error'
+        ? '배송비를 불러오지 못해 결제할 수 없어요'
+        : total === null
+          ? '배송비를 확인한 뒤 결제할 수 있어요'
+          : shortfall > 0
+            ? '예치금이 부족해 결제할 수 없어요'
+            : !agreed
+              ? '판매자 정보 제공에 동의해 주세요'
+              : null
 
   const pay = () => {
-    if (!address?.addressDetail || payReason) return
+    if (!address?.addressDetail || total === null || payReason) return
     const note = deliveryNote.trim()
     onPay({
       ...address,
@@ -179,7 +199,7 @@ export function CheckoutView({
       loading={paymentState === 'processing'}
       onClick={pay}
     >
-      {formatPrice(total)} 결제하기
+      {total === null ? '결제하기' : `${formatPrice(total)} 결제하기`}
     </Button>
   )
 
@@ -199,7 +219,7 @@ export function CheckoutView({
               </Stack>
             </Alert>
           )}
-          {previousTotal != null && previousTotal !== total && (
+          {previousTotal != null && total !== null && previousTotal !== total && (
             <Alert color="warning" icon={<RefreshCw />} title="주문 금액이 바뀌었어요" role="alert">
               <span className="pd-num">
                 {formatPrice(previousTotal)} → {formatPrice(total)}. 바뀐 금액을 확인하고 다시
@@ -234,9 +254,21 @@ export function CheckoutView({
                   onChange={(event) => setDeliveryNote(event.currentTarget.value)}
                 />
                 {feeQuoteStatus === 'error' && (
-                  <Text className={classes.help} role="status">
-                    배송비 견적을 불러오지 못했어요. 결제 금액은 주문할 때 다시 계산돼요
-                  </Text>
+                  <Alert
+                    color="error"
+                    icon={<CircleX />}
+                    title="배송비를 불러오지 못했어요"
+                    role="alert"
+                  >
+                    <Stack gap="sm" align="flex-start">
+                      배송비를 알아야 결제할 수 있어요. 잠시 후 다시 시도해 주세요.
+                      {onFeeQuoteRetry && (
+                        <Button variant="outline" size="sm" onClick={onFeeQuoteRetry}>
+                          배송비 다시 불러오기
+                        </Button>
+                      )}
+                    </Stack>
+                  </Alert>
                 )}
               </>
             ) : (
@@ -287,7 +319,11 @@ export function CheckoutView({
                   </ul>
                   <div className={classes.row}>
                     <span>배송비</span>
-                    <PriceText amount={quote?.baseShippingFee ?? group.shippingFee} size="S" />
+                    {quote ? (
+                      <PriceText amount={quote.baseShippingFee} size="S" />
+                    ) : (
+                      <UnknownPrice />
+                    )}
                   </div>
                   {quote && quote.regionSurcharge > 0 && (
                     <div className={classes.row} data-tone="warning">
@@ -330,7 +366,14 @@ export function CheckoutView({
                   <PriceText amount={balance} size="S" />
                 </dd>
               </div>
-              {shortfall > 0 ? (
+              {total === null ? (
+                <div>
+                  <dt>결제 후 잔액</dt>
+                  <dd>
+                    <UnknownPrice />
+                  </dd>
+                </div>
+              ) : shortfall > 0 ? (
                 <div data-tone="warning">
                   <dt>부족 금액</dt>
                   <dd>
@@ -397,12 +440,11 @@ export function CheckoutView({
             <div>
               <dt>배송비</dt>
               <dd>
-                <PriceText
-                  amount={
-                    feeQuote ? feeQuote.totalShippingFee - surcharge : checkout.totalShippingFee
-                  }
-                  size="S"
-                />
+                {quote ? (
+                  <PriceText amount={quote.totalShippingFee - surcharge} size="S" />
+                ) : (
+                  <UnknownPrice />
+                )}
               </dd>
             </div>
             {surcharge > 0 && (
@@ -415,9 +457,7 @@ export function CheckoutView({
             )}
             <div className={classes.totalRow}>
               <dt>총 결제 금액</dt>
-              <dd>
-                <PriceText amount={total} size="M" />
-              </dd>
+              <dd>{total === null ? <UnknownPrice /> : <PriceText amount={total} size="M" />}</dd>
             </div>
           </dl>
           <div className={classes.desktopOnly}>
@@ -433,9 +473,7 @@ export function CheckoutView({
 
       <CtaBar
         summary={
-          <>
-            총 <PriceText amount={total} size="M" />
-          </>
+          <>총 {total === null ? <UnknownPrice /> : <PriceText amount={total} size="M" />}</>
         }
         reason={payReason}
         action={payButton(false)}

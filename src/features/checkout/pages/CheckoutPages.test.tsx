@@ -80,7 +80,12 @@ describe('CheckoutPage', () => {
         return HttpResponse.json({
           ...remoteQuoteSample,
           regionGroup: 'GENERAL',
-          sellers: remoteQuoteSample.sellers.map((s) => ({ ...s, regionSurcharge: 0 })),
+          sellers: remoteQuoteSample.sellers.map((s) => ({
+            ...s,
+            regionSurcharge: 0,
+            shippingFee: 0,
+          })),
+          totalShippingFee: 0,
         })
       }),
       http.post('*/api/v1/orders', async ({ request }) => {
@@ -143,6 +148,27 @@ describe('CheckoutPage', () => {
     expect(bodies[0]).toMatchObject({ expectedTotalAmount: 45800 })
   })
 
+  it('견적에 실패하면 결제를 막고, 다시 불러오면 견적 금액으로 결제할 수 있다', async () => {
+    let fail = true
+    server.use(
+      http.post('*/api/v1/shipments/fee-quotes', () =>
+        fail ? problem(500, '서버 오류') : HttpResponse.json(remoteQuoteSample),
+      ),
+    )
+    const { user } = renderCheckout()
+
+    await fillAndAgree(user)
+    expect(await screen.findByText('배송비를 불러오지 못했어요')).toBeInTheDocument()
+    for (const button of screen.getAllByRole('button', { name: '결제하기' })) {
+      expect(button).toBeDisabled()
+    }
+    fail = false
+    await user.click(screen.getByRole('button', { name: '배송비 다시 불러오기' }))
+    for (const button of await screen.findAllByRole('button', { name: '45,800원 결제하기' })) {
+      expect(button).toBeEnabled()
+    }
+  })
+
   it('잔액이 부족하면 부족한 만큼 충전하러 보낸다', async () => {
     server.use(
       http.get('*/api/v1/wallets/me/balance', () =>
@@ -158,7 +184,7 @@ describe('CheckoutPage', () => {
   })
 
   it('금액이 바뀌면(409) 주문서를 다시 불러와 바뀐 금액을 알리고, 입력한 배송지는 그대로 둔다', async () => {
-    const changed: Checkout = { ...checkoutSample, totalProductAmount: 41800, totalAmount: 41800 }
+    const changed: Checkout = { ...checkoutSample, totalProductAmount: 41800 }
     let loads = 0
     server.use(
       http.get('*/api/v1/orders/checkout', () => {

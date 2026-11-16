@@ -12,7 +12,8 @@ import { useCheckout, useCreateOrder, useShippingFeeQuote } from '../queries'
 import { CheckoutView } from '../views/CheckoutView'
 
 // B-04 주문서 라우트 /checkout. ✅ GET /orders/checkout(장바구니에서 고른 상품) + GET /wallets/me/balance → POST /orders(expectedTotalAmount).
-// 배송지 우편번호가 정해지면 ✅ POST /shipments/fee-quotes로 도서산간 추가 운임·도착 예정일을 받아 금액에 더한다.
+// 주문서는 상품 금액만 준다. 배송지 우편번호가 정해지면 ✅ POST /shipments/fee-quotes로 배송비(도서산간 포함)·도착 예정일을 받아 금액에 더한다.
+// 견적을 받기 전에는 결제할 수 없다.
 // 409 금액 변경이면 주문서를 다시 불러와 이전 금액과 함께 안내하고, 다른 실패는 ‘결제하지 못했어요’에 서버 문구를 보여 준다.
 // 주문 생성 멱등키(Idempotency-Key)는 화면에 들어올 때 하나 만들어 재시도·두 번 누르기에 같은 키를 보낸다(주문이 하나만 생긴다).
 //   서버는 실패한 요청(금액 변경·잔액 부족·재고 선점 실패)에는 키를 남기지 않아 같은 키로 다시 결제해도 된다.
@@ -95,6 +96,7 @@ export function CheckoutPage() {
               ? 'pending'
               : 'idle'
       }
+      onFeeQuoteRetry={() => void feeQuote.refetch()}
       paymentState={order.isPending ? 'processing' : failure ? 'failed' : 'idle'}
       previousTotal={previousTotal}
       errorMessage={failure}

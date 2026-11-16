@@ -8,14 +8,13 @@ import {
 } from '@/shared/api/types'
 
 // 샘플 데이터. cart/fixtures.ts에서 사과·고구마를 고른 주문서다(DECISIONS.md E).
-// 금액 흐름: 상품 39,800 + 배송비 0 = 39,800원 (실서버는 판매자별 3,000원이지만 샘플 흐름 금액을 지키려고 0으로 둔다)
+// 금액 흐름: 상품 39,800 + 배송비 견적 0 = 39,800원 (실서버는 판매자별 3,000원이지만 샘플 흐름 금액을 지키려고 0으로 둔다)
 //   잔액 충분 128,000 → 결제 후 88,200 / 잔액 부족 32,000 → 7,800 부족 → 10,000 충전 → 42,000 → 결제 후 2,200
 
 export const checkoutSample: Checkout = {
   sellerGroups: [
     {
       sellerId: 7,
-      shippingFee: 0,
       items: [
         {
           productOptionId: 1012,
@@ -29,7 +28,6 @@ export const checkoutSample: Checkout = {
     },
     {
       sellerId: 8,
-      shippingFee: 0,
       items: [
         {
           productOptionId: 1021,
@@ -43,8 +41,6 @@ export const checkoutSample: Checkout = {
     },
   ],
   totalProductAmount: 39800,
-  totalShippingFee: 0,
-  totalAmount: 39800,
 }
 
 export const sellerNames: Record<number, string> = { 7: '청송 햇살농원', 8: '땅끝고구마농장' }
@@ -71,7 +67,7 @@ export const completedOrderSample: OrderDetail = {
   addressDetail: savedAddress.addressDetail ?? '',
   sellerGroups: checkoutSample.sellerGroups.map((group, g) => ({
     sellerId: group.sellerId,
-    shippingFee: group.shippingFee,
+    shippingFee: 0,
     remoteAreaFee: 0,
     items: group.items.map((item, i) => ({
       orderItemId: SAMPLE_ORDER_ID * 10 + g * 2 + i + 1,
@@ -86,9 +82,9 @@ export const completedOrderSample: OrderDetail = {
     })),
   })),
   totalProductAmount: checkoutSample.totalProductAmount,
-  totalShippingFee: checkoutSample.totalShippingFee,
+  totalShippingFee: 0,
   totalRemoteAreaFee: 0,
-  totalAmount: checkoutSample.totalAmount,
+  totalAmount: checkoutSample.totalProductAmount,
 }
 
 // ─── 배송비 견적 (POST /shipments/fee-quotes) ───────────────────────────
