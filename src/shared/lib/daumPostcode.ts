@@ -1,8 +1,9 @@
 // 다음(카카오) 우편번호 서비스. 키 없이 브라우저에서 스크립트를 불러 쓴다.
-// 가이드: https://postcode.map.daum.net/guide — 스크립트 주소가 바뀌면 이 상수만 고친다.
+// 가이드: https://postcode.map.kakao.com/guide — 스크립트 주소가 바뀌면 이 상수만 고친다.
+// t1.daumcdn.net은 2026-11-30까지만 제공돼 t1.kakaocdn.net으로 옮겼다(kakao-postcode-QnA#1562).
 // 1단계부터 쓸 수 있는 화면 기능이고, 서버 API와는 상관없다.
 
-const SCRIPT_URL = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+const SCRIPT_URL = 'https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
 
 /** 고른 주소 (도로명 주소 우선, 없으면 지번) */
 export type PostcodeResult = { zipCode: string; address: string }
