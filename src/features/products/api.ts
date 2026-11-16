@@ -4,11 +4,10 @@ import type {
   ProductListParams,
   ProductPage,
   ProductReview,
-  ProductReviewKeywords,
   ProductSummary,
 } from '@/shared/api/types'
 
-// 구매자 상품 조회. 모두 로그인 없이 부른다(04 Product, 08 Review 상품 리뷰 목록).
+// 구매자 상품 조회. 모두 로그인 없이 부른다(04 Product). 상품 리뷰 목록·키워드는 shared/api/productReviews.ts
 
 // ✅ GET /api/v1/products/categories
 export async function fetchCategories(): Promise<CategoryGroup[]> {
@@ -22,31 +21,6 @@ export async function fetchProducts(
   params: ProductListParams,
 ): Promise<ProductPage<ProductSummary>> {
   const { data } = await apiClient.get<ProductPage<ProductSummary>>('/api/v1/products', { params })
-  return data
-}
-
-// GET /api/v1/products/{productId}/reviews?page&size&keyword. 최신순.
-// keyword는 리뷰 키워드 ID. 목록에 없는 ID면 400(REVIEW_KEYWORD_NOT_FOUND). undefined는 axios가 보내지 않는다
-// TODO(api): 2026-10-18 로컬 서버에는 리뷰 API가 아직 없어 404(No static resource). Bruno 계약대로 연결해 둔다
-export async function fetchProductReviews(
-  productId: number,
-  params: { page: number; size: number; keyword?: string },
-): Promise<ProductPage<ProductReview>> {
-  const { data } = await apiClient.get<ProductPage<ProductReview>>(
-    `/api/v1/products/${productId}/reviews`,
-    { params },
-  )
-  return data
-}
-
-// GET /api/v1/products/{productId}/review-keywords. 상품이 없거나 숨겨졌거나 삭제됐으면 404.
-// TODO(api): 백엔드 #387. 2026-11-06 dev에 아직 없어 이슈 #10의 계약대로 연결해 둔다
-export async function fetchProductReviewKeywords(
-  productId: number,
-): Promise<ProductReviewKeywords> {
-  const { data } = await apiClient.get<ProductReviewKeywords>(
-    `/api/v1/products/${productId}/review-keywords`,
-  )
   return data
 }
 

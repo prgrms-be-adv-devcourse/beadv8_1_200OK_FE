@@ -1,12 +1,11 @@
-import {
-  infiniteQueryOptions,
-  queryOptions,
-  useInfiniteQuery,
-  useQueries,
-  useQuery,
-} from '@tanstack/react-query'
+import { queryOptions, useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import { isApiError } from '@/shared/api/ApiError'
 import { productDetailQueryOptions } from '@/shared/api/productDetail'
+import {
+  productReviewKeys,
+  productReviewKeywordsQueryOptions,
+  productReviewsQueryOptions,
+} from '@/shared/api/productReviews'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
 import type {
   CategoryGroup,
@@ -15,13 +14,7 @@ import type {
   ProductRegion,
   ProductSummary,
 } from '@/shared/api/types'
-import {
-  fetchCategories,
-  fetchMyProductReviews,
-  fetchProductReviewKeywords,
-  fetchProductReviews,
-  fetchProducts,
-} from './api'
+import { fetchCategories, fetchMyProductReviews, fetchProducts } from './api'
 import type { CategoryOption, ListStatus } from './types'
 
 // 상품 쿼리 키·훅. 상품 데이터는 [products, ...], 상품 리뷰 목록은 [reviews, ...]로 시작한다.
@@ -31,7 +24,6 @@ const PRODUCT_STALE_TIME = 60_000
 const CATEGORY_STALE_TIME = 60 * 60_000
 
 export const PRODUCT_PAGE_SIZE = 20
-export const REVIEW_PAGE_SIZE = 20
 
 export type ProductFilters = { category?: ProductCategory; region?: ProductRegion }
 
@@ -44,17 +36,6 @@ export const productKeys = {
   details: () => [queryKeyPrefix.products, 'detail'] as const,
   // 상세 키·조회는 shared/api/productDetail.ts (cart·reviews·seller도 씀)
   detail: (productId: number) => productDetailQueryOptions(productId).queryKey,
-}
-
-export const productReviewKeys = {
-  all: [queryKeyPrefix.reviews, 'product'] as const,
-  // 접두어 [reviews, 'product', productId, 'list']로 키워드와 상관없이 모두 무효화한다
-  list: (productId: number, keyword?: string) =>
-    [queryKeyPrefix.reviews, 'product', productId, 'list', keyword ?? null] as const,
-  keywords: (productId: number) =>
-    [queryKeyPrefix.reviews, 'product', productId, 'keywords'] as const,
-  mine: (productId: number, memberId: number) =>
-    [queryKeyPrefix.reviews, 'product', productId, 'me', memberId] as const,
 }
 
 const toCategoryOptions = (groups: CategoryGroup[]): CategoryOption[] =>
@@ -90,17 +71,6 @@ export function useProduct(productId: number | null) {
   })
 }
 
-// 키워드가 키에 있어 키워드를 바꾸면 다른 목록이 되어 0페이지부터 다시 부른다
-export const productReviewsQueryOptions = (productId: number, keyword: string | undefined) =>
-  infiniteQueryOptions({
-    queryKey: productReviewKeys.list(productId, keyword),
-    queryFn: ({ pageParam }) =>
-      fetchProductReviews(productId, { page: pageParam, size: REVIEW_PAGE_SIZE, keyword }),
-    initialPageParam: 0,
-    getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
-    staleTime: PRODUCT_STALE_TIME,
-  })
-
 /** 상품 리뷰 목록(최신순, 더 보기). keyword가 있으면 그 리뷰 키워드로 거른다. enabled가 false면 부르지 않는다 */
 export function useProductReviews(
   productId: number,
@@ -112,12 +82,7 @@ export function useProductReviews(
 
 /** 상품의 리뷰 키워드(칩). enabled가 false면 부르지 않는다 */
 export function useProductReviewKeywords(productId: number, enabled: boolean) {
-  return useQuery({
-    queryKey: productReviewKeys.keywords(productId),
-    queryFn: () => fetchProductReviewKeywords(productId),
-    staleTime: PRODUCT_STALE_TIME,
-    enabled,
-  })
+  return useQuery({ ...productReviewKeywordsQueryOptions(productId), enabled })
 }
 
 /** 이 상품의 내 리뷰. 로그인했을 때만(memberId가 있을 때) 부른다 */
