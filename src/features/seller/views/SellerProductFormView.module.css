@@ -192,3 +192,7 @@
 .spacer {
   flex: 1;
 }
+
+.reviewsLink {
+  align-self: flex-start;
+}

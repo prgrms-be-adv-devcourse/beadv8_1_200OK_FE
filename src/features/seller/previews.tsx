@@ -1,3 +1,4 @@
+import { appleReviewKeywords, appleReviews } from '@/features/products/fixtures'
 import { RefundStatus } from '@/shared/api/refund'
 import { ProductStatus } from '@/shared/api/types'
 import { LOW_STOCK_THRESHOLD, MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
@@ -23,6 +24,7 @@ import {
   payoutOutlook,
   payouts,
   productStats,
+  reviewOverviewOf,
   reviewSentiments101,
   sellerProducts,
   sellerRefunds,
@@ -42,12 +44,13 @@ import {
   SellerProductFormView,
   type SellerProductFormViewProps,
 } from './views/SellerProductFormView'
+import {
+  SellerProductReviewsView,
+  type SellerProductReviewsViewProps,
+} from './views/SellerProductReviewsView'
 import { SellerProductsView, type SellerProductsViewProps } from './views/SellerProductsView'
 import { SellerProfileView, type SellerProfileViewProps } from './views/SellerProfileView'
-import {
-  SellerReviewSentimentView,
-  type SellerReviewSentimentViewProps,
-} from './views/SellerReviewSentimentView'
+import { SellerReviewOverviewView } from './views/SellerReviewOverviewView'
 import { SellerWalletView, type SellerWalletViewProps } from './views/SellerWalletView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 판매자 레이아웃 안에서 그린다.
@@ -278,17 +281,13 @@ const form = (props: Partial<SellerProductFormViewProps> = {}) => (
   />
 )
 
-const sentiments = (props: Partial<SellerReviewSentimentViewProps> = {}) => (
-  <SellerReviewSentimentView status="success" summary={reviewSentiments101} {...props} />
-)
-
 const edit = (props: Partial<SellerProductFormViewProps> = {}) =>
   form({
     mode: 'edit',
     defaultValues: appleFormValues,
     photos: photosOf(3),
     onDelete: noop,
-    reviewSentiments: sentiments(),
+    reviewsTo: '/seller/reviews/101',
     ...props,
   })
 
@@ -341,6 +340,27 @@ const claims = (props: Partial<SellerClaimsViewProps> = {}) => (
     pendingCount={pendingRefunds.length}
     onApprove={resolved}
     onReject={resolved}
+    {...props}
+  />
+)
+
+const overviewSuccess = (data = reviewOverviewOf(), retryingFailed = false) => (
+  <SellerReviewOverviewView
+    state={{ status: 'success', overview: data, onRetryFailed: noop, retryingFailed }}
+  />
+)
+
+const productReviews = (props: Partial<SellerProductReviewsViewProps> = {}) => (
+  <SellerProductReviewsView
+    productId={101}
+    productName="청송 꿀사과 부사"
+    sentiments={{ status: 'success', summary: reviewSentiments101 }}
+    keywordStatus="success"
+    keywords={appleReviewKeywords.keywords}
+    onSelectKeyword={noop}
+    reviewStatus="success"
+    reviews={appleReviews}
+    reviewTotal={appleReviews.length}
     {...props}
   />
 )
@@ -457,33 +477,6 @@ export const sellerWorkPreviews: ScreenPreview[] = [
           }),
       },
       { id: 'edit', label: '수정 (사진 순서)', session: 'seller', render: () => edit() },
-      {
-        id: 'sentiments-empty',
-        label: '수정 · 분석한 리뷰 없음',
-        session: 'seller',
-        render: () => edit({ reviewSentiments: sentiments({ summary: noReviewSentiments }) }),
-      },
-      {
-        id: 'sentiments-pending',
-        label: '수정 · 리뷰 반응 로딩',
-        session: 'seller',
-        render: () =>
-          edit({ reviewSentiments: sentiments({ status: 'pending', summary: undefined }) }),
-      },
-      {
-        id: 'sentiments-error',
-        label: '수정 · 리뷰 반응 오류',
-        session: 'seller',
-        render: () =>
-          edit({
-            reviewSentiments: sentiments({
-              status: 'error',
-              summary: undefined,
-              errorMessage: '상품을 찾을 수 없습니다.',
-              onRetry: noop,
-            }),
-          }),
-      },
       {
         id: 'conflict',
         label: '수정 충돌 (409)',
@@ -639,6 +632,163 @@ export const sellerWorkPreviews: ScreenPreview[] = [
         label: '불러오기 실패',
         session: 'seller',
         render: () => claims({ status: 'error' }),
+      },
+    ],
+  },
+  {
+    id: 'seller-reviews',
+    title: 'S-10 리뷰 분석',
+    pageTitle: '리뷰 분석',
+    layout: 'seller',
+    path: '/seller/reviews',
+    states: [
+      { id: 'default', label: '상품 여러 개', session: 'seller', render: () => overviewSuccess() },
+      {
+        id: 'partial',
+        label: '일부 상품 반응 실패',
+        session: 'seller',
+        render: () => overviewSuccess(reviewOverviewOf([106])),
+      },
+      {
+        id: 'partial-retrying',
+        label: '일부 실패 · 다시 받는 중',
+        session: 'seller',
+        render: () => overviewSuccess(reviewOverviewOf([106]), true),
+      },
+      {
+        id: 'no-focus',
+        label: '먼저 볼 항목 없음 (언급 10개 이상 항목 없음)',
+        session: 'seller',
+        render: () => overviewSuccess(reviewOverviewOf([101, 106])),
+      },
+      {
+        id: 'zero-analyzed',
+        label: '분석 리뷰 0',
+        session: 'seller',
+        render: () =>
+          overviewSuccess({
+            ...reviewOverviewOf([101, 106, 109, 110]),
+            failed: [],
+          }),
+      },
+      {
+        id: 'no-products',
+        label: '상품 없음',
+        session: 'seller',
+        render: () =>
+          overviewSuccess({
+            ...reviewOverviewOf(),
+            productCount: 0,
+            analyzedReviewCount: 0,
+            ranked: [],
+            thin: [],
+            failed: [],
+          }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () => <SellerReviewOverviewView state={{ status: 'pending' }} />,
+      },
+      {
+        id: 'error',
+        label: '상품 목록 오류',
+        session: 'seller',
+        render: () => (
+          <SellerReviewOverviewView
+            state={{ status: 'error', errorMessage: '잠시 후 다시 시도해 주세요.', onRetry: noop }}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'seller-product-reviews',
+    title: 'S-11 상품 리뷰 분석',
+    pageTitle: '리뷰 분석',
+    layout: 'seller',
+    path: '/seller/reviews/101',
+    states: [
+      {
+        id: 'default',
+        label: '감성 · 키워드 · 리뷰',
+        session: 'seller',
+        render: () => productReviews(),
+      },
+      {
+        id: 'keyword',
+        label: '키워드로 거름',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            selectedKeywordId: 'C02',
+            reviews: appleReviews.slice(0, 1),
+            reviewTotal: 1,
+          }),
+      },
+      {
+        id: 'hidden',
+        label: '숨긴 상품 (공개 API 404)',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            keywordStatus: 'hidden',
+            keywords: [],
+            reviewStatus: 'hidden',
+            reviews: [],
+            reviewTotal: undefined,
+          }),
+      },
+      {
+        id: 'no-reviews',
+        label: '분석한 리뷰 · 리뷰 없음',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            sentiments: { status: 'success', summary: noReviewSentiments },
+            keywords: [],
+            reviews: [],
+            reviewTotal: 0,
+          }),
+      },
+      {
+        id: 'more',
+        label: '리뷰 더 보기',
+        session: 'seller',
+        render: () => productReviews({ hasMore: true, onLoadMore: noop }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            sentiments: { status: 'pending' },
+            keywordStatus: 'pending',
+            reviewStatus: 'pending',
+            reviews: [],
+            reviewTotal: undefined,
+          }),
+      },
+      {
+        id: 'error',
+        label: '감성 · 리뷰 오류',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            sentiments: {
+              status: 'error',
+              errorMessage: '상품을 찾을 수 없습니다.',
+              onRetry: noop,
+            },
+            keywordStatus: 'error',
+            reviewStatus: 'error',
+            reviews: [],
+            reviewTotal: undefined,
+            reviewErrorMessage: '잠시 후 다시 시도해 주세요.',
+            onRetryReviews: noop,
+          }),
       },
     ],
   },

@@ -1,0 +1,217 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  min-width: 0;
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--mantine-font-size-md);
+  font-weight: 600;
+}
+
+.help {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.muted {
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.totals {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+
+  & strong {
+    color: var(--pd-color-text);
+  }
+}
+
+/* ─── 먼저 볼 항목 ─── */
+
+.focus {
+  border-color: var(--pd-color-error);
+  background-color: var(--pd-color-error-bg);
+}
+
+.focusLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: var(--pd-color-error);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+}
+
+.focusValue {
+  margin: 0;
+  font-size: 1.375rem;
+  line-height: 1.875rem;
+  font-weight: 700;
+}
+
+/* ─── 항목별 반응 ─── */
+
+.aspects {
+  display: grid;
+  gap: var(--mantine-spacing-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (min-width: 48em) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: 64em) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.aspect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  min-width: 0;
+}
+
+/* ─── 상품별 반응: 1024 이상은 표, 아래는 카드 목록 ─── */
+
+.tableWrap {
+  display: none;
+
+  @media (min-width: 64em) {
+    display: block;
+  }
+}
+
+.table {
+  table-layout: auto;
+}
+
+.right {
+  text-align: end;
+  white-space: nowrap;
+}
+
+/* 행 전체를 상품명 링크의 클릭 영역으로 쓴다 */
+.row {
+  position: relative;
+
+  &:hover {
+    background-color: var(--pd-color-bg);
+  }
+}
+
+.rowLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.name {
+  color: var(--pd-color-text);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.worst {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--pd-color-error);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  & li + li {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+}
+
+.mobileList {
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  min-height: var(--pd-touch-min);
+  padding: var(--mantine-spacing-xs) 0;
+  color: inherit;
+  text-decoration: none;
+
+  & > .name {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &:hover .name {
+    text-decoration: underline;
+  }
+}
+
+.itemBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.chevron {
+  flex: none;
+  color: var(--pd-color-text-muted);
+}

@@ -132,7 +132,7 @@ describe('summarizeSellerSentiments', () => {
     ])
 
     expect(overview.ranked.map((row) => row.productId)).toEqual([4, 2, 1, 5, 3])
-    expect(overview.ranked[0].worst?.aspect).toBe(ReviewAspect.DELIVERY)
+    expect(overview.ranked.at(0)?.worst?.aspect).toBe(ReviewAspect.DELIVERY)
     expect(overview.ranked.at(-1)?.worst).toBeNull()
   })
 

@@ -2,6 +2,7 @@
 // 화면 상태 갤러리는 개발 전용: '@/features/seller/previews'
 export { SellerPayoutsPage, SellerWalletPage } from './pages/SellerMoneyPages'
 export { SellerHomePage, SellerProfilePage } from './pages/SellerPages'
+export { SellerProductReviewsPage, SellerReviewsPage } from './pages/SellerReviewPages'
 export {
   SellerClaimsPage,
   SellerOrdersPage,

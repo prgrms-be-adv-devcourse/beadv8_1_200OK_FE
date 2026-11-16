@@ -109,14 +109,13 @@ export function summarizeSellerSentiments(
     }
   })
 
-  const aspects = ASPECT_ORDER.map((aspect, i) => {
-    let mentioned = 0
-    let counts = zeroCounts()
-    for (const row of rows) {
-      mentioned += row.aspects[i].mentioned
-      counts = addCounts(counts, row.aspects[i].counts)
-    }
-    return toStat(aspect, mentioned, counts)
+  const aspects = ASPECT_ORDER.map((aspect) => {
+    const stats = rows.flatMap((row) => row.aspects.filter((a) => a.aspect === aspect))
+    return toStat(
+      aspect,
+      stats.reduce((sum, stat) => sum + stat.mentioned, 0),
+      stats.reduce((sum, stat) => addCounts(sum, stat.counts), zeroCounts()),
+    )
   })
 
   const focusCandidate = worstOf(aspects.filter((a) => a.mentioned >= MIN_MENTIONS_FOR_FOCUS))
@@ -150,3 +149,15 @@ export function summarizeSellerSentiments(
 /** 0.4 → '40%', null → '–' */
 export const formatRate = (rate: number | null) =>
   rate === null ? '–' : `${Math.round(rate * 100)}%`
+
+/** S-10 화면 상태. 상품 목록을 못 받으면 error, 상품별 반응이 다 끝날 때까지 pending */
+export type ReviewOverviewState =
+  | { status: 'pending' }
+  | { status: 'error'; errorMessage?: string; onRetry: () => void }
+  | {
+      status: 'success'
+      overview: ReviewOverview
+      /** 못 불러온 상품의 반응만 다시 받는다 */
+      onRetryFailed: () => void
+      retryingFailed: boolean
+    }

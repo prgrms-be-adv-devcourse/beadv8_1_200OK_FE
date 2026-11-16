@@ -4,6 +4,7 @@ import {
   Banknote,
   ExternalLink,
   House,
+  MessageSquareText,
   Package,
   RotateCcw,
   Store,
@@ -45,6 +46,7 @@ export function SellerLayoutView({
   const navItems: ConsoleNavItem[] = [
     { label: '센터 홈', to: '/seller', icon: House, end: true },
     { label: '상품 관리', to: '/seller/products', icon: Package },
+    { label: '리뷰 분석', to: '/seller/reviews', icon: MessageSquareText },
     { label: '주문·출고', to: '/seller/orders', icon: Truck, count: pendingOrders },
     {
       label: '취소 요청',

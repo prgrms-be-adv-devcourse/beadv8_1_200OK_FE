@@ -198,6 +198,12 @@ export const appRoutes: RouteObject[] = [
             { title: '상품 수정', screenId: 'S-05' },
             'SellerProductFormPage',
           ),
+          sellerPage('reviews', { title: '리뷰 분석', screenId: 'S-10' }, 'SellerReviewsPage'),
+          sellerPage(
+            'reviews/:productId',
+            { title: '리뷰 분석', screenId: 'S-11' },
+            'SellerProductReviewsPage',
+          ),
           sellerPage('orders', { title: '주문·출고 관리', screenId: 'S-06' }, 'SellerOrdersPage'),
           sellerPage('claims', { title: '취소 요청 처리', screenId: 'S-07' }, 'SellerClaimsPage'),
           // 상세는 목록 위 모달이라 한 라우트(선택 세그먼트)로 둬 목록이 다시 그려지지 않게 한다

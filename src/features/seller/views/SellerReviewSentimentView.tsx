@@ -8,7 +8,7 @@ import { reviewAspectLabels, reviewSentimentLabels } from '@/shared/lib/labels'
 import { QueryState } from '@/shared/ui'
 import classes from './SellerReviewSentimentView.module.css'
 
-// S-05 상품 수정 화면의 리뷰 감성 집계. ✅ GET /sellers/me/products/{id}/review-sentiments
+// S-11 상품 리뷰 분석의 리뷰 감성 집계. ✅ GET /sellers/me/products/{id}/review-sentiments
 // 비율은 막대 색과 함께 감성 이름 · 개수 · 퍼센트 문구로 읽힌다. 막대는 장식이라 보조기기에서 숨긴다.
 
 export type SellerReviewSentimentViewProps = {
@@ -65,7 +65,7 @@ function Summary({ summary }: { summary: ReviewSentimentSummary }) {
       </p>
       <div className={classes.overall}>
         <h3 className={classes.subtitle}>전체</h3>
-        <Breakdown counts={summary.overall} total={summary.analyzedReviewCount} />
+        <SentimentBreakdown counts={summary.overall} total={summary.analyzedReviewCount} />
       </div>
       <ul className={classes.aspects} aria-label="항목별 반응">
         {summary.aspects.map(({ aspect, mentionedReviewCount, sentiments }) => (
@@ -77,7 +77,7 @@ function Summary({ summary }: { summary: ReviewSentimentSummary }) {
             {mentionedReviewCount === 0 ? (
               <p className={classes.help}>이 항목을 말한 리뷰가 없어요</p>
             ) : (
-              <Breakdown counts={sentiments} total={mentionedReviewCount} />
+              <SentimentBreakdown counts={sentiments} total={mentionedReviewCount} />
             )}
           </li>
         ))}
@@ -86,7 +86,8 @@ function Summary({ summary }: { summary: ReviewSentimentSummary }) {
   )
 }
 
-function Breakdown({ counts, total }: { counts: SentimentCounts; total: number }) {
+/** 감성 막대(장식) + 이름 · 개수 · 퍼센트 문구. total은 비율의 분모 */
+export function SentimentBreakdown({ counts, total }: { counts: SentimentCounts; total: number }) {
   return (
     <>
       <div className={classes.bar} aria-hidden="true">

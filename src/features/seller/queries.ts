@@ -1,7 +1,9 @@
 import {
   type InfiniteData,
+  queryOptions,
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
@@ -9,6 +11,10 @@ import dayjs from 'dayjs'
 import { useSyncExternalStore } from 'react'
 import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
+import {
+  productReviewKeywordsQueryOptions,
+  productReviewsQueryOptions,
+} from '@/shared/api/productReviews'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
 import {
   type Refund,
@@ -76,6 +82,11 @@ import {
   updateMyProfile,
   updateProduct,
 } from './api'
+import {
+  type ReviewOverviewState,
+  type SentimentResult,
+  summarizeSellerSentiments,
+} from './reviewOverview'
 import type { PayoutOutlook } from './types'
 
 // 판매자 센터 쿼리 키 · 훅. 상품을 바꾸면 구매자 화면 캐시도 [products] 접두어로 비운다(ADR-0003).
@@ -84,6 +95,7 @@ export const sellerKeys = {
   all: [queryKeyPrefix.seller] as const,
   myProducts: (params: SellerProductListParams) =>
     [queryKeyPrefix.seller, 'myProducts', params] as const,
+  allMyProducts: () => [queryKeyPrefix.seller, 'myProducts', 'all'] as const,
   productDetail: (productId: number) =>
     [queryKeyPrefix.seller, 'productDetail', productId] as const,
   reviewSentiments: (productId: number) =>
@@ -239,13 +251,91 @@ export function useSellerProductDetail(productId: number) {
   })
 }
 
-/** 수정 화면 아래 리뷰 감성 집계. 상품 상세와 함께 받는다 */
-export function useMyProductReviewSentiments(productId: number) {
-  return useQuery<ReviewSentimentSummary, ApiError>({
+const ALL_PRODUCTS_PAGE_SIZE = 100
+
+/** 내 상품 전부(숨긴 상품 포함, 최신순). 100개씩 받고 남은 쪽은 한꺼번에 이어 받는다 */
+async function fetchAllMyProducts(): Promise<SellerProductSummary[]> {
+  const first = await fetchMyProducts({ page: 0, size: ALL_PRODUCTS_PAGE_SIZE })
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(first.totalPages - 1, 0) }, (_, i) =>
+      fetchMyProducts({ page: i + 1, size: ALL_PRODUCTS_PAGE_SIZE }),
+    ),
+  )
+  // 받는 사이에 상품이 생기면 쪽 경계가 밀려 같은 상품이 두 번 올 수 있다
+  const seen = new Set<number>()
+  return [first, ...rest]
+    .flatMap((page) => page.content)
+    .filter((product) => !seen.has(product.productId) && seen.add(product.productId))
+}
+
+/** 센터 홈 상품 현황 · 리뷰 분석이 같이 쓴다 */
+export function useAllMyProducts() {
+  return useQuery<SellerProductSummary[], ApiError>({
+    queryKey: sellerKeys.allMyProducts(),
+    queryFn: fetchAllMyProducts,
+  })
+}
+
+const reviewSentimentsQueryOptions = (productId: number) =>
+  queryOptions<ReviewSentimentSummary, ApiError>({
     queryKey: sellerKeys.reviewSentiments(productId),
     queryFn: () => fetchMyProductReviewSentiments(productId),
+  })
+
+/** 상품 하나의 리뷰 감성 집계(S-11). 리뷰 분석 전체 화면과 캐시를 나눠 쓴다 */
+export function useMyProductReviewSentiments(productId: number) {
+  return useQuery({
+    ...reviewSentimentsQueryOptions(productId),
     enabled: Number.isInteger(productId),
   })
+}
+
+/**
+ * S-10 리뷰 분석: 내 상품 전부의 감성 집계를 동시에 받아 합친다. 상품마다 따로 실패할 수 있다.
+ * TODO(api): 판매자 전체 요약 API가 생기면 상품 수만큼 부르지 않고 그 API 하나로 바꾼다.
+ */
+export function useSellerReviewOverview(): ReviewOverviewState {
+  const products = useAllMyProducts()
+  const list = products.data ?? []
+  const sentiments = useQueries({
+    queries: list.map((product) => reviewSentimentsQueryOptions(product.productId)),
+  })
+
+  if (products.isError) {
+    return {
+      status: 'error',
+      errorMessage: products.error.detail,
+      onRetry: () => void products.refetch(),
+    }
+  }
+  if (products.isPending || sentiments.some((query) => query.isPending)) {
+    return { status: 'pending' }
+  }
+
+  const results = new Map<number, SentimentResult>()
+  list.forEach((product, i) => {
+    // 다시 받다 실패해도 이미 받은 값이 있으면 그것을 쓴다
+    results.set(product.productId, sentiments[i]?.data ?? 'error')
+  })
+  const failing = sentiments.filter((query) => query.isError && query.data === undefined)
+  return {
+    status: 'success',
+    overview: summarizeSellerSentiments(list, results),
+    onRetryFailed: () => {
+      for (const query of failing) void query.refetch()
+    },
+    retryingFailed: failing.some((query) => query.isFetching),
+  }
+}
+
+/** S-11 리뷰 목록(최신순, 더 보기). 구매자 상품 상세와 같은 공개 API·캐시 */
+export function useSellerProductReviews(productId: number, keyword: string | undefined) {
+  return useInfiniteQuery(productReviewsQueryOptions(productId, keyword))
+}
+
+/** S-11 리뷰 키워드. 숨긴 상품은 공개 API가 404라 부르지 않는다 */
+export function useSellerProductReviewKeywords(productId: number, enabled: boolean) {
+  return useQuery({ ...productReviewKeywordsQueryOptions(productId), enabled })
 }
 
 /** 상품이 바뀌면 목록 · 상세(서버 version이 오른다) · 구매자 화면 캐시를 모두 다시 받는다 */
