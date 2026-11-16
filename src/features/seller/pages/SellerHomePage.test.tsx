@@ -67,6 +67,17 @@ describe('SellerHomePage · SellerLayout', () => {
     expect(screen.queryByText('오늘 처리할 일이 없어요')).not.toBeInTheDocument()
   })
 
+  it('리뷰 분석 요약은 먼저 볼 항목과 그 항목이 가장 나쁜 상품 수를 보이고 리뷰 분석으로 보낸다', async () => {
+    renderSeller('/seller')
+    const card = await screen.findByRole('region', { name: '리뷰 분석' })
+    expect(await within(card).findByText('포장 반응이 나쁜 상품 1개')).toBeInTheDocument()
+    expect(card).toHaveTextContent('포장 부정 40% · 분석 리뷰 59개')
+    expect(within(card).getByRole('link', { name: '리뷰 분석 보기' })).toHaveAttribute(
+      'href',
+      '/seller/reviews',
+    )
+  })
+
   it('정산 후보 조회가 실패해도 홈은 보여 주고 정산 예정 칸만 비운다', async () => {
     server.use(
       http.get('*/api/v1/payouts/me/candidates', () => problem(500, '서버 오류가 발생했습니다.')),

@@ -3,13 +3,14 @@ import { MediaPurpose, ProductStatus, type SellerProfileResponse } from '@/share
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { showToast, useMediaUploads } from '@/shared/ui'
 import {
+  useAllMyProducts,
   useApprovedApplicationPostalCode,
   useMemberId,
-  useMyProducts,
   useMyProfile,
   usePayoutOutlook,
   useSaveMyProfile,
   useSellerBalance,
+  useSellerReviewOverview,
 } from '../queries'
 import type { ProfileFormValues } from '../schemas'
 import type { SellerProductStats } from '../types'
@@ -18,7 +19,7 @@ import { type ProfileFieldErrors, SellerProfileView } from '../views/SellerProfi
 
 // S-03 센터 홈 · S-09 상점 프로필 라우트 (판매자 센터 청크).
 // ✅ 지갑 잔액 GET /wallets/sellers/me/balance, 프로필 GET/POST/PUT /sellers/me/profile, 사진 POST /media/SELLER_PROFILE,
-//    상품 현황은 GET /sellers/me/products(최대 100개)에서 센다.
+//    상품 현황은 GET /sellers/me/products(전부)에서 센다. 리뷰 분석 요약은 S-10과 같은 쿼리(캐시 공유).
 //    출고지 우편번호가 프로필에 없으면 GET /sellers/me/applications(+ /{id})의 승인 신청 값으로 채운다.
 //    정산 예정 금액은 GET /payouts/me/candidates?unsettledOnly=true 합계(정산 내역 화면과 같은 쿼리).
 // TODO(api): ❌ 판매자 주문 목록·집계 API 없음 → 오늘 요약 건수는 ‘–’, 처리할 일은 연결 전(NotConnected).
@@ -29,12 +30,13 @@ const EMPTY_STATS: SellerProductStats = { onSale: 0, ready: 0, lowStockProducts:
 export function SellerHomePage() {
   const profile = useMyProfile()
   const balance = useSellerBalance()
-  const products = useMyProducts({ page: 0, size: 100 })
+  const products = useAllMyProducts()
+  const reviews = useSellerReviewOverview()
   // 후보 조회가 실패해도 홈은 보여 준다(정산 예정 칸만 ‘–’)
   const outlook = usePayoutOutlook()
 
   const productStats = useMemo<SellerProductStats>(() => {
-    const list = products.data?.content
+    const list = products.data
     if (!list) return EMPTY_STATS
     return {
       onSale: list.filter((p) => p.status === ProductStatus.ON_SALE).length,
@@ -60,6 +62,7 @@ export function SellerHomePage() {
       walletBalance={balance.data?.balance ?? 0}
       products={productStats}
       profileIncomplete={profileIncomplete}
+      reviews={reviews}
       errorMessage={balance.error?.detail}
       onRetry={() => {
         void balance.refetch()

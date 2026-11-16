@@ -66,6 +66,12 @@ const home = (props: Partial<SellerHomeViewProps> = {}) => (
     todos={todos}
     walletBalance={sellerWalletBalance}
     products={productStats}
+    reviews={{
+      status: 'success',
+      overview: reviewOverviewOf(),
+      onRetryFailed: noop,
+      retryingFailed: false,
+    }}
     {...props}
   />
 )
@@ -123,6 +129,32 @@ export const sellerCenterPreviews: ScreenPreview[] = [
             stats: { newOrders: 0, waitingShipment: 0, cancelRequests: 0 },
             expectedPayout: 0,
           }),
+      },
+      {
+        id: 'reviews-calm',
+        label: '리뷰 분석 · 먼저 볼 항목 없음',
+        session: 'seller',
+        render: () =>
+          home({
+            reviews: {
+              status: 'success',
+              overview: reviewOverviewOf([101, 106]),
+              onRetryFailed: noop,
+              retryingFailed: false,
+            },
+          }),
+      },
+      {
+        id: 'reviews-loading',
+        label: '리뷰 분석 · 로딩',
+        session: 'seller',
+        render: () => home({ reviews: { status: 'pending' } }),
+      },
+      {
+        id: 'reviews-error',
+        label: '리뷰 분석 · 오류',
+        session: 'seller',
+        render: () => home({ reviews: { status: 'error', onRetry: noop } }),
       },
       {
         id: 'payout-loading',
