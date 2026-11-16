@@ -758,6 +758,7 @@ export type SellerApplyRequest = {
   representativeName: string // 50자 이하
   businessNumber: string
   mailOrderNumber: string // 통신판매업 신고번호, 50자 이하
+  originPostalCode: string // 출고지 우편번호 \d{5}. 승인 때 배송 모듈로 넘어가고, 이후에는 프로필에서 바꾼다
 }
 
 export type SellerApplyResponse = { applicationId: number }
@@ -782,6 +783,7 @@ export type SellerApplicationResponse = {
   storeName: string
   representativeName: string
   businessNumber: string
+  originPostalCode: string | null // 이 칸이 생기기 전 신청은 null
   appliedAt: string
 }
 
@@ -799,6 +801,7 @@ export type SellerApplicationAdminSummary = {
 /** 관리자 신청 상세. review/approve/reject도 처리 뒤 상세를 돌려준다 */
 export type SellerApplicationAdminDetail = SellerApplicationAdminSummary & {
   mailOrderNumber: string
+  originPostalCode: string | null // 신청 당시 출고지 우편번호. 이 칸이 생기기 전 신청은 null
   reviewStartedAt: string | null
   approvedAt: string | null
   rejectedAt: string | null
@@ -821,6 +824,7 @@ export type SellerProfileRequest = {
   storeName: string // 50자 이하
   representativeName: string // 50자 이하
   customerServicePhone: string // 0\d{1,2}-\d{3,4}-\d{4} 또는 1\d{3}-\d{4}
+  originPostalCode: string // 출고지 우편번호 \d{5}. 배송비 계산에 쓴다
   introduction?: string | null // 200자 이하
   profileImageUrl?: string | null // POST /media/SELLER_PROFILE 응답 url. null이면 사진 삭제
 }
@@ -829,6 +833,7 @@ export type SellerProfileResponse = {
   storeName: string
   representativeName: string
   customerServicePhone: string
+  originPostalCode: string | null // 이 칸이 생기기 전 프로필은 null
   introduction: string | null
   profileImageUrl: string | null
 }

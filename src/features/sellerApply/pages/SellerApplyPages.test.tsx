@@ -41,6 +41,7 @@ async function fillShop(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('대표자명'), applyValues.representativeName)
   await user.type(screen.getByLabelText('사업자등록번호'), '5128104273')
   await user.type(screen.getByLabelText('통신판매업 신고번호'), applyValues.mailOrderNumber)
+  await user.type(screen.getByLabelText('출고지 우편번호'), applyValues.originPostalCode)
   await user.click(screen.getByRole('button', { name: '다음' }))
   await screen.findByRole('heading', { name: '신청 내용 확인' })
 }
@@ -96,6 +97,24 @@ describe('SellerApplyPage', () => {
     expect(screen.getByText('신청이 아직 접수되지 않았어요')).toBeInTheDocument()
   })
 
+  it('422 출고지 우편번호 오류는 1단계로 돌아가 그 칸에 붙인다', async () => {
+    server.use(
+      http.post('*/api/v1/sellers/me/applications', () =>
+        problem(422, '요청 값이 올바르지 않습니다.', {
+          errors: [
+            { path: 'originPostalCode', detail: '출고지 우편번호는 5자리 숫자여야 합니다.' },
+          ],
+        }),
+      ),
+    )
+    const { user } = renderAt('/seller/apply')
+    await fillShop(user)
+    await user.click(screen.getByRole('button', { name: '판매자 등록 신청하기' }))
+
+    expect(await screen.findByText('출고지 우편번호는 5자리 숫자여야 합니다.')).toBeVisible()
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveFocus()
+  })
+
   it('진행 중인 신청(PENDING)이 있으면 신청 현황으로 보낸다', async () => {
     server.use(history(applications[S.PENDING]))
     const { router } = renderAt('/seller/apply')
@@ -109,6 +128,7 @@ describe('SellerApplyPage', () => {
     expect(await screen.findByLabelText('상호명')).toHaveValue(applicationDetail.storeName)
     expect(screen.getByLabelText('사업자등록번호')).toHaveValue(applicationDetail.businessNumber)
     expect(screen.getByLabelText('통신판매업 신고번호')).toHaveValue('')
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveValue(applicationDetail.originPostalCode)
     expect(
       screen.getByText('반려 사유: 통신판매업 신고번호를 확인할 수 없어요'),
     ).toBeInTheDocument()

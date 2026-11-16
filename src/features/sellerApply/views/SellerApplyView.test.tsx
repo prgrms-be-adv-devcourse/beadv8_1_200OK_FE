@@ -7,6 +7,9 @@ import { applicationDetail, applicationHistory, applications, applyValues } from
 import { SellerApplyView, type SellerApplyViewProps } from './SellerApplyView'
 import { SellerStatusView } from './SellerStatusView'
 
+const openPostcode = vi.hoisted(() => vi.fn())
+vi.mock('@/shared/lib/daumPostcode', () => ({ openPostcode }))
+
 function renderApply(props: Partial<SellerApplyViewProps> = {}) {
   const onSubmit = vi.fn()
   render(
@@ -29,9 +32,16 @@ describe('SellerApplyView', () => {
     await user.type(screen.getByLabelText('대표자명'), applyValues.representativeName)
     await user.type(screen.getByLabelText('사업자등록번호'), '5128104273')
     await user.type(screen.getByLabelText('통신판매업 신고번호'), applyValues.mailOrderNumber)
+    await user.type(screen.getByLabelText('출고지 우편번호'), '3742')
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    expect(await screen.findByText('우편번호는 숫자 5자리로 입력해 주세요')).toBeInTheDocument()
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveFocus()
+
+    await user.type(screen.getByLabelText('출고지 우편번호'), '1')
     await user.click(screen.getByRole('button', { name: '다음' }))
 
     expect(await screen.findByRole('heading', { name: '신청 내용 확인' })).toBeInTheDocument()
+    expect(screen.getByText('37421')).toBeInTheDocument()
     expect(screen.queryByLabelText('계좌번호')).not.toBeInTheDocument()
     expect(screen.getByText(/정산 계좌는 승인 뒤 지갑에서 등록해요/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '판매자 등록 신청하기' }))
@@ -45,6 +55,7 @@ describe('SellerApplyView', () => {
     await user.type(screen.getByLabelText('대표자명'), applyValues.representativeName)
     await user.type(screen.getByLabelText('사업자등록번호'), '5128104273')
     await user.type(screen.getByLabelText('통신판매업 신고번호'), applyValues.mailOrderNumber)
+    await user.type(screen.getByLabelText('출고지 우편번호'), applyValues.originPostalCode)
     const next = screen.getByRole('button', { name: '다음' })
     await user.click(next)
 
@@ -61,6 +72,26 @@ describe('SellerApplyView', () => {
     })
     expect(await screen.findByText('이미 신청된 사업자등록번호입니다.')).toBeVisible()
     expect(screen.getByLabelText('사업자등록번호')).toBeVisible()
+  })
+
+  it('우편번호 찾기로 고른 우편번호를 칸에 채운다', async () => {
+    openPostcode.mockImplementation(async (onPick) =>
+      onPick({ zipCode: '37421', address: '경북 청송군 부남면' }),
+    )
+    const { user } = renderApply()
+    await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveValue('37421')
+  })
+
+  it('우편번호 찾기를 못 불러오면 직접 입력하라고 칸에 알린다', async () => {
+    openPostcode.mockRejectedValue(new Error('fail'))
+    const { user } = renderApply()
+    await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+    expect(
+      await screen.findByText(
+        '우편번호 찾기를 불러오지 못했어요. 숫자 5자리를 직접 입력해 주세요.',
+      ),
+    ).toBeInTheDocument()
   })
 })
 

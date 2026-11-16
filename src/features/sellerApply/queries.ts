@@ -4,6 +4,12 @@ import type { ApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
 import {
+  fetchMyApplication,
+  fetchMyApplications,
+  myApplicationQueryKey,
+  myApplicationsQueryKey,
+} from '@/shared/api/sellerApplication'
+import {
   MemberRole,
   type SellerApplicationHistoryItem,
   type SellerApplicationHistoryResponse,
@@ -12,14 +18,15 @@ import {
   type SellerApplyResponse,
 } from '@/shared/api/types'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
-import { applySeller, fetchMyApplication, fetchMyApplications } from './api'
+import { applySeller } from './api'
 
 // 판매자 신청 쿼리 키 · 훅. 승인 뒤 권한은 shared/api/reissue의 reissueSession()으로 다시 받는다(화면에서 호출).
 
 export const sellerApplyKeys = {
   all: [queryKeyPrefix.sellerApply] as const,
-  history: () => [queryKeyPrefix.sellerApply, 'history'] as const,
-  detail: (applicationId: number) => [queryKeyPrefix.sellerApply, 'detail', applicationId] as const,
+  // seller(상점 프로필)도 같은 키로 내 신청을 읽는다(shared/api/sellerApplication)
+  history: myApplicationsQueryKey,
+  detail: myApplicationQueryKey,
 }
 
 const byNewest = (a: SellerApplicationHistoryItem, b: SellerApplicationHistoryItem) =>

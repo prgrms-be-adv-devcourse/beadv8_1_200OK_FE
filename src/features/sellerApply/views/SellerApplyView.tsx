@@ -6,13 +6,14 @@ import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import type { SellerApplyRequest } from '@/shared/api/types'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
-import { PageHeader, ProgressSteps } from '@/shared/ui'
+import { PageHeader, PostalCodeField, ProgressSteps } from '@/shared/ui'
 import { ApplicationSummary } from '../components/ApplicationSummary'
 import { type ApplyFormValues, applySchema, stepFields } from '../schemas'
 import classes from './SellerApplyView.module.css'
 
 // S-01 판매자 등록 신청 /seller/apply. 시안: b2c/SellerApplyMobile(단계), b2c/SellerApply(데스크톱 한 페이지)
 // 2단계: 상점 정보 → 신청 내용 확인. 시안의 ‘정산 계좌’ 단계는 API(SellerApplyRequest)에 없어 뺐다(승인 뒤 지갑에서 등록, 준비 중).
+// 출고지 우편번호는 배송비 계산에 쓰고, 승인 뒤에는 상점 프로필에서 바꾼다.
 // 승인은 관리자가 직접 한다(B-4). 사업자등록번호 중복은 제출 뒤 서버 오류(409)로 그 칸에 붙이고 1단계로 돌아간다.
 // ✅ POST /sellers/me/applications
 
@@ -55,6 +56,7 @@ export function SellerApplyView({
     handleSubmit,
     trigger,
     getValues,
+    setValue,
     setError,
     formState: { errors },
   } = useForm<ApplyFormValues>({
@@ -64,6 +66,7 @@ export function SellerApplyView({
       representativeName: '',
       businessNumber: '',
       mailOrderNumber: '',
+      originPostalCode: '',
       ...defaultValues,
     },
   })
@@ -172,6 +175,13 @@ export function SellerApplyView({
               placeholder="제2026-경북청송-0031호"
               error={errors.mailOrderNumber?.message}
               {...register('mailOrderNumber')}
+            />
+            <PostalCodeField
+              label="출고지 우편번호"
+              description="상품을 보내는 곳이에요. 배송비 계산에 쓰고, 승인 뒤에는 상점 프로필에서 바꿀 수 있어요"
+              error={errors.originPostalCode?.message}
+              onPick={(zipCode) => setValue('originPostalCode', zipCode, { shouldValidate: true })}
+              {...register('originPostalCode')}
             />
           </div>
         </section>

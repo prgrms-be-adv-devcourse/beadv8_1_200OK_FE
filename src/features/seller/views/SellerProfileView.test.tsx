@@ -54,6 +54,7 @@ describe('SellerProfileView', () => {
       storeName: '청송 햇살농원',
       representativeName: '김영수',
       customerServicePhone: '1588-1234',
+      originPostalCode: '37421',
       introduction: '3대째 사과만 키우는 청송 부남면 과수원이에요.',
     })
   })

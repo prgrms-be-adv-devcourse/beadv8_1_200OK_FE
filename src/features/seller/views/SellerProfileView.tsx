@@ -26,6 +26,7 @@ import {
   NotConnected,
   NotConnectedValue,
   PageHeader,
+  PostalCodeField,
   QueryState,
 } from '@/shared/ui'
 import { type ProfileFormValues, profileSchema } from '../schemas'
@@ -33,7 +34,7 @@ import type { Follower } from '../types'
 import classes from './SellerProfileView.module.css'
 
 // S-09 상점 프로필 · 팔로워 /seller/profile. 시안: seller/SellerProfile, SellerProfileMobile
-// 사진(없으면 상호 첫 글자) · 상호명 · 대표자 · 고객센터 · 소개 200자 · 팔로워 목록(닉네임만) · 빈 상태
+// 사진(없으면 상호 첫 글자) · 상호명 · 대표자 · 고객센터 · 출고지 우편번호 · 소개 200자 · 팔로워 목록(닉네임만) · 빈 상태
 // profile이 null이면 아직 등록 전 → 빈 폼으로 ‘등록’, 있으면 ‘저장’(전체 수정).
 // ✅ GET/POST/PUT /sellers/me/profile, 사진 POST /media/SELLER_PROFILE.
 // TODO(api): ❌ 팔로워 수·목록 API 없음 → followerCount·followers가 null이면 수는 ‘–’, 목록은 연결 전(NotConnected).
@@ -48,6 +49,8 @@ export type SellerProfileViewProps = {
   status: 'pending' | 'error' | 'success'
   /** null = 아직 등록 안 함(등록 모드). undefined = 아직 모름 */
   profile?: SellerProfileResponse | null
+  /** 프로필에 출고지 우편번호가 없을 때 채울 값(승인된 신청 당시 값). 없으면 빈 칸 */
+  fallbackPostalCode?: string | null
   /** 구매자에게 보이는 상점(/farms/:id) 링크. 등록 모드에서는 숨긴다 */
   sellerId?: number
   /** null = 연결 전. TODO(api): ❌ 팔로워 수 API 없음 */
@@ -86,10 +89,12 @@ type FormProps = Pick<
   | 'serverErrors'
   | 'errorMessage'
   | 'photoUrl'
+  | 'fallbackPostalCode'
 > & { profile: SellerProfileResponse | null }
 
 function ProfileForm({
   profile,
+  fallbackPostalCode,
   photoUrl,
   onSave,
   saving,
@@ -107,6 +112,7 @@ function ProfileForm({
     register,
     handleSubmit,
     watch,
+    setValue,
     setError,
     formState: { errors },
   } = useForm<ProfileFormValues>({
@@ -115,6 +121,7 @@ function ProfileForm({
       storeName: profile?.storeName ?? '',
       representativeName: profile?.representativeName ?? '',
       customerServicePhone: profile?.customerServicePhone ?? '',
+      originPostalCode: profile?.originPostalCode ?? fallbackPostalCode ?? '',
       introduction: profile?.introduction ?? '',
     },
   })
@@ -199,6 +206,13 @@ function ProfileForm({
           classNames={{ input: 'pd-num' }}
           error={errors.customerServicePhone?.message}
           {...register('customerServicePhone')}
+        />
+        <PostalCodeField
+          label="출고지 우편번호"
+          description="상품을 보내는 곳이에요. 배송비 계산에 써요"
+          error={errors.originPostalCode?.message}
+          onPick={(zipCode) => setValue('originPostalCode', zipCode, { shouldValidate: true })}
+          {...register('originPostalCode')}
         />
       </div>
       <Textarea

@@ -3,6 +3,7 @@ import { MediaPurpose, ProductStatus, type SellerProfileResponse } from '@/share
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { showToast, useMediaUploads } from '@/shared/ui'
 import {
+  useApprovedApplicationPostalCode,
   useMemberId,
   useMyProducts,
   useMyProfile,
@@ -18,6 +19,7 @@ import { type ProfileFieldErrors, SellerProfileView } from '../views/SellerProfi
 // S-03 센터 홈 · S-09 상점 프로필 라우트 (판매자 센터 청크).
 // ✅ 지갑 잔액 GET /wallets/sellers/me/balance, 프로필 GET/POST/PUT /sellers/me/profile, 사진 POST /media/SELLER_PROFILE,
 //    상품 현황은 GET /sellers/me/products(최대 100개)에서 센다.
+//    출고지 우편번호가 프로필에 없으면 GET /sellers/me/applications(+ /{id})의 승인 신청 값으로 채운다.
 //    정산 예정 금액은 GET /payouts/me/candidates?unsettledOnly=true 합계(정산 내역 화면과 같은 쿼리).
 // TODO(api): ❌ 판매자 주문 목록·집계 API 없음 → 오늘 요약 건수는 ‘–’, 처리할 일은 연결 전(NotConnected).
 // TODO(api): ❌ 팔로워 목록·수 API 없음 → 팔로워 수는 ‘–’, 목록은 연결 전(NotConnected).
@@ -71,8 +73,13 @@ export function SellerHomePage() {
 
 export function SellerProfilePage() {
   const profile = useMyProfile()
+  // 프로필에 출고지 우편번호가 없으면(미등록·이 칸이 생기기 전 프로필) 승인된 신청 당시 값을 기본값으로 쓴다
+  const fallback = useApprovedApplicationPostalCode(
+    profile.data !== undefined && !profile.data?.originPostalCode,
+  )
 
-  if (profile.data === undefined) {
+  // 폼은 처음 값으로만 채우므로 기본값을 받을 때까지 기다린다(못 받으면 빈 칸)
+  if (profile.data === undefined || fallback.pending) {
     return (
       <SellerProfileView
         status={profile.isError ? 'error' : 'pending'}
@@ -87,10 +94,22 @@ export function SellerProfilePage() {
     )
   }
   // 등록 ↔ 수정이 바뀌면(등록 성공) 폼·업로드 상태를 새로 만든다
-  return <ProfileEditor key={profile.data ? 'edit' : 'register'} profile={profile.data} />
+  return (
+    <ProfileEditor
+      key={profile.data ? 'edit' : 'register'}
+      profile={profile.data}
+      fallbackPostalCode={fallback.postalCode}
+    />
+  )
 }
 
-function ProfileEditor({ profile }: { profile: SellerProfileResponse | null }) {
+function ProfileEditor({
+  profile,
+  fallbackPostalCode,
+}: {
+  profile: SellerProfileResponse | null
+  fallbackPostalCode: string | null
+}) {
   const sellerId = useMemberId()
   const photos = useMediaUploads(
     MediaPurpose.SELLER_PROFILE,
@@ -122,6 +141,7 @@ function ProfileEditor({ profile }: { profile: SellerProfileResponse | null }) {
     <SellerProfileView
       status="success"
       profile={profile}
+      fallbackPostalCode={fallbackPostalCode}
       sellerId={sellerId ?? undefined}
       // TODO(api): ❌ 팔로워 수·목록 API 없음 → null(연결 전)
       followerCount={null}

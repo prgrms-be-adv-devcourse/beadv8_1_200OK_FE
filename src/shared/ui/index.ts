@@ -40,6 +40,7 @@ export {
   type PhotoUploaderProps,
 } from './PhotoUploader/PhotoUploader'
 export { type SavedMedia, useMediaUploads } from './PhotoUploader/useMediaUploads'
+export { PostalCodeField, type PostalCodeFieldProps } from './PostalCodeField/PostalCodeField'
 export { PriceText, type PriceTextProps, type PriceTextSize } from './PriceText/PriceText'
 export {
   ProductCard,

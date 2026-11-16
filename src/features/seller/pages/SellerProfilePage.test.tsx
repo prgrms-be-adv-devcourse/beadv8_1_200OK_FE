@@ -53,6 +53,9 @@ describe('SellerProfilePage', () => {
     await user.type(screen.getByLabelText('상호명'), myProfile.storeName)
     await user.type(screen.getByLabelText('대표자명'), myProfile.representativeName)
     await user.type(screen.getByLabelText('고객센터 연락처'), myProfile.customerServicePhone)
+    // 승인 신청이 없으면(기본 MSW: 빈 내역) 출고지 우편번호는 빈 칸이다
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveValue('')
+    await user.type(screen.getByLabelText('출고지 우편번호'), '37421')
     await user.click(submit)
 
     expect(await screen.findByText('상점 프로필을 등록했어요')).toBeInTheDocument()
@@ -60,6 +63,7 @@ describe('SellerProfilePage', () => {
       storeName: myProfile.storeName,
       representativeName: myProfile.representativeName,
       customerServicePhone: myProfile.customerServicePhone,
+      originPostalCode: '37421',
       introduction: null,
       profileImageUrl: null,
     })
@@ -110,6 +114,91 @@ describe('SellerProfilePage', () => {
 
     expect(await screen.findByText('고객센터 연락처 형식이 올바르지 않습니다.')).toBeInTheDocument()
     expect(screen.getByLabelText('고객센터 연락처')).toHaveFocus()
+  })
+
+  it('422 originPostalCode는 그 칸에 붙이고 focus한다', async () => {
+    server.use(
+      http.put('*/api/v1/sellers/me/profile', () =>
+        problem(422, '요청 값이 올바르지 않습니다.', {
+          errors: [
+            {
+              detail: '출고지 우편번호는 5자리 숫자여야 합니다.',
+              pointer: '/originPostalCode',
+              path: 'originPostalCode',
+            },
+          ],
+        }),
+      ),
+    )
+    const user = renderPage()
+    await user.click(await screen.findByRole('button', { name: '저장' }))
+
+    expect(await screen.findByText('출고지 우편번호는 5자리 숫자여야 합니다.')).toBeInTheDocument()
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveFocus()
+  })
+
+  it('프로필에 출고지 우편번호가 없으면(null) 승인된 신청 당시 값을 채워 저장한다', async () => {
+    let body: unknown
+    server.use(
+      http.get('*/api/v1/sellers/me/profile', () =>
+        HttpResponse.json({ ...myProfile, originPostalCode: null }),
+      ),
+      http.get('*/api/v1/sellers/me/applications', () =>
+        HttpResponse.json({
+          applications: [
+            {
+              applicationId: 31,
+              status: 'APPROVED',
+              appliedAt: '2026-10-13T10:00:00',
+              reviewStartedAt: '2026-10-14T09:30:00',
+              approvedAt: '2026-10-15T14:00:00',
+              rejectedAt: null,
+              rejectReason: null,
+            },
+          ],
+        }),
+      ),
+      http.get('*/api/v1/sellers/me/applications/31', () =>
+        HttpResponse.json({
+          applicationId: 31,
+          status: 'APPROVED',
+          storeName: myProfile.storeName,
+          representativeName: myProfile.representativeName,
+          businessNumber: '512-81-04273',
+          originPostalCode: '37421',
+          appliedAt: '2026-10-13T10:00:00',
+        }),
+      ),
+      http.put('*/api/v1/sellers/me/profile', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(myProfile)
+      }),
+    )
+    const user = renderPage()
+
+    expect(await screen.findByLabelText('출고지 우편번호')).toHaveValue('37421')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(body).toMatchObject({ originPostalCode: '37421' }))
+  })
+
+  it('프로필에 출고지 우편번호가 없고 승인 신청 값도 없으면 빈 칸으로 두고 저장을 막는다', async () => {
+    let saved = false
+    server.use(
+      http.get('*/api/v1/sellers/me/profile', () =>
+        HttpResponse.json({ ...myProfile, originPostalCode: null }),
+      ),
+      http.put('*/api/v1/sellers/me/profile', () => {
+        saved = true
+        return HttpResponse.json(myProfile)
+      }),
+    )
+    const user = renderPage()
+
+    expect(await screen.findByLabelText('출고지 우편번호')).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    expect(await screen.findByText('출고지 우편번호를 입력해 주세요')).toBeInTheDocument()
+    expect(screen.getByLabelText('출고지 우편번호')).toHaveFocus()
+    expect(saved).toBe(false)
   })
 
   it('사진을 올리는 동안 저장을 막고, 다 올리면 그 url을 보낸다', async () => {
