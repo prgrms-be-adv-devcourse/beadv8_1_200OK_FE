@@ -48,6 +48,23 @@ describe('AddressModal', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('상세주소를 비우면 저장하지 않고 칸 오류를 보여 준다', async () => {
+    openPostcode.mockImplementation(async (onPick) =>
+      onPick({ zipCode: '04524', address: '서울 중구 세종대로 110' }),
+    )
+    const { user, onSave } = renderModal()
+    await user.type(await screen.findByLabelText('받는 분'), '이서연')
+    await user.type(screen.getByLabelText('연락처'), '010-2468-1357')
+    await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+    await user.type(screen.getByLabelText('상세주소'), '   ')
+    await user.click(screen.getByRole('button', { name: '이번 주문에 적용' }))
+
+    expect(onSave).not.toHaveBeenCalled()
+    expect(await screen.findByText('상세주소를 입력해 주세요')).toBeInTheDocument()
+    expect(screen.getByLabelText('상세주소')).toHaveFocus()
+    expect(screen.getByLabelText('상세주소')).toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('서비스를 못 불러오면 다시 누르라고 알린다', async () => {
     openPostcode.mockRejectedValue(new Error('fail'))
     const { user } = renderModal()

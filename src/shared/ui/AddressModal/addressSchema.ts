@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// 배송지 검증. 규칙은 Bruno CreateOrderRequest 필드 제약 그대로(DECISIONS.md A-6).
+// 배송지 검증. 규칙은 CreateOrderRequest·배송 AddressRequest 필드 제약 그대로(DECISIONS.md A-6). 상세주소는 둘 다 필수(@NotBlank).
 // shared/ui 안에서만 쓴다(AddressModal).
 
 export const addressSchema = z.object({
@@ -22,7 +22,11 @@ export const addressSchema = z.object({
     .trim()
     .min(1, '주소를 입력해 주세요')
     .max(200, '주소는 200자 이하로 입력해 주세요'),
-  addressDetail: z.string().trim().max(100, '상세주소는 100자 이하로 입력해 주세요'),
+  addressDetail: z
+    .string()
+    .trim()
+    .min(1, '상세주소를 입력해 주세요')
+    .max(100, '상세주소는 100자 이하로 입력해 주세요'),
 })
 
 export type AddressFormValues = z.infer<typeof addressSchema>

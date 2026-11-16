@@ -7,6 +7,7 @@ import {
   Skeleton,
   Stack,
   Text,
+  TextInput,
   ThemeIcon,
 } from '@mantine/core'
 import { CircleAlert, CircleX, Info, MapPin, RefreshCw, Wallet } from 'lucide-react'
@@ -109,6 +110,7 @@ export function CheckoutView({
   const [address, setAddress] = useState<ShippingAddress | null>(defaultAddress)
   const [addressOpen, setAddressOpen] = useState(false)
   const [agreed, setAgreed] = useState(false)
+  const [deliveryNote, setDeliveryNote] = useState('')
 
   const resolvedStatus =
     status === 'success' && (!checkout || checkout.sellerGroups.length === 0) ? 'empty' : status
@@ -140,8 +142,14 @@ export function CheckoutView({
   const shortfall = Math.max(0, total - balance)
   const itemCount = checkout.sellerGroups.reduce((sum, group) => sum + group.items.length, 0)
   const chargePath = `/wallet/charge?shortfall=${shortfall}&returnTo=${encodeURIComponent('/checkout')}`
-  const payReason = !address
+  // 상세주소는 주문에 필수다. 예전에 적어 둔 초안에는 없을 수 있다
+  const addressReason = !address
     ? '배송지를 입력해 주세요'
+    : !address.addressDetail
+      ? '배송지에 상세주소를 입력해 주세요'
+      : null
+  const payReason = addressReason
+    ? addressReason
     : feeQuoteStatus === 'pending'
       ? '배송비를 계산하고 있어요'
       : shortfall > 0
@@ -151,8 +159,15 @@ export function CheckoutView({
           : null
 
   const pay = () => {
-    if (!address || payReason) return
-    onPay({ ...address, thirdPartyProvisionAgreed: true, expectedTotalAmount: total })
+    if (!address?.addressDetail || payReason) return
+    const note = deliveryNote.trim()
+    onPay({
+      ...address,
+      addressDetail: address.addressDetail,
+      ...(note ? { deliveryNote: note } : {}),
+      thirdPartyProvisionAgreed: true,
+      expectedTotalAmount: total,
+    })
   }
 
   const payButton = (fullWidth: boolean) => (
@@ -211,6 +226,13 @@ export function CheckoutView({
                 <Text className={classes.help}>
                   주문서에서 바꾼 배송지는 이번 주문에만 적용돼요
                 </Text>
+                <TextInput
+                  label="배송 요청사항 (선택)"
+                  placeholder="예: 문 앞에 놓아 주세요"
+                  maxLength={255}
+                  value={deliveryNote}
+                  onChange={(event) => setDeliveryNote(event.currentTarget.value)}
+                />
                 {feeQuoteStatus === 'error' && (
                   <Text className={classes.help} role="status">
                     배송비 견적을 불러오지 못했어요. 결제 금액은 주문할 때 다시 계산돼요

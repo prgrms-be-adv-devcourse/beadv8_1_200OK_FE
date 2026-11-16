@@ -69,6 +69,17 @@ describe('CheckoutView', () => {
     expect(screen.getAllByText('배송지를 입력해 주세요').length).toBeGreaterThan(0)
   })
 
+  it('상세주소가 없는 배송지(예전 초안)면 결제를 막고 상세주소를 넣게 한다', async () => {
+    const { user, onPay } = renderCheckout({
+      defaultAddress: { ...savedAddress, addressDetail: undefined },
+    })
+    await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
+
+    for (const button of payButtons()) expect(button).toBeDisabled()
+    expect(screen.getAllByText('배송지에 상세주소를 입력해 주세요').length).toBeGreaterThan(0)
+    expect(onPay).not.toHaveBeenCalled()
+  })
+
   it('도서산간 견적이 오면 추가 운임·도착 예정일을 보여 주고 최종 금액에 더한다', async () => {
     const { user, onPay } = renderCheckout({
       feeQuote: remoteQuoteSample,
