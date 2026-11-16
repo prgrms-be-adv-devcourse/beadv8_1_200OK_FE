@@ -9,7 +9,13 @@ import { MemberRole, type ProductPage, type ProductSummary } from '@/shared/api/
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { appleReviews, MY_MEMBER_ID, productDetailOf, productSummaries } from '../fixtures'
+import {
+  appleReviewKeywords,
+  appleReviews,
+  MY_MEMBER_ID,
+  productDetailOf,
+  productSummaries,
+} from '../fixtures'
 import { HomePage } from './HomePage'
 import { ProductDetailPage } from './ProductDetailPage'
 import { ProductListPage } from './ProductListPage'
@@ -165,6 +171,125 @@ describe('ProductDetailPage', () => {
       '리뷰를 잠시 불러올 수 없습니다.',
     )
     expect(screen.getAllByRole('button', { name: '장바구니 담기' }).length).toBeGreaterThan(0)
+  })
+})
+
+describe('ProductDetailPage 리뷰 키워드', () => {
+  const [mine, other, third] = appleReviews
+
+  const reviewContents = (region: HTMLElement) =>
+    within(region)
+      .queryAllByRole('article')
+      .map((article) => article.querySelector('p')?.textContent)
+
+  const reviewsRegion = async () => {
+    await screen.findByRole('heading', { level: 1, name: productDetailOf(101)?.name })
+    return screen.getByRole('region', { name: /리뷰/ })
+  }
+
+  it('리뷰 키워드를 문구와 리뷰 수로 보여 준다', async () => {
+    renderAt('/products/101')
+
+    const group = await screen.findByRole('group', { name: '리뷰 키워드' })
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(appleReviewKeywords.keywords.length)
+    for (const keyword of appleReviewKeywords.keywords) {
+      expect(
+        within(group).getByRole('checkbox', { name: `${keyword.phrase} ${keyword.reviewCount}` }),
+      ).toBeInTheDocument()
+    }
+    expect(within(group).getByRole('checkbox', { name: '달아요 17' })).not.toBeChecked()
+  })
+
+  it('리뷰 키워드가 없으면 칩 영역을 보이지 않는다', async () => {
+    const requested: string[] = []
+    server.use(
+      http.get('*/api/v1/products/:productId/review-keywords', ({ request }) => {
+        requested.push(request.url)
+        return HttpResponse.json({ analyzedReviewCount: 4, keywords: [] })
+      }),
+    )
+    renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await within(region).findByText(other?.content ?? '')
+    await vi.waitFor(() => expect(requested).toHaveLength(1))
+    expect(screen.queryByRole('group', { name: '리뷰 키워드' })).not.toBeInTheDocument()
+  })
+
+  it('더 본 뒤 칩을 누르면 그 키워드로 0페이지부터 다시 부르고, 다시 누르면 전체로 돌아간다', async () => {
+    const requests: URLSearchParams[] = []
+    server.use(
+      http.get('*/api/v1/products/:productId/reviews', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        requests.push(params)
+        if (params.get('keyword') === 'C02') return HttpResponse.json(pageOf([third], 0, 1))
+        return params.get('page') === '0'
+          ? HttpResponse.json(pageOf([mine, other], 0, 2))
+          : HttpResponse.json(pageOf([third], 1, 2))
+      }),
+    )
+    const { user } = renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await user.click(await within(region).findByRole('button', { name: '리뷰 더 보기' }))
+    await within(region).findByText(third?.content ?? '')
+    expect(requests.map((params) => [params.get('page'), params.has('keyword')])).toEqual([
+      ['0', false],
+      ['1', false],
+    ])
+
+    await user.click(within(region).getByRole('checkbox', { name: '달아요 17' }))
+    expect(within(region).getByRole('checkbox', { name: '달아요 17' })).toBeChecked()
+    await vi.waitFor(() => expect(reviewContents(region)).toEqual([third?.content]))
+    const filtered = requests.at(-1)
+    expect(filtered?.get('keyword')).toBe('C02')
+    expect(filtered?.get('page')).toBe('0')
+    expect(within(region).queryByRole('button', { name: '리뷰 더 보기' })).not.toBeInTheDocument()
+
+    const before = requests.length
+    await user.click(within(region).getByRole('checkbox', { name: '달아요 17' }))
+    expect(within(region).getByRole('checkbox', { name: '달아요 17' })).not.toBeChecked()
+    await vi.waitFor(() =>
+      expect(reviewContents(region)).toEqual([mine?.content, other?.content, third?.content]),
+    )
+    expect(requests.slice(before).filter((params) => params.has('keyword'))).toEqual([])
+  })
+
+  it('키워드로 거르지 못하면(400) 선택을 풀라고 안내하고 칩은 그대로 둔다', async () => {
+    server.use(
+      http.get('*/api/v1/products/:productId/reviews', ({ request }) =>
+        new URL(request.url).searchParams.has('keyword')
+          ? problem(400, '리뷰 키워드를 찾을 수 없습니다.')
+          : HttpResponse.json(pageOf(appleReviews, 0, 1)),
+      ),
+    )
+    const { user } = renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await user.click(await within(region).findByRole('checkbox', { name: '아삭해요 12' }))
+
+    expect(await within(region).findByRole('alert')).toHaveTextContent(
+      '키워드 선택을 풀고 전체 리뷰를 봐 주세요.',
+    )
+    const group = within(region).getByRole('group', { name: '리뷰 키워드' })
+    expect(within(group).getByRole('checkbox', { name: '아삭해요 12' })).toBeChecked()
+  })
+
+  it('리뷰 키워드를 못 불러와도(404) 칩만 빼고 리뷰는 보여 준다', async () => {
+    let keywordsRequested = false
+    server.use(
+      http.get('*/api/v1/products/:productId/review-keywords', () => {
+        keywordsRequested = true
+        return problem(404, '상품을 찾을 수 없습니다.')
+      }),
+    )
+    renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await within(region).findByText(other?.content ?? '')
+    await vi.waitFor(() => expect(keywordsRequested).toBe(true))
+    expect(screen.queryByRole('group', { name: '리뷰 키워드' })).not.toBeInTheDocument()
+    expect(within(region).queryByRole('alert')).not.toBeInTheDocument()
   })
 })
 

@@ -60,6 +60,7 @@ const screens: [path: string, title: string][] = [
   ['/admin/sellers?status=PENDING', '판매자 심사'],
   ['/admin/sellers/4', '판매자 심사 상세'],
   ['/admin/payouts', '정산 관리'],
+  ['/admin/review-analysis-test', '리뷰 분석 테스트'],
 ]
 
 describe('라우트 뼈대', () => {

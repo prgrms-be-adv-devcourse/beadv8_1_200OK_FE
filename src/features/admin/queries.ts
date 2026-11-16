@@ -15,6 +15,7 @@ import type {
   PayoutDetail,
   PayoutRunResponse,
   PayoutSummary,
+  ProductSummary,
   SellerApplicationAdminDetail,
   SellerApplicationAdminSummary,
   SellerApplicationListParams,
@@ -23,12 +24,15 @@ import type {
 import { recentYear } from '@/shared/lib/dateRange'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import {
+  analyzeReviewKeywords,
+  analyzeReviewSentiment,
   approveSellerApplication,
   createPayoutAdjustment,
   getAdminPayout,
   getAdminPayoutCandidates,
   getAdminPayoutItems,
   getAdminPayouts,
+  getProductChoices,
   getSellerApplication,
   getSellerApplications,
   rejectSellerApplication,
@@ -38,7 +42,12 @@ import {
   startSellerApplicationReview,
 } from './api'
 import { canQueryPayouts, toAdminPayoutParams } from './payoutFilter'
-import type { PayoutFilter } from './types'
+import type {
+  KeywordAnalysis,
+  PayoutFilter,
+  ReviewAnalysisRequest,
+  SentimentAnalysis,
+} from './types'
 
 // 관리자 콘솔 쿼리 키 · 훅. 심사 처리 뒤에는 상세를 응답으로 바로 바꾸고 목록·개수는 접두어로 비운다.
 // 정산 배치를 돌리면 판매자 정산 캐시([payouts])도 접두어로 비운다(ADR-0003).
@@ -57,6 +66,7 @@ export const adminKeys = {
   payoutItems: (payoutId: number) => [queryKeyPrefix.admin, 'payoutItems', payoutId] as const,
   payoutCandidates: (params: AdminPayoutCandidateParams) =>
     [queryKeyPrefix.admin, 'payoutCandidates', params] as const,
+  productChoices: [queryKeyPrefix.admin, 'productChoices'] as const,
 }
 
 export const APPLICATION_PAGE_SIZE = 20
@@ -226,5 +236,27 @@ export function useCreatePayoutAdjustment() {
   return useMutation<void, ApiError, PayoutAdjustmentCreateRequest>({
     mutationFn: createPayoutAdjustment,
     onSuccess: afterRun,
+  })
+}
+
+// ─── 리뷰 분석 테스트 ────────────────────────────────────
+
+export function useProductChoices() {
+  return useQuery<PageResponse<ProductSummary>, ApiError>({
+    queryKey: adminKeys.productChoices,
+    queryFn: getProductChoices,
+  })
+}
+
+// 결과를 저장하지 않는 일회성 분석이라 캐시하지 않고 mutation으로 부른다
+export function useAnalyzeReviewKeywords() {
+  return useMutation<KeywordAnalysis, ApiError, ReviewAnalysisRequest>({
+    mutationFn: analyzeReviewKeywords,
+  })
+}
+
+export function useAnalyzeReviewSentiment() {
+  return useMutation<SentimentAnalysis, ApiError, ReviewAnalysisRequest>({
+    mutationFn: analyzeReviewSentiment,
   })
 }

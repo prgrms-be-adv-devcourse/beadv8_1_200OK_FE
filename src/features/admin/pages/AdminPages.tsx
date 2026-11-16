@@ -1,5 +1,8 @@
+import { type UseMutationResult, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
+import type { ApiError } from '@/shared/api/ApiError'
+import { productDetailQueryOptions } from '@/shared/api/productDetail'
 import type { PayoutAdjustmentCreateRequest } from '@/shared/api/types'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { showToast } from '@/shared/ui'
@@ -9,8 +12,11 @@ import {
   useAdminPayout,
   useAdminPayoutItems,
   useAdminPayouts,
+  useAnalyzeReviewKeywords,
+  useAnalyzeReviewSentiment,
   useCreatePayoutAdjustment,
   usePendingCandidateCount,
+  useProductChoices,
   useRunPayoutForOrderItem,
   useRunPayouts,
   useSellerApplication,
@@ -20,16 +26,22 @@ import {
 } from '../queries'
 import {
   type AdjustmentResult,
+  type AnalysisPanel,
   type PayoutFilter,
   type PayoutRunResult,
+  type ReviewAnalysisRequest,
   SellerReviewAction,
   type SinglePayoutResult,
 } from '../types'
 import { AdminPayoutsView, payeeNameOf } from '../views/AdminPayoutsView'
 import { AdminSellerDetailView } from '../views/AdminSellerDetailView'
 import { AdminSellersView } from '../views/AdminSellersView'
+import {
+  ReviewAnalysisTestView,
+  type ReviewAnalysisTestViewProps,
+} from '../views/ReviewAnalysisTestView'
 
-// M-01 · M-02 · M-03 라우트 (관리자 콘솔 청크). 모두 Bearer ADMIN.
+// M-01 · M-02 · M-03 · M-04 라우트 (관리자 콘솔 청크). 모두 Bearer ADMIN.
 // 판매자 심사 ✅ GET/POST /admin/seller-applications…, 정산 ✅ GET /admin/payouts…, POST …/run · run/skip-wait.
 // 1건 정산 · 수동 조정은 서버가 501이라 안내 문구만 보인다(errors.ts).
 
@@ -249,6 +261,80 @@ export function AdminPayoutsPage() {
               payeeName: detail.data ? payeeNameOf(detail.data) : undefined,
             }
       }
+    />
+  )
+}
+
+function panelOf<T>(
+  mutation: UseMutationResult<T, ApiError, ReviewAnalysisRequest>,
+): AnalysisPanel<T> {
+  if (mutation.isPending) return { status: 'pending' }
+  if (mutation.isError) return { status: 'error', message: adminErrorMessage(mutation.error) }
+  if (mutation.isSuccess) return { status: 'success', data: mutation.data }
+  return { status: 'idle' }
+}
+
+/** M-04. 키워드 · 감성 분석을 한 번에 같이 부르고, 한쪽이 실패해도 다른 쪽 결과는 그대로 보인다 */
+export function AdminReviewAnalysisTestPage() {
+  const products = useProductChoices()
+  const [selection, setSelection] = useState<{ productId: number | null; optionId: number | null }>(
+    { productId: null, optionId: null },
+  )
+  const [content, setContent] = useState('')
+  const { productId } = selection
+  const detail = useQuery({
+    ...productDetailQueryOptions(productId ?? -1),
+    enabled: productId !== null,
+  })
+  const keywords = useAnalyzeReviewKeywords()
+  const sentiment = useAnalyzeReviewSentiment()
+
+  const loadedOptions = detail.data?.options ?? []
+  const optionId = loadedOptions.some((o) => o.optionId === selection.optionId)
+    ? selection.optionId
+    : (loadedOptions[0]?.optionId ?? null)
+
+  const productsProp: ReviewAnalysisTestViewProps['products'] = products.isError
+    ? {
+        status: 'error',
+        message: adminErrorMessage(products.error),
+        onRetry: () => void products.refetch(),
+      }
+    : products.isPending
+      ? { status: 'pending' }
+      : {
+          status: 'success',
+          items: products.data.content,
+          truncated: products.data.totalElements > products.data.content.length,
+        }
+
+  const optionsProp: ReviewAnalysisTestViewProps['options'] =
+    productId === null
+      ? { status: 'idle' }
+      : detail.isError
+        ? { status: 'error', message: adminErrorMessage(detail.error) }
+        : detail.isPending
+          ? { status: 'pending' }
+          : { status: 'success', items: detail.data.options }
+
+  return (
+    <ReviewAnalysisTestView
+      products={productsProp}
+      productId={productId}
+      onProductChange={(next) => setSelection({ productId: next, optionId: null })}
+      options={optionsProp}
+      optionId={optionId}
+      onOptionChange={(next) => setSelection({ productId, optionId: next })}
+      content={content}
+      onContentChange={setContent}
+      onAnalyze={() => {
+        if (productId === null || optionId === null) return
+        const body = { productId, optionId, content }
+        keywords.mutate(body)
+        sentiment.mutate(body)
+      }}
+      keywords={panelOf(keywords)}
+      sentiment={panelOf(sentiment)}
     />
   )
 }
