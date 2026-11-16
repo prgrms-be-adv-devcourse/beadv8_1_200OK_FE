@@ -17,13 +17,19 @@ import {
   type SellerApplicationAdminSummary,
 } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
+import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
-import type {
-  AdjustTarget,
-  KeywordAnalysis,
-  PayoutFilter,
-  PayoutRunResult,
-  SentimentAnalysis,
+import {
+  type AdjustTarget,
+  type BlockedOrder,
+  DepositCheckReason,
+  type DepositCheckReview,
+  type KeywordAnalysis,
+  type PayoutFilter,
+  type PayoutRunResult,
+  type Resolution,
+  type ResolutionRequest,
+  type SentimentAnalysis,
 } from './types'
 
 // 서버 응답 모양 그대로 둔 샘플 데이터 (previews · 테스트 · MSW 기본 응답).
@@ -621,3 +627,188 @@ export const sentimentNotAnalyzed: SentimentAnalysis = {
   overall: null,
   aspects: {},
 }
+
+// ─── 막힌 주문 · 대사 확인 ───────────────────────────────
+// 2001: 초과 청구로 3번 실패해 멈춤(근거 있음, 지금은 결제 금액이 바로잡혀 풀림)
+// 2002: 수수료 불일치로 잠김(초과 청구가 아니라 근거 없음) · 2003: 해결됨(다음 실행 대기)
+
+export const blockedOrders: BlockedOrder[] = [
+  {
+    orderId: 2001,
+    status: PayoutBlockStatus.STOPPED,
+    failedRunCount: 3,
+    lastFailedAt: '2026-11-15T02:00:00',
+    sellerIds: [7],
+    reasons: ['AMOUNT_MISMATCH'],
+    categories: ['SOURCE_DATA'],
+    causes: [
+      {
+        orderItemId: 1301,
+        eventType: PayoutEventType.SALE_AMOUNT,
+        reason: 'AMOUNT_MISMATCH',
+        category: 'SOURCE_DATA',
+        detail:
+          '결제 금액 30,000원 / 정산 대상 35,000원 (넘친 금액 5,000원, 처음 넘긴 주문상품 1302)',
+        sellerId: 7,
+        failedAt: '2026-11-15T02:00:00',
+      },
+      {
+        orderItemId: null,
+        eventType: PayoutEventType.SALE_SHIPPING_FEE,
+        reason: 'AMOUNT_MISMATCH',
+        category: 'SOURCE_DATA',
+        detail: '결제 금액 30,000원 / 정산 대상 35,000원',
+        sellerId: 7,
+        failedAt: '2026-11-15T02:00:00',
+      },
+    ],
+    evidenceAtBlock: {
+      deductedAmount: 30000,
+      candidateTotal: 35000,
+      overflowAmount: 5000,
+      firstOverflowItem: '1302',
+      settledAmount: 10000,
+      settledItems: ['1300'],
+      aloneOverItems: [],
+      sellerCount: 1,
+      conflictAmounts: [],
+    },
+    evidenceNow: {
+      deductedAmount: 35000,
+      candidateTotal: 35000,
+      overflowAmount: 0,
+      firstOverflowItem: '판별 불가',
+      settledAmount: 10000,
+      settledItems: ['1300'],
+      aloneOverItems: [],
+      sellerCount: 1,
+      conflictAmounts: [35000],
+    },
+  },
+  {
+    orderId: 2002,
+    status: PayoutBlockStatus.LOCKED,
+    failedRunCount: 1,
+    lastFailedAt: '2026-11-14T02:00:00',
+    sellerIds: [8],
+    reasons: ['FEE_MISMATCH'],
+    categories: ['SYSTEM'],
+    causes: [
+      {
+        orderItemId: 1401,
+        eventType: PayoutEventType.SALE_FEE,
+        reason: 'FEE_MISMATCH',
+        category: 'SYSTEM',
+        detail: '수수료 불일치: 기대 300, 실제 500 <b>원문</b>',
+        sellerId: 8,
+        failedAt: '2026-11-14T02:00:00',
+      },
+    ],
+    evidenceAtBlock: null,
+    evidenceNow: null,
+  },
+  {
+    orderId: 2003,
+    status: PayoutBlockStatus.RESOLVED,
+    failedRunCount: 1,
+    lastFailedAt: '2026-11-13T02:00:00',
+    sellerIds: [9],
+    reasons: ['VERIFY_MISMATCH'],
+    categories: ['SYSTEM'],
+    causes: [
+      {
+        orderItemId: 1501,
+        eventType: PayoutEventType.SALE_AMOUNT,
+        reason: 'VERIFY_MISMATCH',
+        category: 'SYSTEM',
+        detail: '결과 검증 불일치: 스냅샷에 없는 항목',
+        sellerId: 9,
+        failedAt: '2026-11-13T02:00:00',
+      },
+    ],
+    evidenceAtBlock: null,
+    evidenceNow: null,
+  },
+]
+
+const REQUEST_ID = '3f2b8c1e-7d4a-4b9e-9c21-5a6d8e0f1b23'
+
+export const resolutionRequests: ResolutionRequest[] = [
+  {
+    resolutionRequestId: REQUEST_ID,
+    orderId: 2003,
+    method: 'REPROCESS',
+    adminId: ADMIN_MEMBER_ID,
+    resolvedAt: '2026-11-14T10:00:00',
+    memo: '검증 코드 수정 배포 후 다시 처리 <script>alert(1)</script>',
+    resolvedFailureCount: 1,
+  },
+]
+
+export const resolutions: Resolution[] = [
+  {
+    resolutionId: 31,
+    resolutionRequestId: REQUEST_ID,
+    failureId: 11,
+    orderId: 2003,
+    orderItemId: 1501,
+    sellerId: 9,
+    eventType: PayoutEventType.SALE_AMOUNT,
+    amount: 10000,
+    reason: 'VERIFY_MISMATCH',
+    category: 'SYSTEM',
+    detail: '결과 검증 불일치: 스냅샷에 없는 항목',
+    failedAt: '2026-11-13T02:00:00',
+    method: 'REPROCESS',
+    adminId: ADMIN_MEMBER_ID,
+    resolvedAt: '2026-11-14T10:00:00',
+    memo: '검증 코드 수정 배포 후 다시 처리 <script>alert(1)</script>',
+  },
+]
+
+export const depositChecks: DepositCheckReview[] = [
+  {
+    payoutId: 1031,
+    payeeId: 7,
+    amount: 9700,
+    walletPayeeId: 8,
+    walletAmount: 9700,
+    reason: DepositCheckReason.PAYEE_MISMATCH,
+    attemptCount: 1,
+    notFoundCount: 0,
+    lastAskedAt: '2026-11-15T02:00:00',
+  },
+  {
+    payoutId: 1030,
+    payeeId: 8,
+    amount: 19400,
+    walletPayeeId: 8,
+    walletAmount: 18400,
+    reason: DepositCheckReason.AMOUNT_MISMATCH,
+    attemptCount: 1,
+    notFoundCount: 0,
+    lastAskedAt: '2026-11-15T02:00:00',
+  },
+  {
+    payoutId: 1029,
+    payeeId: 9,
+    amount: 4850,
+    walletPayeeId: null,
+    walletAmount: null,
+    reason: DepositCheckReason.NOT_FOUND,
+    attemptCount: 3,
+    notFoundCount: 2,
+    lastAskedAt: '2026-11-14T02:00:00',
+  },
+  {
+    payoutId: 1028,
+    payeeId: 7,
+    amount: 29100,
+    walletPayeeId: null,
+    walletAmount: null,
+    reason: DepositCheckReason.NO_RESPONSE,
+    attemptCount: 3,
+    notFoundCount: 0,
+    lastAskedAt: '2026-11-13T02:00:00',
+  },
+]

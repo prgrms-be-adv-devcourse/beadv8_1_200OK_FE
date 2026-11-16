@@ -227,6 +227,17 @@ export const appRoutes: RouteObject[] = [
             { title: '정산 관리', screenId: 'M-03' },
             'AdminPayoutsPage',
           ),
+          // 정산 관리의 다른 탭. 고정 경로라 'payouts/:payoutId?'보다 먼저 맞는다
+          adminPage(
+            'payouts/blocked-orders',
+            { title: '정산 관리', screenId: 'M-03' },
+            'AdminBlockedOrdersPage',
+          ),
+          adminPage(
+            'payouts/deposit-checks',
+            { title: '정산 관리', screenId: 'M-03' },
+            'AdminDepositChecksPage',
+          ),
           adminPage(
             'review-analysis-test',
             { title: '리뷰 분석 테스트', screenId: 'M-04' },

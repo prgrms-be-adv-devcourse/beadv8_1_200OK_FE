@@ -15,7 +15,16 @@ import type {
   SellerApplicationListParams,
   SellerApplicationRejectRequest,
 } from '@/shared/api/types'
-import type { KeywordAnalysis, ReviewAnalysisRequest, SentimentAnalysis } from './types'
+import type {
+  BlockedOrder,
+  DepositCheckReview,
+  KeywordAnalysis,
+  OrderResolveRequest,
+  Resolution,
+  ResolutionRequest,
+  ReviewAnalysisRequest,
+  SentimentAnalysis,
+} from './types'
 
 // 관리자 콘솔 요청. 모두 Bearer(ADMIN 권한). 토큰 없으면 401, 관리자가 아니면 403.
 // 오류는 서버 detail을 그대로 보여 준다(errors.ts에서 501·404 문구만 바꾼다).
@@ -119,13 +128,14 @@ export async function getAdminPayoutCandidates(
   return data
 }
 
-// ✅ POST /api/v1/admin/payouts/run → { executionId, status }. 배치가 COMPLETED가 아니면 500. prod에서는 닫혀 있다(@Profile("!prod"))
+// ✅ POST /api/v1/admin/payouts/run → { executionId, status }. 409 이미 실행 중(ShedLock), 배치가 COMPLETED가 아니면 500
 export async function runPayouts(): Promise<PayoutRunResponse> {
   const { data } = await apiClient.post<PayoutRunResponse>(`${payouts}/run`)
   return data
 }
 
-// ✅ POST /api/v1/admin/payouts/run/skip-wait → 정산 대기 기간(15일)을 건너뛰고 미정산 후보를 모두 정산. 발표·연동 테스트용
+// ✅ POST /api/v1/admin/payouts/run/skip-wait → 정산 대기 기간(15일)을 건너뛰고 미정산 후보를 모두 정산. 발표·연동 테스트용.
+// 409 서버 설정으로 꺼짐(기본값) · 이미 실행 중. 둘 다 type이 about:blank라 detail로 가른다(errors.ts)
 export async function runPayoutsSkipWait(): Promise<PayoutRunResponse> {
   const { data } = await apiClient.post<PayoutRunResponse>(`${payouts}/run/skip-wait`)
   return data
@@ -140,6 +150,67 @@ export async function runPayoutForOrderItem(orderItemId: number): Promise<void> 
 // 422(금액 0 · 사유 공백·255자 초과 · 항목 종류)가 501보다 먼저 온다
 export async function createPayoutAdjustment(body: PayoutAdjustmentCreateRequest): Promise<void> {
   await apiClient.post(`${payouts}/adjustments`, body)
+}
+
+// ─── 막힌 주문 · 대사 확인 ───────────────────────────────
+
+type PageParams = { page: number; size: number }
+
+// ✅ GET /api/v1/admin/payouts/blocked-orders?page&size → 마지막 실패 시각 최신순. 기간 조건 없음.
+// 정산 실행이 끝날 때 갱신되는 집계라 해결한 주문은 다음 실행 전까지 RESOLVED로 남는다
+export async function getBlockedOrders(params: PageParams): Promise<PageResponse<BlockedOrder>> {
+  const { data } = await apiClient.get<PageResponse<BlockedOrder>>(`${payouts}/blocked-orders`, {
+    params,
+  })
+  return data
+}
+
+// ✅ POST /api/v1/admin/payouts/orders/{orderId}/resolution { memo } → 201 방금 저장한 해결 요청.
+// 409 해결할 잠금·멈춤 없음(이미 해결 · 동시 요청 · 없는 주문), 422 메모 공백·255자 초과(errors[].path = memo)
+export async function resolveBlockedOrder(
+  orderId: number,
+  body: OrderResolveRequest,
+): Promise<ResolutionRequest> {
+  const { data } = await apiClient.post<ResolutionRequest>(
+    `${payouts}/orders/${orderId}/resolution`,
+    body,
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/payouts/orders/{orderId}/resolution-requests?page&size → 해결 요청 1번 = 1줄, 최신순. 없으면 빈 목록
+export async function getResolutionRequests(
+  orderId: number,
+  params: PageParams,
+): Promise<PageResponse<ResolutionRequest>> {
+  const { data } = await apiClient.get<PageResponse<ResolutionRequest>>(
+    `${payouts}/orders/${orderId}/resolution-requests`,
+    { params },
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/payouts/orders/{orderId}/resolutions?page&size → 해결한 실패 기록 1건 = 1줄, 최신순
+export async function getResolutions(
+  orderId: number,
+  params: PageParams,
+): Promise<PageResponse<Resolution>> {
+  const { data } = await apiClient.get<PageResponse<Resolution>>(
+    `${payouts}/orders/${orderId}/resolutions`,
+    { params },
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/payouts/deposit-checks?page&size → 관리자 확인이 필요한 정산만, 새 정산 먼저. 조회 전용
+export async function getDepositCheckReviews(
+  params: PageParams,
+): Promise<PageResponse<DepositCheckReview>> {
+  const { data } = await apiClient.get<PageResponse<DepositCheckReview>>(
+    `${payouts}/deposit-checks`,
+    { params },
+  )
+  return data
 }
 
 // ─── 리뷰 분석 테스트 ────────────────────────────────────

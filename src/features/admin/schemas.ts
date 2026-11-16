@@ -54,3 +54,14 @@ export const adjustmentSchema = z.object({
 })
 
 export type AdjustmentFormValues = z.infer<typeof adjustmentSchema>
+
+// ─── 막힌 주문 해결 ──────────────────────────────────────
+
+/** 서버 해결 기록 memo 컬럼 길이 */
+export const RESOLUTION_MEMO_MAX = 255
+
+export const resolutionMemoSchema = z
+  .string()
+  .trim()
+  .min(1, '무엇을 확인하거나 고쳤는지 메모를 남겨 주세요')
+  .max(RESOLUTION_MEMO_MAX, `메모는 ${RESOLUTION_MEMO_MAX}자까지 쓸 수 있어요`)
