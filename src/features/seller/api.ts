@@ -12,6 +12,7 @@ import type {
   ProductStatusRequest,
   ProductUpdateRequest,
   ProductVisibilityRequest,
+  ReviewSentimentSummary,
   SellerBalanceResponse,
   SellerPayoutCandidateParams,
   SellerPayoutListParams,
@@ -77,6 +78,17 @@ export async function deleteProduct(productId: number): Promise<void> {
 export async function fetchMyProductDetail(productId: number): Promise<SellerProductDetail> {
   const { data } = await apiClient.get<SellerProductDetail>(
     `/api/v1/sellers/me/products/${productId}`,
+  )
+  return data
+}
+
+// ✅ GET /api/v1/sellers/me/products/{id}/review-sentiments → 분석 완료 리뷰의 전체 · 항목별 감성 집계.
+// 401 로그인 필요, 403 SELLER가 아님, 404 없거나 삭제됐거나 내 상품이 아님
+export async function fetchMyProductReviewSentiments(
+  productId: number,
+): Promise<ReviewSentimentSummary> {
+  const { data } = await apiClient.get<ReviewSentimentSummary>(
+    `/api/v1/sellers/me/products/${productId}/review-sentiments`,
   )
   return data
 }

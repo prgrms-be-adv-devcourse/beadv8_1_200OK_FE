@@ -9,6 +9,8 @@ import {
   ProductRegion,
   ProductStatus,
   ProductVisibility,
+  ReviewAspect,
+  type ReviewSentimentSummary,
   type SellerProductDetail,
   type SellerProductSummary,
   type SellerProfile,
@@ -278,6 +280,55 @@ export const sellerProductDetail101: SellerProductDetail = {
   })),
   createdAt: '2026-09-01T09:00:00',
   updatedAt: '2026-10-12T18:20:00',
+}
+
+/** ✅ GET /sellers/me/products/101/review-sentiments 응답 모양. 항목별 합은 mentionedReviewCount와 같다 */
+export const reviewSentiments101: ReviewSentimentSummary = {
+  analyzedReviewCount: 18,
+  overall: { positive: 12, negative: 3, neutral: 2, mixed: 1 },
+  aspects: [
+    {
+      aspect: ReviewAspect.TASTE,
+      mentionedReviewCount: 15,
+      sentiments: { positive: 12, negative: 2, neutral: 1, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.FRESHNESS,
+      mentionedReviewCount: 9,
+      sentiments: { positive: 7, negative: 1, neutral: 0, mixed: 1 },
+    },
+    {
+      aspect: ReviewAspect.CONDITION,
+      mentionedReviewCount: 4,
+      sentiments: { positive: 2, negative: 2, neutral: 0, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.PACKAGING,
+      mentionedReviewCount: 3,
+      sentiments: { positive: 1, negative: 1, neutral: 1, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.DELIVERY,
+      mentionedReviewCount: 6,
+      sentiments: { positive: 4, negative: 2, neutral: 0, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.PRICE,
+      mentionedReviewCount: 0,
+      sentiments: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
+    },
+  ],
+}
+
+/** 분석을 마친 리뷰가 아직 없는 상품. 항목 6개는 모두 0으로 온다 */
+export const noReviewSentiments: ReviewSentimentSummary = {
+  analyzedReviewCount: 0,
+  overall: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
+  aspects: reviewSentiments101.aspects.map(({ aspect }) => ({
+    aspect,
+    mentionedReviewCount: 0,
+    sentiments: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
+  })),
 }
 
 // ─── 출고 (✅ GET /seller/shipments · /seller/shipments/{id}) — 테스트(MSW)·/__design 전용 ───

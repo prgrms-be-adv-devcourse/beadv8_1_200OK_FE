@@ -86,6 +86,24 @@ export enum ReviewKeywordAspect {
   OTHER = 'OTHER',
 }
 
+/** 리뷰 감성을 나눠 보는 6개 항목. 서버가 주는 순서이자 화면 순서 */
+export enum ReviewAspect {
+  TASTE = 'TASTE',
+  FRESHNESS = 'FRESHNESS',
+  CONDITION = 'CONDITION',
+  PACKAGING = 'PACKAGING',
+  DELIVERY = 'DELIVERY',
+  PRICE = 'PRICE',
+}
+
+export enum ReviewSentiment {
+  POSITIVE = 'POSITIVE',
+  NEGATIVE = 'NEGATIVE',
+  NEUTRAL = 'NEUTRAL',
+  MIXED = 'MIXED',
+  NOT_MENTIONED = 'NOT_MENTIONED',
+}
+
 export enum PayoutEventType {
   SALE_AMOUNT = 'SALE_AMOUNT',
   SALE_SHIPPING_FEE = 'SALE_SHIPPING_FEE',
@@ -321,6 +339,30 @@ export type SellerProductOption = {
   totalStock: number
   allocatedQuantity: number // 주문에 배정된 수량. 총재고를 이보다 작게 줄일 수 없다
   availableStock: number // 총재고 − 배정 수량
+}
+
+/** 감성별 리뷰 수 */
+export type SentimentCounts = {
+  positive: number
+  negative: number
+  neutral: number
+  mixed: number
+}
+
+export type AspectSentimentSummary = {
+  aspect: ReviewAspect
+  mentionedReviewCount: number // 이 항목을 언급한 분석 완료 리뷰 수. sentiments의 합이다
+  sentiments: SentimentCounts
+}
+
+/**
+ * 내 상품 리뷰 감성 집계 GET /sellers/me/products/{productId}/review-sentiments.
+ * 분석을 기다리거나 실패한 리뷰는 세지 않는다. 404 없거나 삭제됐거나 내 상품이 아님
+ */
+export type ReviewSentimentSummary = {
+  analyzedReviewCount: number // 분석 완료 리뷰 수. overall의 분모
+  overall: SentimentCounts
+  aspects: AspectSentimentSummary[] // 6개 항목 모두, 언급이 없으면 0. 순서는 ReviewAspect 순서로 고정
 }
 
 export type SellerProductListParams = {

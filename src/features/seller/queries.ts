@@ -21,6 +21,7 @@ import {
   type ProductStatus,
   type ProductUpdateRequest,
   type ProductVisibility,
+  type ReviewSentimentSummary,
   type SellerApplicationHistoryResponse,
   type SellerApplicationResponse,
   SellerApplicationStatus,
@@ -48,6 +49,7 @@ import {
   deleteProduct,
   dispatchShipment,
   fetchMyProductDetail,
+  fetchMyProductReviewSentiments,
   fetchMyProducts,
   fetchMyProfile,
   fetchSellerBalance,
@@ -70,6 +72,8 @@ export const sellerKeys = {
     [queryKeyPrefix.seller, 'myProducts', params] as const,
   productDetail: (productId: number) =>
     [queryKeyPrefix.seller, 'productDetail', productId] as const,
+  reviewSentiments: (productId: number) =>
+    [queryKeyPrefix.seller, 'reviewSentiments', productId] as const,
   profile: () => [queryKeyPrefix.seller, 'profile'] as const,
   balance: () => [queryKeyPrefix.seller, 'balance'] as const,
   shipments: () => [queryKeyPrefix.seller, 'shipments'] as const,
@@ -170,6 +174,15 @@ export function useSellerProductDetail(productId: number) {
     gcTime: 0,
     // 폼을 연 뒤에 version만 몰래 바뀌면 안 되므로 창 포커스로 다시 받지 않는다. 다시 받는 건 저장·409 때뿐이다
     staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+/** 수정 화면 아래 리뷰 감성 집계. 상품 상세와 함께 받는다 */
+export function useMyProductReviewSentiments(productId: number) {
+  return useQuery<ReviewSentimentSummary, ApiError>({
+    queryKey: sellerKeys.reviewSentiments(productId),
+    queryFn: () => fetchMyProductReviewSentiments(productId),
+    enabled: Number.isInteger(productId),
   })
 }
 
