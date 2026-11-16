@@ -134,6 +134,17 @@ describe('CheckoutView', () => {
     expect(screen.queryByText(/NaN|undefined/)).not.toBeInTheDocument()
   })
 
+  it('견적에 빠진 판매자가 있으면 합계를 모르는 값으로 두고 결제를 막는다', async () => {
+    const partial = { ...feeQuoteSample, sellers: feeQuoteSample.sellers.slice(0, 1) }
+    const { user, onPay } = renderCheckout({ feeQuote: partial })
+    await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
+    for (const button of unknownTotalButtons()) expect(button).toBeDisabled()
+    expect(
+      screen.getAllByText('일부 판매자의 배송비를 확인하지 못해 결제할 수 없어요').length,
+    ).toBeGreaterThan(0)
+    expect(onPay).not.toHaveBeenCalled()
+  })
+
   it('견적에 실패하면 결제를 막고 다시 불러오게 한다', async () => {
     const onFeeQuoteRetry = vi.fn()
     const { user, onPay } = renderCheckout({

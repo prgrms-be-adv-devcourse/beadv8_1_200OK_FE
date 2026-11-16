@@ -151,7 +151,13 @@ export function CheckoutView({
   }
 
   // 견적이 있어야 배송비·최종 금액을 안다. 없으면 null(‘–’)
-  const quote = feeQuoteStatus === 'success' ? feeQuote : undefined
+  // 판매자 묶음 하나라도 견적에 없으면 합계를 믿을 수 없어 견적 전과 같이 다룬다
+  const quoteCoversAll =
+    feeQuote !== undefined &&
+    checkout.sellerGroups.every((group) =>
+      feeQuote.sellers.some((s) => s.sellerId === group.sellerId),
+    )
+  const quote = feeQuoteStatus === 'success' && quoteCoversAll ? feeQuote : undefined
   const quoteOf = (sellerId: number) => quote?.sellers.find((s) => s.sellerId === sellerId)
   const surcharge = quote?.sellers.reduce((sum, s) => sum + s.regionSurcharge, 0) ?? 0
   const total = quote ? checkout.totalProductAmount + quote.totalShippingFee : null
@@ -170,13 +176,15 @@ export function CheckoutView({
       ? '배송비를 계산하고 있어요'
       : feeQuoteStatus === 'error'
         ? '배송비를 불러오지 못해 결제할 수 없어요'
-        : total === null
-          ? '배송비를 확인한 뒤 결제할 수 있어요'
-          : shortfall > 0
-            ? '예치금이 부족해 결제할 수 없어요'
-            : !agreed
-              ? '판매자 정보 제공에 동의해 주세요'
-              : null
+        : feeQuoteStatus === 'success' && !quoteCoversAll
+          ? '일부 판매자의 배송비를 확인하지 못해 결제할 수 없어요'
+          : total === null
+            ? '배송비를 확인한 뒤 결제할 수 있어요'
+            : shortfall > 0
+              ? '예치금이 부족해 결제할 수 없어요'
+              : !agreed
+                ? '판매자 정보 제공에 동의해 주세요'
+                : null
 
   const pay = () => {
     if (!address?.addressDetail || total === null || payReason) return
