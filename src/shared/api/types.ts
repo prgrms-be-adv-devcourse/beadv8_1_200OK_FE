@@ -470,7 +470,8 @@ export type CreateOrderRequest = {
   recipientPhone: string // "010-1234-5678" 형식 (하이픈 필수)
   zipCode: string // 숫자 5자리
   address: string // 200자 이하
-  addressDetail?: string // 100자 이하
+  addressDetail: string // 필수, 100자 이하
+  deliveryNote?: string // 선택, 255자 이하. 공백만이면 서버가 null로 본다
   thirdPartyProvisionAgreed: true
   expectedTotalAmount: number // 화면에 보여준 최종 금액 (totalAmount + 도서산간 운임)
 }
@@ -697,11 +698,14 @@ export type ShipmentDetail = {
   latestAddressChange: LatestAddressChange | null
 }
 
-/** 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다 */
+/**
+ * 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다.
+ * 상세주소는 주문할 때 필수지만, 예전에 저장한 배송지(초안·주문 상세)에는 없을 수 있어 선택으로 둔다
+ */
 export type ShippingAddress = Pick<
   CreateOrderRequest,
-  'recipientName' | 'recipientPhone' | 'zipCode' | 'address' | 'addressDetail'
->
+  'recipientName' | 'recipientPhone' | 'zipCode' | 'address'
+> & { addressDetail?: string }
 
 // ─── 리뷰 ────────────────────────────────────────────────
 

@@ -19,10 +19,25 @@ export async function fetchCheckout(): Promise<Checkout> {
 }
 
 // ✅ POST /api/v1/orders → 201 { orderId }. 잔액(예치금)에서 결제한다.
-// 오류: 409 금액 변경(ORDER_AMOUNT_CHANGED → 주문서 다시 조회)·잔액 부족·재고 부족, 400 선택 상품 없음·동의 안 함, 422 입력 검증
-export async function createOrder(body: CreateOrderRequest): Promise<CreateOrderResponse> {
-  const { data } = await apiClient.post<CreateOrderResponse>('/api/v1/orders', body)
+// 헤더 Idempotency-Key(필수, 64자 이하): 같은 키로 다시 보내면 주문을 새로 만들지 않고 처음 orderId로 201.
+// 오류: 409 금액 변경(ORDER_AMOUNT_CHANGED → 주문서 다시 조회)·잔액 부족·재고 부족·같은 키 처리 중(order-creation-in-progress),
+//   400 키 없음·선택 상품 없음·동의 안 함, 422 입력 검증(상세주소 필수)
+export async function createOrder(
+  body: CreateOrderRequest,
+  idempotencyKey: string,
+): Promise<CreateOrderResponse> {
+  const { data } = await apiClient.post<CreateOrderResponse>('/api/v1/orders', body, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  })
   return data
+}
+
+/** 주문 생성 멱등키. 주문서 화면에 들어올 때 하나 만들고 같은 화면의 재시도에 그대로 쓴다(36자) */
+export function newIdempotencyKey(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  // randomUUID는 보안 컨텍스트(HTTPS·localhost)에서만 있다. 그 밖에서는 같은 길이의 난수 hex로 대신한다
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 // ✅ POST /api/v1/shipments/fee-quotes → 200 ShippingFeeQuote (로그인 불필요). 표시용이며 결제 금액은 주문이 서버에서 다시 계산한다.
