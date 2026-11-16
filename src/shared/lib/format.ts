@@ -57,3 +57,24 @@ export function formatQuantity(quantity: number, optionName?: string): string {
   const count = amountFormatter.format(quantity)
   return optionName ? `${optionName} × ${count}` : `${count}개`
 }
+
+/**
+ * 연락처 숫자 9~11자리에 하이픈을 붙인다: `01024681357` → `010-2468-1357`, `0212345678` → `02-1234-5678`.
+ * 주문 생성 API가 `00-000-0000` 꼴(하이픈 필수)만 받아서, 하이픈 없이 입력하거나 숫자만 내려온 값을 맞춘다. 자릿수가 다르면 그대로 둔다.
+ */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const seoul = digits.startsWith('02')
+  switch (digits.length) {
+    case 9:
+      return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`
+    case 10:
+      return seoul
+        ? `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`
+        : `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+    case 11:
+      return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+    default:
+      return phone
+  }
+}

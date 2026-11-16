@@ -38,6 +38,33 @@ describe('AddressModal', () => {
     })
   })
 
+  it('연락처는 숫자 9~11자리를 받고 하이픈을 붙여 넘긴다', async () => {
+    openPostcode.mockImplementation(async (onPick) =>
+      onPick({ zipCode: '04524', address: '서울 중구 세종대로 110' }),
+    )
+    const { user, onSave } = renderModal()
+
+    await user.type(await screen.findByLabelText('받는 분'), '이서연')
+    await user.type(screen.getByLabelText('연락처'), '021234567')
+    await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+    await user.type(screen.getByLabelText('상세주소'), '3층')
+    await user.click(screen.getByRole('button', { name: '이번 주문에 적용' }))
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ recipientPhone: '02-123-4567' }))
+  })
+
+  it.each(['01234567', '010123456789', '010--1234-5678'])(
+    '연락처가 숫자 9~11자리가 아니면(%s) 막는다',
+    async (phone) => {
+      const { user, onSave } = renderModal()
+      await user.type(await screen.findByLabelText('연락처'), phone)
+      await user.click(screen.getByRole('button', { name: '이번 주문에 적용' }))
+
+      expect(onSave).not.toHaveBeenCalled()
+      expect(await screen.findByText('연락처를 숫자 9~11자리로 입력해 주세요')).toBeInTheDocument()
+    },
+  )
+
   it('주소를 안 고르면 우편번호 찾기를 안내한다', async () => {
     const { user, onSave } = renderModal()
     await user.click(await screen.findByRole('button', { name: '이번 주문에 적용' }))

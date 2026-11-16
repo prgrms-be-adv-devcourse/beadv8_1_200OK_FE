@@ -119,6 +119,13 @@ describe('OrderDetailPage', () => {
     expect(screen.getByText('청송 꿀사과 부사')).toBeInTheDocument()
   })
 
+  it('결제 전에 무산된 주문(CANCELED)은 주문과 상품 모두 주문 취소로 보여 준다', async () => {
+    renderAt('/orders/140')
+    expect(await screen.findByText('평창 고랭지 알배기배추')).toBeInTheDocument()
+    expect(screen.getAllByText('주문 취소')).toHaveLength(2)
+    expect(screen.queryByText('환불 완료')).not.toBeInTheDocument()
+  })
+
   it('없는 주문(404)이나 잘못된 번호는 찾을 수 없다고 알린다', async () => {
     renderAt('/orders/999999')
     expect(await screen.findByText('주문을 찾을 수 없어요')).toBeInTheDocument()

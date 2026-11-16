@@ -1,6 +1,7 @@
 import {
   formatAmount,
   formatDate,
+  formatPhone,
   formatPrice,
   formatQuantity,
   formatSignedAmount,
@@ -86,5 +87,19 @@ describe('formatQuantity', () => {
   it('옵션명이 있으면 옵션 × 수량', () => {
     expect(formatQuantity(1, '3kg')).toBe('3kg × 1')
     expect(formatQuantity(2, '5kg (16~18과)')).toBe('5kg (16~18과) × 2')
+  })
+})
+
+describe('formatPhone', () => {
+  it('숫자 9~11자리에 주문 생성 형식(00-000-0000)으로 하이픈을 붙인다', () => {
+    expect(formatPhone('01024681357')).toBe('010-2468-1357')
+    expect(formatPhone('0311234567')).toBe('031-123-4567')
+    expect(formatPhone('0212345678')).toBe('02-1234-5678')
+    expect(formatPhone('021234567')).toBe('02-123-4567')
+    expect(formatPhone('010-2468-1357')).toBe('010-2468-1357')
+  })
+
+  it('자릿수가 맞지 않으면 그대로 둔다', () => {
+    expect(formatPhone('12345678')).toBe('12345678')
   })
 })

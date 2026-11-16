@@ -1,5 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
+import { formatPhone } from '@/shared/lib/format'
 import { getAuthSession, subscribeAuth } from './authToken'
 import { apiClient } from './client'
 import { queryKeyPrefix } from './queryKeys'
@@ -40,15 +41,7 @@ export function useDefaultAddress() {
   return { ...useQuery({ ...defaultAddressQueryOptions(), enabled }), enabled }
 }
 
-/** 서버는 숫자만 내려준다. 화면 입력 규칙(010-1234-5678)에 맞춰 하이픈을 붙인다 */
-export function formatPhone(digits: string): string {
-  const value = digits.replace(/\D/g, '')
-  if (value.length === 11) return `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7)}`
-  if (value.length === 10) return `${value.slice(0, 3)}-${value.slice(3, 6)}-${value.slice(6)}`
-  return digits
-}
-
-/** 서버 배송지 → 주문서·계정 화면의 배송지 모양 */
+/** 서버 배송지 → 주문서·계정 화면의 배송지 모양. 연락처는 서버가 숫자만 내려줘서 하이픈을 붙인다 */
 export function toShippingAddress(address: ShipmentAddress): ShippingAddress {
   return {
     recipientName: address.recipientName,

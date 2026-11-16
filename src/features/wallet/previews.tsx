@@ -60,9 +60,9 @@ export const chargePreviews: ScreenPreview[] = [
         render: () => charge({ defaultAmount: 5000 }),
       },
       {
-        id: 'not-step',
-        label: '10,000원 단위 아님',
-        render: () => charge({ defaultAmount: 15000 }),
+        id: 'odd-amount',
+        label: '원 단위 금액',
+        render: () => charge({ defaultAmount: 12_300 }),
       },
       {
         id: 'over-limit',

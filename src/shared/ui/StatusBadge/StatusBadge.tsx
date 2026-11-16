@@ -48,9 +48,10 @@ const labels: Record<BadgeStatus, string> = {
 }
 
 const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
-  // 주문 상품 상태 8종
+  // 주문 상품 상태 9종
   [OrderItemStatus.PAYMENT_PENDING]: { tone: 'warning', icon: Clock },
   [OrderItemStatus.PAYMENT_FAILED]: { tone: 'error', icon: CircleX },
+  [OrderItemStatus.CANCELED]: { tone: 'neutral', icon: RotateCcw },
   [OrderItemStatus.PREPARING]: { tone: 'neutral', icon: Package },
   [OrderItemStatus.SHIPPING]: { tone: 'info', icon: Truck },
   [OrderItemStatus.DELIVERED]: { tone: 'success', icon: CircleCheck },
