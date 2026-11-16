@@ -31,7 +31,7 @@ export const STORE_INTRO_MAX = 200
 export const PASSWORD_RESET_LINK_MINUTES = 30
 /** 토스트 유지 시간(ms) */
 export const TOAST_DURATION_MS = 4000
-/** 한 번에 담을 수 있는 수량 (가정). 장바구니 API에 상한이 없고 재고 수량도 내려주지 않는다(A-7) */
+/** 장바구니 한 줄에 담을 수 있는 수량. 서버 담기 규칙(1~99)과 같다. 재고 수량은 내려주지 않는다(A-7) */
 export const MAX_CART_QUANTITY = 99
 /** 정산 계좌 은행 (시안). TODO(api): ❌ 정산 계좌 등록 API 없음. 생기면 은행 코드에 맞춘다 */
 export const BANKS = [

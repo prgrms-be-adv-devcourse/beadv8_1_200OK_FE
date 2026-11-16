@@ -7,7 +7,7 @@ import classes from './PurchaseForm.module.css'
 
 // 옵션 선택 → 수량 → 총 상품 금액. 상세 데스크톱 오른쪽과 모바일 옵션 시트가 같이 쓴다.
 // 옵션 5개 이하는 옵션 카드, 넘으면 Select(design/COMPONENTS.md). 품절 옵션은 고를 수 없다.
-// 수량 상한은 API에 없어 MAX_CART_QUANTITY(가정)로 막는다.
+// 수량 상한은 서버 담기 규칙과 같은 MAX_CART_QUANTITY로 막는다.
 
 export type PurchaseFormProps = {
   productName: string

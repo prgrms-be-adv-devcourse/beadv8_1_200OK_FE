@@ -6,6 +6,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole, type ProductPage, type ProductSummary } from '@/shared/api/types'
+import { MAX_CART_QUANTITY } from '@/shared/lib/constants'
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
@@ -303,6 +304,7 @@ describe('ProductDetailPage 장바구니 담기', () => {
   afterEach(() => {
     localStorage.clear()
     notifications.clean()
+    server.events.removeAllListeners()
   })
 
   it('비회원이면 담지 않고 로그인 안내를 띄운다', async () => {
@@ -310,7 +312,7 @@ describe('ProductDetailPage 장바구니 담기', () => {
     server.use(
       http.post('*/api/v1/cart/items', () => {
         posted = true
-        return HttpResponse.json({ cartItemId: 1 }, { status: 201 })
+        return HttpResponse.json({ cartItemId: 1, quantity: 1 }, { status: 201 })
       }),
     )
     const { user } = renderAt('/products/101')
@@ -326,7 +328,7 @@ describe('ProductDetailPage 장바구니 담기', () => {
     server.use(
       http.post('*/api/v1/cart/items', async ({ request }) => {
         bodies.push(await request.json())
-        return HttpResponse.json({ cartItemId: 1 }, { status: 201 })
+        return HttpResponse.json({ cartItemId: 1, quantity: 1 }, { status: 201 })
       }),
     )
     const { user } = renderAt('/products/101')
@@ -336,37 +338,38 @@ describe('ProductDetailPage 장바구니 담기', () => {
     expect(bodies).toEqual([{ productOptionId: 1011, quantity: 1 }])
   })
 
-  it('이미 담긴 옵션(409)이면 담긴 수량에 더하고, 장바구니에 없으면 서버 문구를 알린다', async () => {
+  it('이미 담긴 옵션이면 서버가 더한 수량(200)을 알리고, 다른 요청은 보내지 않는다', async () => {
     setAccessToken(fakeToken({ role: MemberRole.BUYER }))
-    let inCart = true
-    const patched: unknown[] = []
+    const added = [3, MAX_CART_QUANTITY]
+    const sent: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (request.method !== 'GET') sent.push(`${request.method} ${new URL(request.url).pathname}`)
+    })
     server.use(
       http.post('*/api/v1/cart/items', () =>
-        problem(409, inCart ? '이미 장바구니에 담긴 상품입니다.' : '판매 중인 상품이 아닙니다.'),
+        HttpResponse.json({ cartItemId: 5, quantity: added.shift() }, { status: 200 }),
       ),
-      http.get('*/api/v1/cart', () =>
-        HttpResponse.json({
-          cartId: 1,
-          items: inCart
-            ? [{ cartItemId: 5, productOptionId: 1011, quantity: 2, selected: true }]
-            : [],
-        }),
-      ),
-      http.patch('*/api/v1/cart/items/:cartItemId', async ({ request, params }) => {
-        patched.push({ cartItemId: params.cartItemId, ...((await request.json()) as object) })
-        return new HttpResponse(null, { status: 204 })
-      }),
     )
     const { user } = renderAt('/products/101')
 
     await user.click(await addButton())
-    expect(await screen.findByText('이미 담긴 상품이라 수량을 더했어요')).toBeInTheDocument()
-    expect(patched).toEqual([{ cartItemId: '5', quantity: 3 }])
+    expect(
+      await screen.findByText('이미 담긴 상품이라 수량을 더했어요. 지금 3개 담겨 있어요'),
+    ).toBeInTheDocument()
+    await user.click(await addButton())
+    expect(
+      await screen.findByText(`이미 담긴 상품이라 최대 수량(${MAX_CART_QUANTITY}개)까지 담았어요`),
+    ).toBeInTheDocument()
+    expect(sent).toEqual(['POST /api/v1/cart/items', 'POST /api/v1/cart/items'])
+  })
 
-    inCart = false
+  it('판매 중이 아닌 상품(409)이면 서버 문구를 알린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    server.use(http.post('*/api/v1/cart/items', () => problem(409, '판매 중인 상품이 아닙니다.')))
+    const { user } = renderAt('/products/101')
+
     await user.click(await addButton())
     expect(await screen.findByText('판매 중인 상품이 아닙니다.')).toBeInTheDocument()
-    expect(patched).toHaveLength(1)
   })
 })
 

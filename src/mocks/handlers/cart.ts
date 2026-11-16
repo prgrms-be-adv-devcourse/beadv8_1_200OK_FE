@@ -22,7 +22,9 @@ const noContent = () => new HttpResponse(null, { status: 204 })
 
 export const cartHandlers = [
   http.get('*/api/v1/cart', () => HttpResponse.json(mockCart)),
-  http.post('*/api/v1/cart/items', () => HttpResponse.json({ cartItemId: 99 }, { status: 201 })),
+  http.post('*/api/v1/cart/items', () =>
+    HttpResponse.json({ cartItemId: 99, quantity: 1 }, { status: 201 }),
+  ),
   // 고정 경로(selection·selected)를 {cartItemId}보다 먼저 둔다
   http.patch('*/api/v1/cart/items/selection', noContent),
   http.delete('*/api/v1/cart/items/selected', noContent),
