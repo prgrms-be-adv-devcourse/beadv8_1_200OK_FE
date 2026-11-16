@@ -1,0 +1,135 @@
+/* 막힌 주문 · 대사 확인 화면 */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+}
+
+.panel {
+  overflow: hidden;
+  border: 1px solid var(--pd-color-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--pd-color-surface);
+}
+
+.panelHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  padding: 1.25rem 1.25rem var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--pd-color-divider);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--mantine-font-size-lg);
+  line-height: 1.625rem;
+  font-weight: 600;
+}
+
+.desc {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+}
+
+.help {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  min-width: 0;
+  padding: var(--mantine-spacing-md) 1.25rem;
+
+  & + & {
+    border-top: 1px solid var(--pd-color-divider);
+  }
+}
+
+.orderHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+}
+
+.orderTitle {
+  margin: 0;
+  font-size: var(--mantine-font-size-md);
+  font-weight: 600;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem var(--mantine-spacing-sm);
+  margin: 0;
+  font-size: var(--mantine-font-size-sm);
+
+  & dt {
+    color: var(--pd-color-text-muted);
+  }
+
+  & dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.subTitle {
+  margin: 0;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+}
+
+.detailText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.evidence {
+  max-width: 40rem;
+}
+
+.right {
+  text-align: end;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-xs);
+  align-items: flex-start;
+}
+
+.tableWrap {
+  padding: 0 var(--mantine-spacing-md);
+}
+
+.pagination {
+  justify-content: center;
+  margin: var(--mantine-spacing-sm) 0;
+}
+
+.sum {
+  margin: 0;
+  padding: var(--mantine-spacing-sm) 1.25rem;
+  border-top: 1px solid var(--pd-color-divider);
+  background-color: var(--pd-color-bg);
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+  text-align: end;
+}

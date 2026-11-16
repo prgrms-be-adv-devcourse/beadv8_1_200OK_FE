@@ -7,6 +7,7 @@ import {
   Clock,
   Hourglass,
   Loader,
+  Lock,
   type LucideIcon,
   Package,
   RotateCcw,
@@ -16,6 +17,7 @@ import {
 import { OrderItemStatus, OrderStatus, ProductStatus } from '@/shared/api/types'
 import { ClaimState, claimStateLabels } from '@/shared/lib/claimState'
 import { orderItemStatusLabels, orderStatusLabels, productStatusLabels } from '@/shared/lib/labels'
+import { PayoutBlockStatus, payoutBlockStatusLabels } from '@/shared/lib/payoutBlockState'
 import { ProductSaleState, productSaleStateLabels } from '@/shared/lib/productState'
 import {
   SellerApplicationStatus,
@@ -35,6 +37,7 @@ export type BadgeStatus =
   | ClaimState
   | WithdrawalState
   | SellerApplicationStatus
+  | PayoutBlockStatus
 
 type BadgeSpec = { tone: StatusTone; icon: LucideIcon | null; label: string }
 
@@ -45,6 +48,7 @@ const labels: Record<BadgeStatus, string> = {
   ...claimStateLabels,
   ...withdrawalStateLabels,
   ...sellerApplicationStatusLabels,
+  ...payoutBlockStatusLabels,
 }
 
 const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
@@ -82,6 +86,10 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [SellerApplicationStatus.IN_REVIEW]: { tone: 'info', icon: Hourglass },
   [SellerApplicationStatus.APPROVED]: { tone: 'success', icon: CircleCheck },
   [SellerApplicationStatus.REJECTED]: { tone: 'error', icon: CircleX },
+  // 정산이 막힌 주문 (관리자 정산 관리)
+  [PayoutBlockStatus.LOCKED]: { tone: 'error', icon: Lock },
+  [PayoutBlockStatus.STOPPED]: { tone: 'warning', icon: CirclePause },
+  [PayoutBlockStatus.RESOLVED]: { tone: 'success', icon: CircleCheck },
 }
 
 export function getStatusBadgeSpec(status: BadgeStatus): BadgeSpec {

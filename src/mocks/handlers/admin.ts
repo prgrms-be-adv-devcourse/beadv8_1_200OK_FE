@@ -3,13 +3,18 @@ import {
   adminPayoutCandidates,
   adminPayoutItems,
   adminPayouts,
+  blockedOrders,
+  depositChecks,
   findApplication,
   findPayoutDetail,
   keywordAnalysis,
+  resolutionRequests,
+  resolutions,
   sellerApplicationSummaries,
   sentimentAnalysis,
 } from '@/features/admin/fixtures'
 import { SellerApplicationStatus } from '@/shared/api/types'
+import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { pageOf, problem } from './_shared'
 
 // 관리자 판매자 심사·정산·리뷰 분석 기본 응답 (admin fixtures). 실패 시나리오는 테스트에서 server.use(...)로 덮는다.
@@ -77,7 +82,48 @@ export const adminHandlers = [
   }),
 
   // ─── 정산 ──────────────────────────────────────────────
-  // candidates · run · adjustments는 /:payoutId보다 먼저 둔다
+  // candidates · run · adjustments · blocked-orders · deposit-checks는 /:payoutId보다 먼저 둔다
+  http.get(`${payouts}/blocked-orders`, ({ request }) =>
+    HttpResponse.json(pageOf(blockedOrders, new URL(request.url).searchParams)),
+  ),
+  http.get(`${payouts}/deposit-checks`, ({ request }) =>
+    HttpResponse.json(pageOf(depositChecks, new URL(request.url).searchParams)),
+  ),
+  http.get(`${payouts}/orders/:orderId/resolution-requests`, ({ params, request }) => {
+    const list = resolutionRequests.filter((r) => r.orderId === Number(params.orderId))
+    return HttpResponse.json(pageOf(list, new URL(request.url).searchParams))
+  }),
+  http.get(`${payouts}/orders/:orderId/resolutions`, ({ params, request }) => {
+    const list = resolutions.filter((r) => r.orderId === Number(params.orderId))
+    return HttpResponse.json(pageOf(list, new URL(request.url).searchParams))
+  }),
+  // 잠김·멈춤인 주문만 해결된다. 상태는 저장하지 않는다
+  http.post(`${payouts}/orders/:orderId/resolution`, async ({ params, request }) => {
+    const orderId = Number(params.orderId)
+    const body = (await request.json()) as { memo?: string }
+    const memo = body.memo?.trim() ?? ''
+    if (!memo) {
+      return problem(422, '요청 값이 올바르지 않습니다.', {
+        errors: [{ path: 'memo', pointer: '/memo', detail: '해결 메모는 필수입니다.' }],
+      })
+    }
+    const order = blockedOrders.find((o) => o.orderId === orderId)
+    if (!order || order.status === PayoutBlockStatus.RESOLVED) {
+      return problem(409, '해결할 잠금이나 멈춤이 없는 주문입니다.')
+    }
+    return HttpResponse.json(
+      {
+        resolutionRequestId: '9a1c2b3d-0000-4000-8000-000000000001',
+        orderId,
+        method: 'REPROCESS',
+        adminId: 1,
+        resolvedAt: now(),
+        memo,
+        resolvedFailureCount: order.causes.length,
+      },
+      { status: 201 },
+    )
+  }),
   http.get(`${payouts}/candidates`, ({ request }) => {
     const params = new URL(request.url).searchParams
     const unsettledOnly = params.get('unsettledOnly') === 'true'

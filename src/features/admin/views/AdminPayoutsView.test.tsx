@@ -25,6 +25,7 @@ function renderPayouts(
   render(
     <MemoryRouter>
       <AdminPayoutsView
+        onSectionChange={() => {}}
         run={{
           pendingCandidateCount: 3,
           result: null,

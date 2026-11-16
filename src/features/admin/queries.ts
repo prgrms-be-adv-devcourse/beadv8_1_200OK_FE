@@ -32,10 +32,15 @@ import {
   getAdminPayoutCandidates,
   getAdminPayoutItems,
   getAdminPayouts,
+  getBlockedOrders,
+  getDepositCheckReviews,
   getProductChoices,
+  getResolutionRequests,
+  getResolutions,
   getSellerApplication,
   getSellerApplications,
   rejectSellerApplication,
+  resolveBlockedOrder,
   runPayoutForOrderItem,
   runPayouts,
   runPayoutsSkipWait,
@@ -43,8 +48,13 @@ import {
 } from './api'
 import { canQueryPayouts, toAdminPayoutParams } from './payoutFilter'
 import type {
+  BlockedOrder,
+  DepositCheckReview,
   KeywordAnalysis,
   PayoutFilter,
+  ResolutionHistoryRows,
+  ResolutionRequest,
+  ResolutionView,
   ReviewAnalysisRequest,
   SentimentAnalysis,
 } from './types'
@@ -66,13 +76,26 @@ export const adminKeys = {
   payoutItems: (payoutId: number) => [queryKeyPrefix.admin, 'payoutItems', payoutId] as const,
   payoutCandidates: (params: AdminPayoutCandidateParams) =>
     [queryKeyPrefix.admin, 'payoutCandidates', params] as const,
+  blockedOrders: (page: number) => [queryKeyPrefix.admin, 'blockedOrders', page] as const,
+  /** 주문 하나의 해결 기록. 'requests'(요청 묶음) · 'lines'(1줄씩) */
+  resolutions: (orderId: number, view?: ResolutionView) =>
+    view
+      ? ([queryKeyPrefix.admin, 'resolutions', orderId, view] as const)
+      : ([queryKeyPrefix.admin, 'resolutions', orderId] as const),
+  depositChecks: (page: number) => [queryKeyPrefix.admin, 'depositChecks', page] as const,
   productChoices: [queryKeyPrefix.admin, 'productChoices'] as const,
 }
 
 export const APPLICATION_PAGE_SIZE = 20
 const PAYOUT_ITEM_PAGE_SIZE = 50
+export const BLOCKED_ORDER_PAGE_SIZE = 20
+export const DEPOSIT_CHECK_PAGE_SIZE = 20
+const RESOLUTION_PAGE_SIZE = 20
 /** 개수는 자주 바뀌지 않아 30초 동안 다시 묻지 않는다 */
 const COUNT_STALE_MS = 30_000
+
+const nextPageOf = (last: PageResponse<unknown>) =>
+  last.page + 1 < last.totalPages ? last.page + 1 : undefined
 
 // ─── 판매자 신청 심사 ────────────────────────────────────
 
@@ -184,7 +207,7 @@ export function useAdminPayoutItems(payoutId: number | null) {
     queryFn: ({ pageParam }) =>
       getAdminPayoutItems(payoutId as number, { page: pageParam, size: PAYOUT_ITEM_PAGE_SIZE }),
     initialPageParam: 0,
-    getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
+    getNextPageParam: nextPageOf,
     enabled: payoutId !== null,
   })
 }
@@ -210,11 +233,12 @@ function useAfterPayoutRun() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.admin, 'payouts'] })
     void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.admin, 'payoutCandidates'] })
+    void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.admin, 'blockedOrders'] })
     void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.payouts] })
   }
 }
 
-/** 전체 실행 · 대기 건너뛰기 실행. 끝나면 정산 목록 · 후보 · 판매자 정산 캐시를 비운다 */
+/** 전체 실행 · 대기 건너뛰기 실행. 끝나면 정산 목록 · 후보 · 막힌 주문 · 판매자 정산 캐시를 비운다 */
 export function useRunPayouts(kind: 'run' | 'skipWait') {
   const afterRun = useAfterPayoutRun()
   return useMutation<PayoutRunResponse, ApiError, void>({
@@ -236,6 +260,71 @@ export function useCreatePayoutAdjustment() {
   return useMutation<void, ApiError, PayoutAdjustmentCreateRequest>({
     mutationFn: createPayoutAdjustment,
     onSuccess: afterRun,
+  })
+}
+
+// ─── 막힌 주문 · 대사 확인 ───────────────────────────────
+
+/** page는 0부터 */
+export function useBlockedOrders(page: number) {
+  return useQuery<PageResponse<BlockedOrder>, ApiError>({
+    queryKey: adminKeys.blockedOrders(page),
+    queryFn: () => getBlockedOrders({ page, size: BLOCKED_ORDER_PAGE_SIZE }),
+    placeholderData: (previous) => previous,
+  })
+}
+
+/** 해결 기록 모달. 지금 보는 보기만 부른다 (orderId가 null이면 닫힘) */
+export function useResolutionHistory(orderId: number | null, view: ResolutionView) {
+  const id = orderId ?? -1
+  const requests = useInfiniteQuery({
+    queryKey: adminKeys.resolutions(id, 'requests'),
+    queryFn: ({ pageParam }) =>
+      getResolutionRequests(id, { page: pageParam, size: RESOLUTION_PAGE_SIZE }),
+    initialPageParam: 0,
+    getNextPageParam: nextPageOf,
+    enabled: orderId !== null && view === 'requests',
+  })
+  const lines = useInfiniteQuery({
+    queryKey: adminKeys.resolutions(id, 'lines'),
+    queryFn: ({ pageParam }) => getResolutions(id, { page: pageParam, size: RESOLUTION_PAGE_SIZE }),
+    initialPageParam: 0,
+    getNextPageParam: nextPageOf,
+    enabled: orderId !== null && view === 'lines',
+  })
+  const history: ResolutionHistoryRows =
+    view === 'requests'
+      ? { view, rows: requests.data?.pages.flatMap((p) => p.content) ?? [] }
+      : { view, rows: lines.data?.pages.flatMap((p) => p.content) ?? [] }
+  return { query: view === 'requests' ? requests : lines, history }
+}
+
+/**
+ * 막힌 주문 해결. 성공하면 막힌 주문 목록과 그 주문의 해결 기록을 비운다.
+ * 409(해결할 것 없음)는 목록이 낡은 것이라 목록을 다시 받는다.
+ */
+export function useResolveBlockedOrder() {
+  const queryClient = useQueryClient()
+  const refreshList = () =>
+    void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.admin, 'blockedOrders'] })
+  return useMutation<ResolutionRequest, ApiError, { orderId: number; memo: string }>({
+    mutationFn: ({ orderId, memo }) => resolveBlockedOrder(orderId, { memo }),
+    onSuccess: (_, { orderId }) => {
+      refreshList()
+      void queryClient.invalidateQueries({ queryKey: adminKeys.resolutions(orderId) })
+    },
+    onError: (error) => {
+      if (error.status === 409) refreshList()
+    },
+  })
+}
+
+/** page는 0부터 */
+export function useDepositCheckReviews(page: number) {
+  return useQuery<PageResponse<DepositCheckReview>, ApiError>({
+    queryKey: adminKeys.depositChecks(page),
+    queryFn: () => getDepositCheckReviews({ page, size: DEPOSIT_CHECK_PAGE_SIZE }),
+    placeholderData: (previous) => previous,
   })
 }
 

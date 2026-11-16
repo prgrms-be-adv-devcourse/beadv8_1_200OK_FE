@@ -23,18 +23,21 @@ import {
 } from '@/shared/ui'
 import { AdjustmentPanel, type AdjustmentPanelProps } from '../components/AdjustmentPanel'
 import { PayoutRunCard, type PayoutRunCardProps } from '../components/PayoutRunCard'
+import { PayoutSectionTabs } from '../components/PayoutSectionTabs'
 import { SinglePayoutCard, type SinglePayoutCardProps } from '../components/SinglePayoutCard'
 import { payeeIdMissing, rangeErrorOf } from '../payoutFilter'
-import type { PayoutFilter, PayoutPayeeFilter } from '../types'
+import { type PayoutFilter, type PayoutPayeeFilter, PayoutSection } from '../types'
 import classes from './AdminPayoutsView.module.css'
 
 // M-03 정산 관리 /admin/payouts, 상세 /admin/payouts/:payoutId (목록 위 모달). 시안: admin/AdminSettlements
 // 정산 실행 · 1건 정산 · 정산 조정 · 전체 정산(받는 사람 · 완료일 필터, 상세 모달).
+// 막힌 주문 · 대사 확인은 같은 메뉴의 다른 탭(주소)이다(BlockedOrdersView · DepositChecksView).
 // 목록 API는 정산 금액만 준다 → 건수·판매 대금·수수료·배송비 나눔은 상세에서 보여 준다.
 // ✅ GET /api/v1/admin/payouts?payeeId&system&from&to&page&size, 상세·항목. 실행 ✅, 1건·조정은 서버 501.
 // TODO(api): ❌ 판매자 이름 목록 API 없음 → 받는 사람은 ‘판매자 {회원 번호}’로 보여 주고, 판매자 지정은 회원 번호를 직접 입력한다
 
 export type AdminPayoutsViewProps = {
+  onSectionChange: (section: PayoutSection) => void
   run: PayoutRunCardProps
   single: SinglePayoutCardProps
   adjustment: AdjustmentPanelProps
@@ -67,6 +70,7 @@ export const payeeNameOf = (payout: Pick<PayoutSummary, 'payeeId' | 'system'>) =
   payout.system || payout.payeeId === null ? '플랫폼 수수료' : `판매자 ${payout.payeeId}`
 
 export function AdminPayoutsView({
+  onSectionChange,
   run,
   single,
   adjustment,
@@ -92,6 +96,7 @@ export function AdminPayoutsView({
   return (
     <div className={classes.root}>
       <PageHeader title="정산 관리" hideOnMobile />
+      <PayoutSectionTabs value={PayoutSection.PAYOUTS} onChange={onSectionChange} />
 
       <div className={classes.topGrid}>
         <PayoutRunCard {...run} />

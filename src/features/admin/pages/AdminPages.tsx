@@ -6,7 +6,12 @@ import { productDetailQueryOptions } from '@/shared/api/productDetail'
 import type { PayoutAdjustmentCreateRequest } from '@/shared/api/types'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { showToast } from '@/shared/ui'
-import { adminErrorMessage, isConflict } from '../errors'
+import {
+  adminErrorMessage,
+  isConflict,
+  NOTHING_TO_RESOLVE_MESSAGE,
+  payoutRunErrorMessage,
+} from '../errors'
 import { defaultPayoutFilter } from '../payoutFilter'
 import {
   useAdminPayout,
@@ -14,9 +19,13 @@ import {
   useAdminPayouts,
   useAnalyzeReviewKeywords,
   useAnalyzeReviewSentiment,
+  useBlockedOrders,
   useCreatePayoutAdjustment,
+  useDepositCheckReviews,
   usePendingCandidateCount,
   useProductChoices,
+  useResolutionHistory,
+  useResolveBlockedOrder,
   useRunPayoutForOrderItem,
   useRunPayouts,
   useSellerApplication,
@@ -29,6 +38,8 @@ import {
   type AnalysisPanel,
   type PayoutFilter,
   type PayoutRunResult,
+  PayoutSection,
+  type ResolutionView,
   type ReviewAnalysisRequest,
   SellerReviewAction,
   type SinglePayoutResult,
@@ -36,13 +47,16 @@ import {
 import { AdminPayoutsView, payeeNameOf } from '../views/AdminPayoutsView'
 import { AdminSellerDetailView } from '../views/AdminSellerDetailView'
 import { AdminSellersView } from '../views/AdminSellersView'
+import { BlockedOrdersView } from '../views/BlockedOrdersView'
+import { DepositChecksView } from '../views/DepositChecksView'
 import {
   ReviewAnalysisTestView,
   type ReviewAnalysisTestViewProps,
 } from '../views/ReviewAnalysisTestView'
 
 // M-01 · M-02 · M-03 · M-04 라우트 (관리자 콘솔 청크). 모두 Bearer ADMIN.
-// 판매자 심사 ✅ GET/POST /admin/seller-applications…, 정산 ✅ GET /admin/payouts…, POST …/run · run/skip-wait.
+// 판매자 심사 ✅ GET/POST /admin/seller-applications…, 정산 ✅ GET /admin/payouts…, POST …/run · run/skip-wait,
+// 막힌 주문 ✅ GET …/blocked-orders · POST …/orders/{id}/resolution · 해결 기록, 대사 확인 ✅ GET …/deposit-checks.
 // 1건 정산 · 수동 조정은 서버가 501이라 안내 문구만 보인다(errors.ts).
 
 const S = SellerApplicationStatus
@@ -51,6 +65,17 @@ const isStatus = (value: string | null): value is SellerApplicationStatus =>
   Object.values(S).includes(value as SellerApplicationStatus)
 
 const pageOf = (params: URLSearchParams) => Math.max(1, Number(params.get('page')) || 1)
+
+const payoutSectionPaths: Record<PayoutSection, string> = {
+  [PayoutSection.PAYOUTS]: '/admin/payouts',
+  [PayoutSection.BLOCKED_ORDERS]: '/admin/payouts/blocked-orders',
+  [PayoutSection.DEPOSIT_CHECKS]: '/admin/payouts/deposit-checks',
+}
+
+function usePayoutSectionNavigate() {
+  const navigate = useNavigate()
+  return (section: PayoutSection) => navigate(payoutSectionPaths[section])
+}
 
 /** 라우트 파라미터 → 양의 정수. 아니면 null(없는 것으로 다룬다) */
 const idOf = (raw: string | undefined) => {
@@ -152,6 +177,7 @@ export function AdminPayoutsPage() {
   const { payoutId } = useParams()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+  const onSectionChange = usePayoutSectionNavigate()
   const [filter, setFilter] = useState<PayoutFilter>(defaultPayoutFilter)
   const page = pageOf(params)
   const search = params.toString()
@@ -181,12 +207,14 @@ export function AdminPayoutsPage() {
           ? 'pending'
           : 'success'
 
-  const runWith = (mutation: typeof run, skipWait: boolean) => () => {
+  const runWith = (mutation: typeof run, kind: 'run' | 'skipWait') => () => {
     setRunResult(null)
     return mutation
       .mutateAsync()
-      .then((result) => setRunResult({ kind: 'ok', ...result, skipWait }))
-      .catch((error) => setRunResult({ kind: 'error', message: adminErrorMessage(error) }))
+      .then((result) => setRunResult({ kind: 'ok', ...result, skipWait: kind === 'skipWait' }))
+      .catch((error) =>
+        setRunResult({ kind: 'error', message: payoutRunErrorMessage(error, kind) }),
+      )
   }
 
   const adjustFieldErrors =
@@ -196,12 +224,13 @@ export function AdminPayoutsPage() {
 
   return (
     <AdminPayoutsView
+      onSectionChange={onSectionChange}
       run={{
         pendingCandidateCount: pendingCandidates.data,
         running: run.isPending || runSkipWait.isPending,
         result: runResult,
-        onRun: runWith(run, false),
-        onRunSkipWait: runWith(runSkipWait, true),
+        onRun: runWith(run, 'run'),
+        onRunSkipWait: runWith(runSkipWait, 'skipWait'),
       }}
       single={{
         running: single.isPending,
@@ -261,6 +290,109 @@ export function AdminPayoutsPage() {
               payeeName: detail.data ? payeeNameOf(detail.data) : undefined,
             }
       }
+    />
+  )
+}
+
+/** /admin/payouts/blocked-orders?page=. 해결 · 해결 기록은 목록 위 모달 */
+export function AdminBlockedOrdersPage() {
+  const [params, setParams] = useSearchParams()
+  const onSectionChange = usePayoutSectionNavigate()
+  const page = pageOf(params)
+  const list = useBlockedOrders(page - 1)
+
+  const [resolveId, setResolveId] = useState<number | null>(null)
+  const resolve = useResolveBlockedOrder()
+  const [historyId, setHistoryId] = useState<number | null>(null)
+  const [historyView, setHistoryView] = useState<ResolutionView>('requests')
+  const { query: history, history: historyRows } = useResolutionHistory(historyId, historyView)
+
+  const resolveError = resolve.error
+  const closeResolve = () => {
+    setResolveId(null)
+    resolve.reset()
+  }
+
+  return (
+    <BlockedOrdersView
+      onSectionChange={onSectionChange}
+      status={list.isError ? 'error' : list.isPending ? 'pending' : 'success'}
+      errorMessage={list.error ? adminErrorMessage(list.error) : undefined}
+      onRetry={() => void list.refetch()}
+      orders={list.data?.content ?? []}
+      totalElements={list.data?.totalElements ?? 0}
+      page={page}
+      totalPages={list.data?.totalPages ?? 1}
+      onPageChange={(next) => setParams(next === 1 ? {} : { page: String(next) })}
+      onResolve={(order) => {
+        resolve.reset()
+        setResolveId(order.orderId)
+      }}
+      onShowHistory={(orderId) => {
+        setHistoryView('requests')
+        setHistoryId(orderId)
+      }}
+      resolve={{
+        orderId: resolveId,
+        onClose: closeResolve,
+        submitting: resolve.isPending,
+        serverError: resolveError?.status === 422 ? (resolveError.fieldErrors.memo ?? null) : null,
+        errorMessage: !resolveError
+          ? null
+          : resolveError.status === 409
+            ? NOTHING_TO_RESOLVE_MESSAGE
+            : resolveError.status === 422 && resolveError.fieldErrors.memo
+              ? null
+              : adminErrorMessage(resolveError),
+        onConfirm: (memo) => {
+          if (resolveId === null) return
+          resolve.mutate(
+            { orderId: resolveId, memo },
+            {
+              onSuccess: (result) => {
+                setResolveId(null)
+                showToast({
+                  message: `주문 ${result.orderId}의 실패 기록 ${result.resolvedFailureCount}건을 해결했어요. 다음 정산 실행에서 다시 검사해요`,
+                })
+              },
+            },
+          )
+        },
+      }}
+      history={{
+        orderId: historyId,
+        history: historyRows,
+        onViewChange: setHistoryView,
+        status: history.isError ? 'error' : history.isPending ? 'pending' : 'success',
+        errorMessage: history.error ? adminErrorMessage(history.error) : undefined,
+        onRetry: () => void history.refetch(),
+        hasMore: history.hasNextPage,
+        loadingMore: history.isFetchingNextPage,
+        onLoadMore: () => void history.fetchNextPage(),
+        onClose: () => setHistoryId(null),
+      }}
+    />
+  )
+}
+
+/** /admin/payouts/deposit-checks?page=. 조회 전용 */
+export function AdminDepositChecksPage() {
+  const [params, setParams] = useSearchParams()
+  const onSectionChange = usePayoutSectionNavigate()
+  const page = pageOf(params)
+  const list = useDepositCheckReviews(page - 1)
+
+  return (
+    <DepositChecksView
+      onSectionChange={onSectionChange}
+      status={list.isError ? 'error' : list.isPending ? 'pending' : 'success'}
+      errorMessage={list.error ? adminErrorMessage(list.error) : undefined}
+      onRetry={() => void list.refetch()}
+      checks={list.data?.content ?? []}
+      totalElements={list.data?.totalElements ?? 0}
+      page={page}
+      totalPages={list.data?.totalPages ?? 1}
+      onPageChange={(next) => setParams(next === 1 ? {} : { page: String(next) })}
     />
   )
 }
