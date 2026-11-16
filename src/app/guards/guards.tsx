@@ -20,6 +20,27 @@ export function RequireAuth() {
   return <Outlet />
 }
 
+/**
+ * 구매자 API(장바구니·주문·예치금)를 쓰는 화면. 서버가 BUYER 권한만 받는다.
+ * 승인된 판매자는 BUYER도 함께 받아 통과하고, 관리자(ADMIN 단독)는 403 원문 대신 이유를 보여 준다.
+ */
+export function RequireBuyer() {
+  const session = useSession()
+  if (session.status === 'authenticated' && session.role === MemberRole.ADMIN) {
+    return (
+      <QueryState
+        status="forbidden"
+        forbidden={{
+          title: '관리자 계정은 장보기를 할 수 없어요',
+          description: '장바구니·주문·예치금은 구매자 계정으로 로그인해서 이용해 주세요',
+          action: { label: '관리자 화면으로', to: '/admin' },
+        }}
+      />
+    )
+  }
+  return <Outlet />
+}
+
 /** 판매자만. 비회원은 로그인, 판매자가 아니면 판매자 신청 안내로 */
 export function RequireSeller() {
   const session = useSession()

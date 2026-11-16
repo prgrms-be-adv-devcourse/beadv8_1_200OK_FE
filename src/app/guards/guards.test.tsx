@@ -4,7 +4,7 @@ import { MemberRole } from '@/shared/api/types'
 import { safeReturnTo } from '@/shared/lib/returnTo'
 import { render } from '@/test/render'
 import type { Session } from '../session'
-import { GuestOnly, RequireAdmin, RequireAuth, RequireSeller } from './guards'
+import { GuestOnly, RequireAdmin, RequireAuth, RequireBuyer, RequireSeller } from './guards'
 
 let session: Session = { status: 'unknown' }
 vi.mock('../session', () => ({ useSession: () => session }))
@@ -20,6 +20,7 @@ function renderAt(path: string) {
       { path: '/seller/apply', Component: show('판매자 신청') },
       { path: '/', Component: show('홈') },
       { Component: RequireAuth, children: [{ path: '/cart', Component: show('장바구니') }] },
+      { Component: RequireBuyer, children: [{ path: '/orders', Component: show('주문 내역') }] },
       { Component: RequireSeller, children: [{ path: '/seller', Component: show('센터 홈') }] },
       { Component: RequireAdmin, children: [{ path: '/admin', Component: show('관리자') }] },
       { Component: GuestOnly, children: [{ path: '/signup', Component: show('가입') }] },
@@ -58,6 +59,20 @@ describe('가드', () => {
     session = buyer
     renderAt('/admin')
     expect(screen.getByText('관리자만 볼 수 있는 화면이에요')).toBeInTheDocument()
+  })
+
+  it('RequireBuyer: 관리자는 구매자 화면 대신 이유와 관리자 화면 링크를 본다', () => {
+    session = { status: 'authenticated', role: MemberRole.ADMIN }
+    renderAt('/orders')
+    expect(screen.queryByText('주문 내역')).not.toBeInTheDocument()
+    expect(screen.getByText('관리자 계정은 장보기를 할 수 없어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '관리자 화면으로' })).toHaveAttribute('href', '/admin')
+  })
+
+  it.each([MemberRole.BUYER, MemberRole.SELLER])('RequireBuyer: %s는 통과한다', (role) => {
+    session = { status: 'authenticated', role }
+    renderAt('/orders')
+    expect(screen.getByText('주문 내역')).toBeInTheDocument()
   })
 
   it('GuestOnly: 로그인 상태면 returnTo로 보낸다', () => {

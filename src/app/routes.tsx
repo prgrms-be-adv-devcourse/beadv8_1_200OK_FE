@@ -16,7 +16,7 @@ import {
   WalletHistoryPage,
 } from '@/features/wallet'
 import { lazyWithRetry } from '@/shared/lib/lazyWithRetry'
-import { GuestOnly, RequireAdmin, RequireAuth, RequireSeller } from './guards/guards'
+import { GuestOnly, RequireAdmin, RequireAuth, RequireBuyer, RequireSeller } from './guards/guards'
 import { AuthLayout } from './layouts/AuthLayout'
 import { MyPageLayout } from './layouts/MyPageLayout'
 import { PublicLayout } from './layouts/PublicLayout'
@@ -90,32 +90,55 @@ export const appRoutes: RouteObject[] = [
       {
         Component: RequireAuth,
         children: [
-          page('cart', { title: '장바구니', screenId: 'B-03' }, CartPage),
-          page('checkout', { title: '주문서', screenId: 'B-04' }, CheckoutPage),
-          page('checkout/complete', { title: '주문 완료', screenId: 'B-06' }, CheckoutCompletePage),
-          page('wallet/charge', { title: '예치금 충전', screenId: 'B-05' }, ChargePage),
-          page(
-            'wallet/charge/success',
-            { title: '충전 완료', screenId: 'B-05' },
-            ChargeSuccessPage,
-          ),
-          page('wallet/charge/fail', { title: '충전 실패', screenId: 'B-05' }, ChargeFailPage),
-          page('orders/:orderId', { title: '주문 상세', screenId: 'B-08' }, OrderDetailPage),
-          page('orders/:orderId/shipments/:shipmentId', { title: '배송 조회' }, ShipmentPage),
-          page('orders/:orderId/inquiry', { title: '고객센터 문의' }, SupportPage),
-          page('reviews/new', { title: '리뷰 쓰기', screenId: 'B-10' }, ReviewNewPage),
-          page('reviews/:reviewId/edit', { title: '리뷰 수정', screenId: 'B-10' }, ReviewEditPage),
+          {
+            // 구매자 API(장바구니·주문·예치금)를 쓰는 화면. 관리자는 이유 화면을 본다
+            Component: RequireBuyer,
+            children: [
+              page('cart', { title: '장바구니', screenId: 'B-03' }, CartPage),
+              page('checkout', { title: '주문서', screenId: 'B-04' }, CheckoutPage),
+              page(
+                'checkout/complete',
+                { title: '주문 완료', screenId: 'B-06' },
+                CheckoutCompletePage,
+              ),
+              page('wallet/charge', { title: '예치금 충전', screenId: 'B-05' }, ChargePage),
+              page(
+                'wallet/charge/success',
+                { title: '충전 완료', screenId: 'B-05' },
+                ChargeSuccessPage,
+              ),
+              page('wallet/charge/fail', { title: '충전 실패', screenId: 'B-05' }, ChargeFailPage),
+              page('orders/:orderId', { title: '주문 상세', screenId: 'B-08' }, OrderDetailPage),
+              page('orders/:orderId/shipments/:shipmentId', { title: '배송 조회' }, ShipmentPage),
+              page('orders/:orderId/inquiry', { title: '고객센터 문의' }, SupportPage),
+              page('reviews/new', { title: '리뷰 쓰기', screenId: 'B-10' }, ReviewNewPage),
+              page(
+                'reviews/:reviewId/edit',
+                { title: '리뷰 수정', screenId: 'B-10' },
+                ReviewEditPage,
+              ),
+            ],
+          },
           {
             // 마이 묶음: 데스크톱 왼쪽 메뉴 (MyPageLayout). 메뉴에서 여는 주문 내역·판매자 신청도 메뉴를 유지한다
             Component: MyPageLayout,
             children: [
               page('me', { title: '마이페이지', screenId: 'B-12', tabBar: true }, MyPage),
-              page('orders', { title: '주문 내역', screenId: 'B-07', tabBar: true }, OrderListPage),
-              page(
-                'me/wallet',
-                { title: '지갑 이용 내역', screenId: 'B-13', tabBar: true },
-                WalletHistoryPage,
-              ),
+              {
+                Component: RequireBuyer,
+                children: [
+                  page(
+                    'orders',
+                    { title: '주문 내역', screenId: 'B-07', tabBar: true },
+                    OrderListPage,
+                  ),
+                  page(
+                    'me/wallet',
+                    { title: '지갑 이용 내역', screenId: 'B-13', tabBar: true },
+                    WalletHistoryPage,
+                  ),
+                ],
+              },
               page('me/likes', { title: '관심', screenId: 'B-14', tabBar: true }, LikesPage),
               page('me/account', { title: '계정 관리', screenId: 'B-15' }, AccountPage),
               page('seller/apply', { title: '판매자 신청', screenId: 'S-01' }, SellerApplyPage),

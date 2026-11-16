@@ -12,7 +12,7 @@ import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { productDetailQueryOptions } from '@/shared/api/productDetail'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
-import type { Cart, CartItem, ProductDetail } from '@/shared/api/types'
+import { type Cart, type CartItem, MemberRole, type ProductDetail } from '@/shared/api/types'
 import { MAX_CART_QUANTITY } from '@/shared/lib/constants'
 import { showToast } from '@/shared/ui'
 import {
@@ -42,15 +42,16 @@ export const cartQueryOptions = () =>
 
 const useAuthSession = () => useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)
 
-/** 헤더 장바구니 개수(담긴 줄 수). 로그인하지 않았으면 부르지 않고 undefined */
+/** 헤더 장바구니 개수(담긴 줄 수). 비회원·관리자(장바구니 API 403)는 부르지 않고 undefined */
 export function useCartCount(): number | undefined {
   const auth = useAuthSession()
+  const canBuy = auth !== null && auth.role !== MemberRole.ADMIN
   const { data } = useQuery({
     ...cartQueryOptions(),
-    enabled: auth !== null,
+    enabled: canBuy,
     select: (cart) => cart.items.length,
   })
-  return auth ? data : undefined
+  return canBuy ? data : undefined
 }
 
 // 상품 상세를 이미 본 옵션이면 캐시에서 상품을 찾는다(products 상세 키: [products, 'detail', id])
