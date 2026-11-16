@@ -10,7 +10,7 @@ import classes from './SellerOrdersView.module.css'
 // S-06 주문 · 출고 /seller/orders. 시안: seller/SellerOrders, SellerOrdersMobile
 // 한 줄 = 배송 1건(한 주문에서 이 농가로 온 상품 묶음). 출고 전(PREPARING)에는 송장 등록 · 배송지 변경 요청 승인·거절.
 // ✅ GET /seller/shipments?page(25건 고정, 서버 필터 없음 → 상태 탭 대신 쪽 넘김만), 송장 POST …/dispatch, 배송지 변경 PATCH — 모달은 components/OrderModals.
-// TODO(api): ❌ 구매자 닉네임·상품 금액이 목록에 없어 열을 뺐다. ❌ 출고 지연 알리기 · 판매자 취소 API 없음 → 안내만 둔다. 📝 취소 요청(클레임)은 /seller/claims(연결 전).
+// TODO(api): ❌ 구매자 닉네임·상품 금액이 목록에 없어 열을 뺐다. ❌ 출고 지연 알리기 · 판매자 취소 API 없음 → 안내만 둔다. 구매자 취소 요청은 /seller/claims.
 
 export type SellerOrdersViewProps = {
   status: 'pending' | 'error' | 'success'

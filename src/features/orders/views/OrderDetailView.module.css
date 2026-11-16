@@ -146,3 +146,8 @@ aside.card {
 .shipments li > :last-child {
   margin-left: auto;
 }
+
+.note {
+  color: var(--pd-color-text-muted);
+  font-size: var(--mantine-font-size-sm);
+}

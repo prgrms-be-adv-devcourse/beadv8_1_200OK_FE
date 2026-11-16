@@ -1,3 +1,4 @@
+import { type Refund, RefundStatus } from '@/shared/api/refund'
 import {
   type OrderDetail,
   type OrderDetailItem,
@@ -158,6 +159,87 @@ export function orderWithItemStatus(status: OrderItemStatus): OrderDetail {
 export const remoteAreaOrder: OrderDetail = detail(185, OrderStatus.PAID, '2026-10-19T10:05:00', [
   { ...group(7, [apple(OrderItemStatus.PREPARING)]), shippingFee: 3000, remoteAreaFee: 5000 },
 ])
+
+// ─── 취소 요청 (✅ GET /refunds) — 테스트(MSW)·/__design 전용 ───────────
+// 주문 184: 고구마(1842)는 승인 대기, 사과(1841)는 철회해서 다시 요청할 수 있다.
+
+const refund = (patch: Partial<Refund> & Pick<Refund, 'refundId' | 'status'>): Refund => ({
+  orderId: 184,
+  orderItemId: 1842,
+  productName: '해남 꿀고구마 베니하루카',
+  optionName: '3kg 한입 크기',
+  quantity: 1,
+  unitPrice: 15900,
+  itemAmount: 15900,
+  shippingFeeAmount: 0,
+  remoteAreaFeeAmount: 0,
+  deductedShippingFeeAmount: 0,
+  refundAmount: 15900,
+  cancelReason: null,
+  rejectReason: null,
+  requestedAt: '2026-10-18T15:00:00',
+  decidedAt: null,
+  completedAt: null,
+  ...patch,
+})
+
+/** 최신순: 승인 대기 · 철회 · 거절 · 환불 완료(배송비 환불) */
+export const myRefunds: Refund[] = [
+  refund({ refundId: 41, status: RefundStatus.REQUESTED, cancelReason: '옵션을 잘못 골랐어요' }),
+  refund({
+    refundId: 40,
+    status: RefundStatus.WITHDRAWN,
+    orderItemId: 1841,
+    productName: '청송 꿀사과 부사',
+    optionName: '2kg (11~13과)',
+    unitPrice: 23900,
+    itemAmount: 23900,
+    refundAmount: 23900,
+    requestedAt: '2026-10-18T14:40:00',
+    decidedAt: '2026-10-18T14:50:00',
+  }),
+  refund({
+    refundId: 39,
+    status: RefundStatus.REJECTED,
+    orderId: 151,
+    orderItemId: 1511,
+    productName: '제주 노지 조생 감귤',
+    optionName: '3kg (S~M)',
+    unitPrice: 13900,
+    itemAmount: 13900,
+    refundAmount: 13900,
+    cancelReason: '다른 상품으로 다시 주문할게요',
+    rejectReason: '이미 포장을 마쳐 오늘 출고했어요',
+    requestedAt: '2026-10-15T10:00:00',
+    decidedAt: '2026-10-15T11:00:00',
+  }),
+  refund({
+    refundId: 38,
+    status: RefundStatus.COMPLETED,
+    orderId: 140,
+    orderItemId: 1401,
+    productName: '평창 고랭지 알배기배추',
+    optionName: '2포기',
+    unitPrice: 9900,
+    itemAmount: 9900,
+    shippingFeeAmount: 3000,
+    refundAmount: 12900,
+    requestedAt: '2026-10-14T21:00:00',
+    decidedAt: '2026-10-14T21:30:00',
+    completedAt: '2026-10-14T21:31:00',
+  }),
+]
+
+/** 승인 뒤 처리 중(일부 취소로 배송비를 뺀 경우), 미리보기용 */
+export const processingRefund: Refund = refund({
+  refundId: 42,
+  status: RefundStatus.PROCESSING,
+  quantity: 2,
+  itemAmount: 31800,
+  deductedShippingFeeAmount: 3000,
+  refundAmount: 28800,
+  decidedAt: '2026-10-18T16:00:00',
+})
 
 // ─── 배송 (✅ GET /shipments · /shipments/{id}) — 테스트(MSW)·/__design 전용 ───────────
 

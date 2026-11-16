@@ -4,7 +4,13 @@ import { CartPage } from '@/features/cart'
 import { CheckoutCompletePage, CheckoutPage } from '@/features/checkout'
 import { FarmPage } from '@/features/farms'
 import { AccountPage, LikesPage, MyPage } from '@/features/me'
-import { OrderDetailPage, OrderListPage, ShipmentPage, SupportPage } from '@/features/orders'
+import {
+  OrderDetailPage,
+  OrderListPage,
+  RefundListPage,
+  ShipmentPage,
+  SupportPage,
+} from '@/features/orders'
 import { HomePage, ProductDetailPage, ProductListPage } from '@/features/products'
 import { ReviewEditPage, ReviewNewPage } from '@/features/reviews'
 import { SellerApplyPage, SellerStatusPage } from '@/features/sellerApply'
@@ -132,6 +138,7 @@ export const appRoutes: RouteObject[] = [
                     { title: '주문 내역', screenId: 'B-07', tabBar: true },
                     OrderListPage,
                   ),
+                  page('orders/refunds', { title: '취소 요청 내역' }, RefundListPage),
                   page(
                     'me/wallet',
                     { title: '지갑 이용 내역', screenId: 'B-13', tabBar: true },

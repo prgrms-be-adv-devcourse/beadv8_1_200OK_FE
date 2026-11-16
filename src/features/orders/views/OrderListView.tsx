@@ -48,7 +48,15 @@ export function OrderListView({
 }: OrderListViewProps) {
   return (
     <div className={classes.root}>
-      <PageHeader title="주문 내역" backTo="/me" />
+      <PageHeader
+        title="주문 내역"
+        backTo="/me"
+        actions={
+          <Button component={Link} to="/orders/refunds" variant="subtle" size="sm">
+            취소 요청 내역
+          </Button>
+        }
+      />
 
       <QueryState
         status={status === 'success' && orders.length === 0 ? 'empty' : status}

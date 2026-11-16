@@ -7,7 +7,7 @@ import { type SellerMenuStatus, useSellerMenuStatus } from '@/features/sellerApp
 import { showToast } from '@/shared/ui'
 import classes from './MyPageLayout.module.css'
 
-// 마이페이지 묶음(/me, /me/wallet, /me/likes, /me/account, /orders, /seller/apply[/status]) 레이아웃. PublicLayout 안에 들어간다.
+// 마이페이지 묶음(/me, /me/wallet, /me/likes, /me/account, /orders, /orders/refunds, /seller/apply[/status]) 레이아웃. PublicLayout 안에 들어간다.
 // 데스크톱(≥ 1024): 왼쪽 메뉴 240 + 본문. 모바일: 본문만, 마이 홈(/me) 아래에 같은 메뉴를 목록으로.
 // 시안: b2c/MyPage·Wallet·Likes·Account(.mside), MyPageMobile(메뉴 목록)
 
@@ -29,6 +29,7 @@ function menuGroups(status: SellerMenuStatus): { title: string | null; items: Me
       title: '쇼핑',
       items: [
         { label: '주문 내역', to: '/orders' },
+        { label: '취소 요청 내역', to: '/orders/refunds' },
         { label: '지갑 이용 내역', to: '/me/wallet' },
         { label: '관심 상품', to: '/me/likes?tab=products' },
         { label: '팔로우한 농가', to: '/me/likes?tab=farms' },

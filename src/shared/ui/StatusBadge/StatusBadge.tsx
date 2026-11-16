@@ -14,11 +14,12 @@ import {
   TriangleAlert,
   Truck,
 } from 'lucide-react'
+import { RefundStatus } from '@/shared/api/refund'
 import { OrderItemStatus, OrderStatus, ProductStatus } from '@/shared/api/types'
-import { ClaimState, claimStateLabels } from '@/shared/lib/claimState'
 import { orderItemStatusLabels, orderStatusLabels, productStatusLabels } from '@/shared/lib/labels'
 import { PayoutBlockStatus, payoutBlockStatusLabels } from '@/shared/lib/payoutBlockState'
 import { ProductSaleState, productSaleStateLabels } from '@/shared/lib/productState'
+import { refundStatusLabels } from '@/shared/lib/refundState'
 import {
   SellerApplicationStatus,
   sellerApplicationStatusLabels,
@@ -34,7 +35,6 @@ export type BadgeStatus =
   | OrderItemStatus
   | ProductSaleState
   | ShipmentState
-  | ClaimState
   | WithdrawalState
   | SellerApplicationStatus
   | PayoutBlockStatus
@@ -45,7 +45,6 @@ const labels: Record<BadgeStatus, string> = {
   ...orderItemStatusLabels,
   ...productSaleStateLabels,
   ...shipmentStateLabels,
-  ...claimStateLabels,
   ...withdrawalStateLabels,
   ...sellerApplicationStatusLabels,
   ...payoutBlockStatusLabels,
@@ -72,10 +71,6 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [ShipmentState.DELAYED]: { tone: 'warning', icon: Clock },
   [ShipmentState.COMPLETED]: { tone: 'primary', icon: BadgeCheck },
   [ShipmentState.CANCELLED]: { tone: 'neutral', icon: CircleX },
-  // 판매자 취소 요청 처리
-  [ClaimState.CLAIM_PENDING]: { tone: 'warning', icon: Clock },
-  [ClaimState.CLAIM_APPROVED]: { tone: 'success', icon: CircleCheck },
-  [ClaimState.CLAIM_REJECTED]: { tone: 'neutral', icon: CircleX },
   // 판매자 출금
   [WithdrawalState.REQUESTED]: { tone: 'neutral', icon: Clock },
   [WithdrawalState.PROCESSING]: { tone: 'info', icon: Loader },
@@ -147,6 +142,28 @@ export function OrderStatusBadge({ status, ...props }: OrderStatusBadgeProps) {
   return (
     <Badge color={tone} leftSection={Icon ? <Icon aria-hidden="true" /> : undefined} {...props}>
       {orderStatusLabels[status]}
+    </Badge>
+  )
+}
+
+// 환불(취소 요청) 상태(서버 RefundStatus). 출금 상태(WithdrawalState)와 값 이름이 겹쳐 따로 둔다.
+const refundStatusLooks: Record<RefundStatus, Omit<BadgeSpec, 'label'>> = {
+  [RefundStatus.REQUESTED]: { tone: 'warning', icon: Clock },
+  [RefundStatus.PROCESSING]: { tone: 'info', icon: Loader },
+  [RefundStatus.COMPLETED]: { tone: 'success', icon: CircleCheck },
+  [RefundStatus.REJECTED]: { tone: 'error', icon: CircleX },
+  [RefundStatus.WITHDRAWN]: { tone: 'neutral', icon: RotateCcw },
+}
+
+export type RefundStatusBadgeProps = Omit<BadgeProps, 'color' | 'leftSection' | 'children'> & {
+  status: RefundStatus
+}
+
+export function RefundStatusBadge({ status, ...props }: RefundStatusBadgeProps) {
+  const { tone, icon: Icon } = refundStatusLooks[status]
+  return (
+    <Badge color={tone} leftSection={Icon ? <Icon aria-hidden="true" /> : undefined} {...props}>
+      {refundStatusLabels[status]}
     </Badge>
   )
 }

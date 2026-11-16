@@ -7,6 +7,7 @@ import { checkoutHandlers } from './checkout'
 import { membersHandlers } from './members'
 import { ordersHandlers } from './orders'
 import { productHandlers } from './products'
+import { refundsHandlers } from './refunds'
 import { reviewHandlers } from './reviews'
 import { sellerHandlers } from './seller'
 import { sellerApplyHandlers } from './sellerApply'
@@ -25,6 +26,7 @@ export const handlers: RequestHandler[] = [
   ...ordersHandlers,
   ...addressesHandlers,
   ...shipmentsHandlers,
+  ...refundsHandlers,
   ...walletHandlers,
   ...sellerHandlers,
   ...sellerApplyHandlers,

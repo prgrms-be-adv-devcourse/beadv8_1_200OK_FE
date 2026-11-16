@@ -71,22 +71,12 @@
   background-color: var(--pd-color-surface-subtle);
 }
 
-.rows {
-  margin: 0;
+.tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
 
-  & > div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.25rem 0;
+  & > * {
+    flex: none;
   }
-
-  & dd {
-    margin: 0;
-  }
-}
-
-.total {
-  border-top: 1px dashed var(--pd-color-border);
-  font-weight: 600;
 }

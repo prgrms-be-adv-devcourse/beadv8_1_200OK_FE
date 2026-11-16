@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Outlet } from 'react-router'
-import { useMyProfile } from '@/features/seller'
+import { useMyProfile, usePendingRefundCount } from '@/features/seller'
 import { myInfoQueryOptions } from '@/shared/api/memberInfo'
 import { useRouteHandle } from '../routeHandle'
 import { type ConsoleNavItem, ConsoleShell } from './ConsoleShell'
@@ -107,14 +107,17 @@ export function SellerLayout() {
   const handle = useRouteHandle()
   // ✅ 상호는 GET /sellers/me/profile(아직 등록 전이면 null → 비움).
   // ✅ 회원 이름은 GET /members/me(못 받으면 비움).
-  // TODO(api): 출고 대기·취소 요청 개수(판매자 주문 목록 API)는 없어 비워 둔다
+  // ✅ 취소 요청 수는 GET /seller/refunds?status=REQUESTED의 totalElements(못 받으면 비움).
+  // TODO(api): 출고 대기 개수(판매자 주문 집계 API)는 없어 비워 둔다
   const profile = useMyProfile()
   const info = useQuery(myInfoQueryOptions())
+  const pendingRefunds = usePendingRefundCount()
   return (
     <SellerLayoutView
       title={handle.title ?? '판매자 센터'}
       storeName={profile.data?.storeName}
       userName={info.data?.name}
+      pendingClaims={pendingRefunds.data || undefined}
     >
       <Outlet />
     </SellerLayoutView>
