@@ -18,11 +18,13 @@ import {
   homeStats,
   myProfile,
   myStore,
+  noReviewSentiments,
   payoutDetails,
   payoutItems,
   payoutOutlook,
   payouts,
   productStats,
+  reviewSentiments101,
   sellerProducts,
   sellerShipmentDetail2,
   sellerShipments,
@@ -46,6 +48,10 @@ import {
 } from './views/SellerProductFormView'
 import { SellerProductsView, type SellerProductsViewProps } from './views/SellerProductsView'
 import { SellerProfileView, type SellerProfileViewProps } from './views/SellerProfileView'
+import {
+  SellerReviewSentimentView,
+  type SellerReviewSentimentViewProps,
+} from './views/SellerReviewSentimentView'
 import { SellerWalletView, type SellerWalletViewProps } from './views/SellerWalletView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 판매자 레이아웃 안에서 그린다.
@@ -276,12 +282,17 @@ const form = (props: Partial<SellerProductFormViewProps> = {}) => (
   />
 )
 
+const sentiments = (props: Partial<SellerReviewSentimentViewProps> = {}) => (
+  <SellerReviewSentimentView status="success" summary={reviewSentiments101} {...props} />
+)
+
 const edit = (props: Partial<SellerProductFormViewProps> = {}) =>
   form({
     mode: 'edit',
     defaultValues: appleFormValues,
     photos: photosOf(3),
     onDelete: noop,
+    reviewSentiments: sentiments(),
     ...props,
   })
 
@@ -449,6 +460,33 @@ export const sellerWorkPreviews: ScreenPreview[] = [
           }),
       },
       { id: 'edit', label: '수정 (사진 순서)', session: 'seller', render: () => edit() },
+      {
+        id: 'sentiments-empty',
+        label: '수정 · 분석한 리뷰 없음',
+        session: 'seller',
+        render: () => edit({ reviewSentiments: sentiments({ summary: noReviewSentiments }) }),
+      },
+      {
+        id: 'sentiments-pending',
+        label: '수정 · 리뷰 반응 로딩',
+        session: 'seller',
+        render: () =>
+          edit({ reviewSentiments: sentiments({ status: 'pending', summary: undefined }) }),
+      },
+      {
+        id: 'sentiments-error',
+        label: '수정 · 리뷰 반응 오류',
+        session: 'seller',
+        render: () =>
+          edit({
+            reviewSentiments: sentiments({
+              status: 'error',
+              summary: undefined,
+              errorMessage: '상품을 찾을 수 없습니다.',
+              onRetry: noop,
+            }),
+          }),
+      },
       {
         id: 'conflict',
         label: '수정 충돌 (409)',

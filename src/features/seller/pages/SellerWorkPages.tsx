@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { uploadMedia } from '@/shared/api/media'
 import {
@@ -21,6 +21,7 @@ import {
   useDecideAddressChange,
   useDeleteProduct,
   useDispatchShipment,
+  useMyProductReviewSentiments,
   useMyProducts,
   useSellerProductDetail,
   useSellerShipmentDetail,
@@ -32,11 +33,13 @@ import { SellerClaimsNotConnectedView } from '../views/SellerClaimsView'
 import { SellerOrdersView } from '../views/SellerOrdersView'
 import { SellerProductFormView } from '../views/SellerProductFormView'
 import { type ProductTab, SellerProductsView } from '../views/SellerProductsView'
+import { SellerReviewSentimentView } from '../views/SellerReviewSentimentView'
 
 // S-04 ~ S-07 판매자 상품·주문·취소 라우트 (판매자 센터 청크).
 // 상품: ✅ 목록 GET /sellers/me/products, 등록 POST /products, 수정 PUT /products/{id}(version, 판매 상태·노출 포함),
 //   상태·노출 PATCH /products/{id}/status · /visibility(목록에서 바로), 삭제 DELETE, 사진 POST /media/PRODUCT.
 // 수정 화면은 ✅ GET /sellers/me/products/{id}(version · 옵션 id · 재고 · 상태 · 노출)로 채우고, 저장할 때 그 version을 그대로 보낸다.
+//   폼 아래에 ✅ GET /sellers/me/products/{id}/review-sentiments(리뷰 감성 집계)를 함께 보인다.
 //   저장·상태·노출 변경이 성공하면 서버 version이 오르므로 상세·목록을 다시 받는다. 409면 ‘최신 내용 불러오기’로 상세를 다시 받는다.
 // 주문·출고(S-06)는 ✅ 출고 API로 연결. TODO(api): 📝 판매자 취소 요청(클레임) API 없음 → 취소 요청 화면 전체를 연결 전(NotConnected)으로 둔다.
 
@@ -192,6 +195,7 @@ function toFormValues(detail: SellerProductDetail): ProductFormValues {
 
 function ProductEdit({ productId }: { productId: number }) {
   const detail = useSellerProductDetail(productId)
+  const sentiments = useMyProductReviewSentiments(productId)
   // 최신 내용 불러오기: 상세를 다시 받고 폼을 새로 그린다
   const [loadCount, setLoadCount] = useState(0)
 
@@ -225,6 +229,14 @@ function ProductEdit({ productId }: { productId: number }) {
       key={loadCount}
       product={detail.data}
       onReload={() => void detail.refetch().then(() => setLoadCount((count) => count + 1))}
+      reviewSentiments={
+        <SellerReviewSentimentView
+          status={sentiments.data ? 'success' : sentiments.isError ? 'error' : 'pending'}
+          summary={sentiments.data}
+          errorMessage={sentiments.error?.detail}
+          onRetry={() => void sentiments.refetch()}
+        />
+      }
     />
   )
 }
@@ -232,9 +244,11 @@ function ProductEdit({ productId }: { productId: number }) {
 function ProductEditForm({
   product,
   onReload,
+  reviewSentiments,
 }: {
   product: SellerProductDetail
   onReload: () => void
+  reviewSentiments: ReactNode
 }) {
   const navigate = useNavigate()
   const photos = useMediaUploads(
@@ -262,6 +276,7 @@ function ProductEditForm({
       fieldErrors={failure.fieldErrors}
       conflict={failure.conflict}
       onReload={onReload}
+      reviewSentiments={reviewSentiments}
       onSubmit={(values) =>
         update.mutate(
           {

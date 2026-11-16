@@ -12,7 +12,12 @@ import {
 } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { mySellerProducts, sellerProductDetail101 } from '../fixtures'
+import {
+  mySellerProducts,
+  noReviewSentiments,
+  reviewSentiments101,
+  sellerProductDetail101,
+} from '../fixtures'
 import { SellerProductFormPage, SellerProductsPage } from './SellerWorkPages'
 
 const S3 = 'https://bucket.s3.ap-northeast-2.amazonaws.com/product'
@@ -356,5 +361,75 @@ describe('상품 수정', () => {
       'href',
       '/seller/products',
     )
+  })
+})
+
+describe('상품 수정 · 리뷰 반응', () => {
+  const section = async () => within(await screen.findByRole('region', { name: '리뷰 반응' }))
+
+  it('전체와 여섯 항목의 감성을 이름 · 개수 · 비율 문구로 보인다', async () => {
+    let auth: string | null = null
+    server.use(
+      http.get('*/api/v1/sellers/me/products/101/review-sentiments', ({ request }) => {
+        auth = request.headers.get('Authorization')
+        return HttpResponse.json(reviewSentiments101)
+      }),
+    )
+    renderAt('/seller/products/101/edit')
+
+    const region = await section()
+    expect(await region.findByText(/분석을 마친 리뷰 18개 기준/)).toBeInTheDocument()
+    expect(auth).toMatch(/^Bearer /)
+
+    const overall = within(
+      region.getByRole('heading', { name: '전체' }).parentElement as HTMLElement,
+    )
+    expect(overall.getByText('긍정').nextSibling).toHaveTextContent('12개 · 67%')
+    expect(overall.getByText('혼합').nextSibling).toHaveTextContent('1개 · 6%')
+
+    const headings = region
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent)
+    expect(headings).toEqual(['전체', '맛', '신선도', '상품 상태', '포장', '배송', '가격'])
+
+    const taste = region.getByRole('heading', { name: '맛' }).closest('li') as HTMLElement
+    expect(within(taste).getByText('언급 15개')).toBeInTheDocument()
+    expect(within(taste).getByText('긍정').nextSibling).toHaveTextContent('12개 · 80%')
+
+    const price = region.getByRole('heading', { name: '가격' }).closest('li') as HTMLElement
+    expect(within(price).getByText('언급 0개')).toBeInTheDocument()
+    expect(within(price).getByText('이 항목을 말한 리뷰가 없어요')).toBeInTheDocument()
+  })
+
+  it('분석을 마친 리뷰가 0개면 빈 상태를 보인다', async () => {
+    server.use(
+      http.get('*/api/v1/sellers/me/products/101/review-sentiments', () =>
+        HttpResponse.json(noReviewSentiments),
+      ),
+    )
+    renderAt('/seller/products/101/edit')
+
+    const region = await section()
+    expect(await region.findByText('아직 분석한 리뷰가 없어요')).toBeInTheDocument()
+    expect(region.queryByRole('heading', { name: '맛' })).not.toBeInTheDocument()
+  })
+
+  it('집계를 못 받아도 수정 폼은 쓸 수 있고, 다시 시도로 다시 받는다', async () => {
+    let calls = 0
+    server.use(
+      http.get('*/api/v1/sellers/me/products/101/review-sentiments', () => {
+        calls += 1
+        return calls === 1
+          ? problem(404, '상품을 찾을 수 없습니다.')
+          : HttpResponse.json(reviewSentiments101)
+      }),
+    )
+    const user = renderAt('/seller/products/101/edit')
+
+    expect(await screen.findByDisplayValue('청송 꿀사과 부사')).toBeInTheDocument()
+    const region = await section()
+    expect(await region.findByText('상품을 찾을 수 없습니다.')).toBeInTheDocument()
+    await user.click(region.getByRole('button', { name: '다시 시도' }))
+    expect(await region.findByText(/분석을 마친 리뷰 18개 기준/)).toBeInTheDocument()
   })
 })

@@ -10,20 +10,20 @@ import {
   ProductRegion,
   ProductStatus,
   type ProductSummary,
+  ReviewAspect,
   ReviewKeywordAspect,
+  ReviewSentiment,
   type SellerApplicationAdminDetail,
   type SellerApplicationAdminSummary,
 } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
-import {
-  type AdjustTarget,
-  type KeywordAnalysis,
-  type PayoutFilter,
-  type PayoutRunResult,
-  ReviewAspect,
-  ReviewSentiment,
-  type SentimentAnalysis,
+import type {
+  AdjustTarget,
+  KeywordAnalysis,
+  PayoutFilter,
+  PayoutRunResult,
+  SentimentAnalysis,
 } from './types'
 
 // 서버 응답 모양 그대로 둔 샘플 데이터 (previews · 테스트 · MSW 기본 응답).

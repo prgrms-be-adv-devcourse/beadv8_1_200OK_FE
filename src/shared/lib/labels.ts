@@ -12,7 +12,9 @@ import {
   ProductStatus,
   ProductVisibility,
   type RegionGroup,
+  ReviewAspect,
   ReviewMediaType,
+  ReviewSentiment,
   ShipmentCarrier,
   TermsType,
 } from '@/shared/api/types'
@@ -103,6 +105,23 @@ export const termsTypeLabels: Record<TermsType, string> = {
 export const reviewMediaTypeLabels: Record<ReviewMediaType, string> = {
   [ReviewMediaType.IMAGE]: '이미지',
   [ReviewMediaType.VIDEO]: '영상',
+}
+
+export const reviewAspectLabels: Record<ReviewAspect, string> = {
+  [ReviewAspect.TASTE]: '맛',
+  [ReviewAspect.FRESHNESS]: '신선도',
+  [ReviewAspect.CONDITION]: '상품 상태',
+  [ReviewAspect.PACKAGING]: '포장',
+  [ReviewAspect.DELIVERY]: '배송',
+  [ReviewAspect.PRICE]: '가격',
+}
+
+export const reviewSentimentLabels: Record<ReviewSentiment, string> = {
+  [ReviewSentiment.POSITIVE]: '긍정',
+  [ReviewSentiment.NEGATIVE]: '부정',
+  [ReviewSentiment.NEUTRAL]: '중립',
+  [ReviewSentiment.MIXED]: '혼합',
+  [ReviewSentiment.NOT_MENTIONED]: '언급 없음',
 }
 
 export const payoutEventTypeLabels: Record<PayoutEventType, string> = {

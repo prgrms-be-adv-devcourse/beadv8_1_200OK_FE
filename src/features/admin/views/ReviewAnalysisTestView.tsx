@@ -11,18 +11,12 @@ import {
   Smile,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { ProductOption } from '@/shared/api/types'
+import { type ProductOption, ReviewAspect, ReviewSentiment } from '@/shared/api/types'
 import { formatAmount } from '@/shared/lib/format'
+import { reviewAspectLabels, reviewSentimentLabels } from '@/shared/lib/labels'
 import { DisabledReason, PageHeader } from '@/shared/ui'
-import { reviewAspectLabels, reviewKeywordAspectLabels, reviewSentimentLabels } from '../labels'
-import {
-  type AnalysisPanel,
-  type AnalyzedKeyword,
-  type KeywordAnalysis,
-  ReviewAspect,
-  ReviewSentiment,
-  type SentimentAnalysis,
-} from '../types'
+import { reviewKeywordAspectLabels } from '../labels'
+import type { AnalysisPanel, AnalyzedKeyword, KeywordAnalysis, SentimentAnalysis } from '../types'
 import classes from './ReviewAnalysisTestView.module.css'
 
 // M-04 리뷰 분석 테스트 /admin/review-analysis-test. 리뷰를 남기지 않고 본문 하나의 키워드 · 감성 분석을 바로 본다.

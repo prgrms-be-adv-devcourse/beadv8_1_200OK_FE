@@ -15,7 +15,7 @@ import {
   TextInput,
 } from '@mantine/core'
 import { CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, type ReactNode, Suspense, useEffect, useState } from 'react'
 import {
   Controller,
   type FieldErrors,
@@ -81,6 +81,8 @@ export type SellerProductFormViewProps = {
   /** 처음부터 오류 요약을 보여 준다 (미리보기) */
   defaultShowErrors?: boolean
   defaultDeleteOpen?: boolean
+  /** 수정 화면에서 폼 아래에 두는 리뷰 감성 집계 */
+  reviewSentiments?: ReactNode
 }
 
 /** 재고 칸 안내: 배정 수량이 있으면 그 아래로 못 줄인다고, 아니면 0일 때 품절 안내 */
@@ -162,6 +164,7 @@ export function SellerProductFormView({
   deleting = false,
   defaultShowErrors = false,
   defaultDeleteOpen = false,
+  reviewSentiments,
 }: SellerProductFormViewProps) {
   const [submitted, setSubmitted] = useState(defaultShowErrors)
   const [deleteOpen, setDeleteOpen] = useState(defaultDeleteOpen)
@@ -601,6 +604,8 @@ export function SellerProductFormView({
           </DisabledReason>
         </div>
       </form>
+
+      {reviewSentiments}
 
       <Modal opened={deleteOpen} onClose={() => setDeleteOpen(false)} title="상품을 삭제할까요?">
         <Text>

@@ -1,6 +1,7 @@
 import { ReviewKeywordAspect } from '@/shared/api/types'
+import { reviewAspectLabels } from '@/shared/lib/labels'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
-import { ReviewAspect, ReviewSentiment, SellerReviewAction } from './types'
+import { SellerReviewAction } from './types'
 
 // 심사 목록 탭 이름 (시안). 서버 상태 4종 그대로.
 export const sellerReviewTabLabels: Record<SellerApplicationStatus, string> = {
@@ -17,24 +18,7 @@ export const sellerReviewActionLabels: Record<SellerReviewAction, string> = {
   [SellerReviewAction.REJECT]: '반려',
 }
 
-export const reviewAspectLabels: Record<ReviewAspect, string> = {
-  [ReviewAspect.TASTE]: '맛',
-  [ReviewAspect.FRESHNESS]: '신선도',
-  [ReviewAspect.CONDITION]: '상품 상태',
-  [ReviewAspect.PACKAGING]: '포장',
-  [ReviewAspect.DELIVERY]: '배송',
-  [ReviewAspect.PRICE]: '가격',
-}
-
 export const reviewKeywordAspectLabels: Record<ReviewKeywordAspect, string> = {
   ...reviewAspectLabels,
   [ReviewKeywordAspect.OTHER]: '기타',
-}
-
-export const reviewSentimentLabels: Record<ReviewSentiment, string> = {
-  [ReviewSentiment.POSITIVE]: '긍정',
-  [ReviewSentiment.NEGATIVE]: '부정',
-  [ReviewSentiment.NEUTRAL]: '중립',
-  [ReviewSentiment.MIXED]: '혼합',
-  [ReviewSentiment.NOT_MENTIONED]: '언급 없음',
 }
