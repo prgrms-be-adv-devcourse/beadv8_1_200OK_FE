@@ -22,6 +22,8 @@ const checkout = (props: Partial<CheckoutViewProps> = {}) => (
     sellerNames={sellerNames}
     balance={BALANCE_ENOUGH}
     defaultAddress={savedAddress}
+    feeQuote={feeQuoteSample}
+    feeQuoteStatus="success"
     onPay={() => {}}
     onRetry={() => {}}
     {...props}
@@ -39,8 +41,10 @@ const priceChanged = {
       : group,
   ),
   totalProductAmount: 40800,
-  totalAmount: 40800,
 }
+
+/** 견적을 받기 전: 배송비·합계를 모르고 결제를 막는다 */
+const noQuote = { feeQuote: undefined }
 
 export const checkoutPreviews: ScreenPreview[] = [
   {
@@ -49,12 +53,7 @@ export const checkoutPreviews: ScreenPreview[] = [
     layout: 'public',
     path: '/checkout',
     states: [
-      { id: 'enough', label: '잔액 충분', render: () => checkout() },
-      {
-        id: 'quoted',
-        label: '배송비 견적 (일반 지역)',
-        render: () => checkout({ feeQuote: feeQuoteSample, feeQuoteStatus: 'success' }),
-      },
+      { id: 'enough', label: '잔액 충분 (일반 지역 견적)', render: () => checkout() },
       {
         id: 'remote',
         label: '도서산간 추가 운임',
@@ -72,15 +71,19 @@ export const checkoutPreviews: ScreenPreview[] = [
       {
         id: 'quote-pending',
         label: '배송비 계산 중',
-        render: () => checkout({ feeQuoteStatus: 'pending' }),
+        render: () => checkout({ ...noQuote, feeQuoteStatus: 'pending' }),
       },
       {
         id: 'quote-error',
         label: '배송비 견적 실패',
-        render: () => checkout({ feeQuoteStatus: 'error' }),
+        render: () => checkout({ ...noQuote, feeQuoteStatus: 'error', onFeeQuoteRetry: () => {} }),
       },
       { id: 'short', label: '잔액 부족', render: () => checkout({ balance: BALANCE_SHORT }) },
-      { id: 'no-address', label: '배송지 없음', render: () => checkout({ defaultAddress: null }) },
+      {
+        id: 'no-address',
+        label: '배송지 없음',
+        render: () => checkout({ ...noQuote, feeQuoteStatus: 'idle', defaultAddress: null }),
+      },
       {
         id: 'processing',
         label: '결제 처리 중',
@@ -91,7 +94,7 @@ export const checkoutPreviews: ScreenPreview[] = [
         id: 'price-changed',
         label: '금액 변경 (409)',
         render: () =>
-          checkout({ checkout: priceChanged, previousTotal: checkoutSample.totalAmount }),
+          checkout({ checkout: priceChanged, previousTotal: checkoutSample.totalProductAmount }),
       },
       { id: 'loading', label: '로딩', render: () => checkout({ status: 'pending' }) },
       { id: 'error', label: '불러오기 실패', render: () => checkout({ status: 'error' }) },
@@ -116,7 +119,7 @@ export const checkoutPreviews: ScreenPreview[] = [
             orderId={SAMPLE_ORDER_ID}
             order={completedOrderSample}
             sellerNames={sellerNames}
-            balance={BALANCE_ENOUGH - checkoutSample.totalAmount}
+            balance={BALANCE_ENOUGH - completedOrderSample.totalAmount}
           />
         ),
       },

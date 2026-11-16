@@ -11,7 +11,7 @@ import type {
 // 2026-10-20 로컬 서버 확인: 견적은 판매자별 기본 배송비 3,000원, 제주(63000)는 regionGroup JEJU_ISLANDS · 추가 운임 5,000원,
 //   우편번호 형식 오류 422 errors[].path "postalCode" "우편번호는 숫자 5자리여야 합니다."
 
-// ✅ GET /api/v1/orders/checkout → 200 Checkout. totalAmount에 도서산간 운임이 빠져 있다 → 견적의 regionSurcharge를 더해 expectedTotalAmount로 보낸다
+// ✅ GET /api/v1/orders/checkout → 200 Checkout. 상품 금액(totalProductAmount)만 준다 → 견적의 totalShippingFee를 더해 expectedTotalAmount로 보낸다
 // 오류: 400 선택한 상품 없음·본인 상품, 404 옵션 없음, 409 판매 중 아님·재고 부족
 export async function fetchCheckout(): Promise<Checkout> {
   const { data } = await apiClient.get<Checkout>('/api/v1/orders/checkout')
@@ -40,7 +40,7 @@ export function newIdempotencyKey(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-// ✅ POST /api/v1/shipments/fee-quotes → 200 ShippingFeeQuote (로그인 불필요). 표시용이며 결제 금액은 주문이 서버에서 다시 계산한다.
+// ✅ POST /api/v1/shipments/fee-quotes → 200 ShippingFeeQuote (로그인 불필요). 배송비는 이 값으로만 안다(주문서 응답에 없음). 주문 생성은 서버가 다시 계산해 expectedTotalAmount와 비교한다.
 // 오류: 422 우편번호 형식·판매자 목록(비었거나 100개 초과·중복)·금액 음수
 export async function fetchShippingFeeQuote(
   body: ShippingFeeQuoteRequest,

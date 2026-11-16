@@ -454,15 +454,13 @@ export type CheckoutItem = {
 
 export type CheckoutSellerGroup = {
   sellerId: number
-  shippingFee: number // 판매자 묶음 기본 배송비. 도서산간 추가 운임은 빠져 있다
   items: CheckoutItem[]
 }
 
+/** 주문서 GET /orders/checkout. 배송비·합계는 없다 → 배송비는 견적(fee-quotes)으로만 받는다 */
 export type Checkout = {
   sellerGroups: CheckoutSellerGroup[]
   totalProductAmount: number
-  totalShippingFee: number
-  totalAmount: number // 도서산간 운임 제외 → 견적(fee-quotes)의 regionSurcharge를 더해 expectedTotalAmount로 보낸다
 }
 
 export type CreateOrderRequest = {
@@ -473,7 +471,7 @@ export type CreateOrderRequest = {
   addressDetail: string // 필수, 100자 이하
   deliveryNote?: string // 선택, 255자 이하. 공백만이면 서버가 null로 본다
   thirdPartyProvisionAgreed: true
-  expectedTotalAmount: number // 화면에 보여준 최종 금액 (totalAmount + 도서산간 운임)
+  expectedTotalAmount: number // 화면에 보여준 최종 금액 (totalProductAmount + 견적 totalShippingFee)
 }
 
 export type CreateOrderResponse = { orderId: number }
