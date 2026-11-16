@@ -49,7 +49,7 @@ type Seed = Pick<
   Partial<
     Pick<
       SellerApplicationAdminDetail,
-      'reviewStartedAt' | 'approvedAt' | 'rejectedAt' | 'rejectReason'
+      'originPostalCode' | 'reviewStartedAt' | 'approvedAt' | 'rejectedAt' | 'rejectReason'
     >
   >
 
@@ -61,6 +61,7 @@ const seeds: Seed[] = [
     representativeName: '최다은',
     businessNumber: '415-12-08831',
     mailOrderNumber: '제2026-전남영암-0042호',
+    originPostalCode: '58431',
     status: S.PENDING,
     appliedAt: '2026-10-16T09:40:00',
   },
@@ -71,6 +72,7 @@ const seeds: Seed[] = [
     representativeName: '한상욱',
     businessNumber: '301-25-77104',
     mailOrderNumber: '제2026-충북괴산-0018호',
+    originPostalCode: '28044',
     status: S.PENDING,
     appliedAt: '2026-10-16T11:05:00',
   },
@@ -81,6 +83,7 @@ const seeds: Seed[] = [
     representativeName: '오미래',
     businessNumber: '409-31-26650',
     mailOrderNumber: '제2026-전남담양-0027호',
+    originPostalCode: '57339',
     status: S.PENDING,
     appliedAt: '2026-10-17T15:20:00',
   },
@@ -91,6 +94,7 @@ const seeds: Seed[] = [
     representativeName: '박지훈',
     businessNumber: '613-08-45512',
     mailOrderNumber: '제2026-경남남해-0009호',
+    originPostalCode: '52430',
     status: S.IN_REVIEW,
     appliedAt: '2026-10-15T14:10:00',
     reviewStartedAt: '2026-10-16T10:00:00',
@@ -102,6 +106,7 @@ const seeds: Seed[] = [
     representativeName: '윤해솔',
     businessNumber: '415-90-11873',
     mailOrderNumber: '제2026-전남보성-0033호',
+    originPostalCode: '59435',
     status: S.REJECTED,
     appliedAt: '2026-10-13T16:30:00',
     reviewStartedAt: '2026-10-14T09:30:00',
@@ -115,6 +120,7 @@ const seeds: Seed[] = [
     representativeName: '김영수',
     businessNumber: '512-81-04273',
     mailOrderNumber: '제2026-경북청송-0031호',
+    originPostalCode: '37421',
     status: S.APPROVED,
     appliedAt: '2026-09-02T10:00:00',
     reviewStartedAt: '2026-09-02T14:00:00',
@@ -127,6 +133,7 @@ const seeds: Seed[] = [
     representativeName: '박정희',
     businessNumber: '415-27-60318',
     mailOrderNumber: '제2026-전남해남-0015호',
+    originPostalCode: '52430',
     status: S.APPROVED,
     appliedAt: '2026-09-05T13:00:00',
     reviewStartedAt: '2026-09-05T16:00:00',
@@ -139,6 +146,7 @@ const seeds: Seed[] = [
     representativeName: '고은비',
     businessNumber: '616-14-90235',
     mailOrderNumber: '제2026-제주서귀포-0061호',
+    originPostalCode: '63535',
     status: S.APPROVED,
     appliedAt: '2026-09-09T09:20:00',
     reviewStartedAt: '2026-09-09T13:00:00',
@@ -151,6 +159,7 @@ const seeds: Seed[] = [
     representativeName: '최태호',
     businessNumber: '226-50-18874',
     mailOrderNumber: '제2026-강원평창-0012호',
+    originPostalCode: '25363',
     status: S.APPROVED,
     appliedAt: '2026-09-12T10:10:00',
     reviewStartedAt: '2026-09-12T15:00:00',
@@ -175,6 +184,8 @@ const decided = (seed: Seed) => seed.status === S.APPROVED || seed.status === S.
 /** 관리자 신청 상세 (오래된 신청부터 — 서버 정렬과 같다) */
 export const sellerApplications: SellerApplicationAdminDetail[] = seeds
   .map((seed) => ({
+    // 우편번호가 없는 신청은 이 칸이 생기기 전 신청(서버 null)
+    originPostalCode: null,
     reviewStartedAt: null,
     approvedAt: null,
     rejectedAt: null,

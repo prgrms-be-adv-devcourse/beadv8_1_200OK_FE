@@ -4,29 +4,38 @@ import { useSyncExternalStore } from 'react'
 import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
-import type {
-  AddressChangeDecision,
-  AddressChangeRequestResult,
-  PageResponse,
-  PayoutSellerCandidate,
-  PayoutSellerDetail,
-  PayoutSummary,
-  ProductCreateRequest,
-  ProductStatus,
-  ProductUpdateRequest,
-  ProductVisibility,
-  SellerBalanceResponse,
-  SellerPayoutCandidateParams,
-  SellerPayoutListParams,
-  SellerProductDetail,
-  SellerProductListParams,
-  SellerProductSummary,
-  SellerProfileRequest,
-  SellerProfileResponse,
-  SellerShipmentPage,
-  ShipmentDetail,
-  ShipmentDispatchRequest,
-  ShipmentDispatchResponse,
+import {
+  fetchMyApplication,
+  fetchMyApplications,
+  myApplicationQueryKey,
+  myApplicationsQueryKey,
+} from '@/shared/api/sellerApplication'
+import {
+  type AddressChangeDecision,
+  type AddressChangeRequestResult,
+  type PageResponse,
+  type PayoutSellerCandidate,
+  type PayoutSellerDetail,
+  type PayoutSummary,
+  type ProductCreateRequest,
+  type ProductStatus,
+  type ProductUpdateRequest,
+  type ProductVisibility,
+  type SellerApplicationHistoryResponse,
+  type SellerApplicationResponse,
+  SellerApplicationStatus,
+  type SellerBalanceResponse,
+  type SellerPayoutCandidateParams,
+  type SellerPayoutListParams,
+  type SellerProductDetail,
+  type SellerProductListParams,
+  type SellerProductSummary,
+  type SellerProfileRequest,
+  type SellerProfileResponse,
+  type SellerShipmentPage,
+  type ShipmentDetail,
+  type ShipmentDispatchRequest,
+  type ShipmentDispatchResponse,
 } from '@/shared/api/types'
 import { PAYOUT_RUN_HOUR } from '@/shared/lib/constants'
 import { recentYear, thisMonth, toServerDateTime } from '@/shared/lib/dateRange'
@@ -248,6 +257,30 @@ export function useMyProfile(enabled = true) {
     retry: false,
     staleTime: 60_000,
   })
+}
+
+/**
+ * 승인된 신청 당시의 출고지 우편번호. 프로필에 출고지 우편번호가 없을 때(미등록·이 칸이 생기기 전 프로필) 폼 기본값으로 쓴다.
+ * 내역에서 가장 최근 승인 신청을 골라 상세를 받는다. 못 받거나 없으면 null(빈 칸으로 둔다).
+ */
+export function useApprovedApplicationPostalCode(enabled: boolean) {
+  const history = useQuery<SellerApplicationHistoryResponse, ApiError>({
+    queryKey: myApplicationsQueryKey(),
+    queryFn: fetchMyApplications,
+    enabled,
+  })
+  const approved = history.data?.applications
+    .filter((application) => application.status === SellerApplicationStatus.APPROVED)
+    .sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))[0]
+  const detail = useQuery<SellerApplicationResponse, ApiError>({
+    queryKey: myApplicationQueryKey(approved?.applicationId ?? -1),
+    queryFn: () => fetchMyApplication(approved?.applicationId ?? -1),
+    enabled: enabled && approved !== undefined,
+  })
+  return {
+    pending: enabled && (history.isPending || (approved !== undefined && detail.isPending)),
+    postalCode: detail.data?.originPostalCode ?? null,
+  }
 }
 
 /** 등록(POST)과 수정(PUT)을 캐시 값으로 가른다: 아직 없으면(null) 등록 */

@@ -53,6 +53,7 @@ export function SellerApplyPage() {
           storeName: previous.data.storeName,
           representativeName: previous.data.representativeName,
           businessNumber: previous.data.businessNumber,
+          originPostalCode: previous.data.originPostalCode ?? '',
         }
       : undefined
 

@@ -277,6 +277,11 @@ export const adminPreviews: ScreenPreview[] = [
       },
       { id: 'rejected', label: '반려됨', render: () => detailView(appOf(S.REJECTED)) },
       {
+        id: 'no-postal-code',
+        label: '출고지 우편번호 없음 (이 칸이 생기기 전 신청)',
+        render: () => detailView({ ...pending, originPostalCode: null }),
+      },
+      {
         id: 'not-found',
         label: '없는 신청 (404)',
         render: () => detailView(null, { status: 'notFound' }),

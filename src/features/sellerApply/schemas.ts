@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { postalCodeSchema } from '@/shared/lib/postalCode'
 
 // 판매자 신청 검증. ✅ SellerApplyRequest(POST /sellers/me/applications) 규칙:
-// 상호·대표자 50자, 사업자등록번호 숫자 10자리(하이픈 없이 보내도 000-00-00000으로 저장), 통신판매업 신고번호 50자.
+// 상호·대표자 50자, 사업자등록번호 숫자 10자리(하이픈 없이 보내도 000-00-00000으로 저장), 통신판매업 신고번호 50자,
+// 출고지 우편번호 숫자 5자리(필수).
 
 export const applySchema = z.object({
   storeName: z
@@ -23,13 +25,14 @@ export const applySchema = z.object({
     .trim()
     .min(1, '통신판매업 신고번호를 입력해 주세요')
     .max(50, '통신판매업 신고번호는 50자 이하로 입력해 주세요'),
+  originPostalCode: postalCodeSchema,
 })
 
 export type ApplyFormValues = z.infer<typeof applySchema>
 
 /** 단계별 칸 (다음 단계로 갈 때 이 칸만 검사한다). 정산 계좌 단계는 API에 없어 뺐다(승인 뒤 지갑에서 등록, 준비 중) */
 export const stepFields: (keyof ApplyFormValues)[][] = [
-  ['storeName', 'representativeName', 'businessNumber', 'mailOrderNumber'],
+  ['storeName', 'representativeName', 'businessNumber', 'mailOrderNumber', 'originPostalCode'],
   [],
 ]
 

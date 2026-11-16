@@ -194,6 +194,22 @@ export const sellerCenterPreviews: ScreenPreview[] = [
           }),
       },
       {
+        id: 'no-postal-code',
+        label: '출고지 우편번호 없음 (이 칸이 생기기 전 프로필 · 신청 값도 없음)',
+        session: 'seller',
+        render: () => profile({ profile: { ...myProfile, originPostalCode: null } }),
+      },
+      {
+        id: 'postal-code-from-application',
+        label: '출고지 우편번호 없음 → 승인 신청 값으로 채움',
+        session: 'seller',
+        render: () =>
+          profile({
+            profile: { ...myProfile, originPostalCode: null },
+            fallbackPostalCode: '37421',
+          }),
+      },
+      {
         id: 'error',
         label: '저장 실패 (서버)',
         session: 'seller',

@@ -135,4 +135,15 @@ describe('AdminSellerDetailView', () => {
     expect(screen.queryByText('정산 계좌')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '승인' })).not.toBeInTheDocument()
   })
+
+  it('출고지 우편번호를 보여 준다', () => {
+    renderDetail({ application: { ...appOf(S.PENDING), originPostalCode: '58431' } })
+    expect(screen.getByText('출고지 우편번호')).toBeInTheDocument()
+    expect(screen.getByText('58431')).toBeInTheDocument()
+  })
+
+  it('출고지 우편번호가 null이면 우편번호를 받기 전 신청이라고 보여 준다', () => {
+    renderDetail({ application: { ...appOf(S.PENDING), originPostalCode: null } })
+    expect(screen.getByText('없음 · 우편번호를 받기 전 신청이에요')).toBeInTheDocument()
+  })
 })

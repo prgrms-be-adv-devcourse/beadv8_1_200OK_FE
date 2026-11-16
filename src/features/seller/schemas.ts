@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { STORE_INTRO_MAX } from '@/shared/lib/constants'
+import { postalCodeSchema } from '@/shared/lib/postalCode'
 
-// 상점 프로필 검증. ✅ SellerProfileRequest(POST·PUT /sellers/me/profile) 규칙: 상호·대표자 50자, 연락처 하이픈 포함, 소개 200자.
+// 상점 프로필 검증. ✅ SellerProfileRequest(POST·PUT /sellers/me/profile) 규칙: 상호·대표자 50자, 연락처 하이픈 포함,
+// 출고지 우편번호 숫자 5자리(필수), 소개 200자.
 
 export const profileSchema = z.object({
   storeName: z
@@ -21,6 +23,7 @@ export const profileSchema = z.object({
       /^(0\d{1,2}-\d{3,4}-\d{4}|1\d{3}-\d{4})$/,
       '연락처를 054-873-2210 또는 1588-1234 형식으로 입력해 주세요',
     ),
+  originPostalCode: postalCodeSchema,
   introduction: z
     .string()
     .trim()

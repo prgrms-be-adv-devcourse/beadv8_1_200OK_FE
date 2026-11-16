@@ -256,6 +256,11 @@ export function AdminSellerDetailView({
                     { label: '대표자', value: application.representativeName },
                     { label: '사업자등록번호', value: application.businessNumber, num: true },
                     { label: '통신판매업 신고번호', value: application.mailOrderNumber, num: true },
+                    {
+                      label: '출고지 우편번호',
+                      value: application.originPostalCode ?? '없음 · 우편번호를 받기 전 신청이에요',
+                      num: application.originPostalCode !== null,
+                    },
                     { label: '신청 회원 번호', value: String(application.memberId), num: true },
                     { label: '신청일', value: formatDate(application.appliedAt), num: true },
                   ]}

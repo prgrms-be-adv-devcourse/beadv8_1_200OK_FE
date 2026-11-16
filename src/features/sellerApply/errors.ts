@@ -18,6 +18,7 @@ const FIELDS: ApplyField[] = [
   'representativeName',
   'businessNumber',
   'mailOrderNumber',
+  'originPostalCode',
 ]
 
 const isField = (path: string): path is ApplyField => (FIELDS as string[]).includes(path)
