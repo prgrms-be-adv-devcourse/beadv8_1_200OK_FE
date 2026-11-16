@@ -111,10 +111,11 @@ export const payoutEventTypeLabels: Record<PayoutEventType, string> = {
   [PayoutEventType.SALE_SHIPPING_FEE]: '상품판매 배송비',
 }
 
-// 주문 상품 상태 8종 (GET /orders/{orderId} items[].status, design/COMPONENTS.md 상태 배지 세트)
+// 주문 상품 상태 9종 (GET /orders/{orderId} items[].status, design/COMPONENTS.md 상태 배지 세트)
 export const orderItemStatusLabels: Record<OrderItemStatus, string> = {
   [OrderItemStatus.PAYMENT_PENDING]: '결제 대기',
   [OrderItemStatus.PAYMENT_FAILED]: '결제 실패',
+  [OrderItemStatus.CANCELED]: '주문 취소',
   [OrderItemStatus.PREPARING]: '상품 준비 중',
   [OrderItemStatus.SHIPPING]: '배송 중',
   [OrderItemStatus.DELIVERED]: '배송 완료',

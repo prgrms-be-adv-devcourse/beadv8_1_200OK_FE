@@ -96,6 +96,7 @@ export enum PayoutEventType {
 export enum OrderItemStatus {
   PAYMENT_PENDING = 'PAYMENT_PENDING',
   PAYMENT_FAILED = 'PAYMENT_FAILED',
+  CANCELED = 'CANCELED', // 결제까지 가지 못하고 무산된 주문의 상품
   PREPARING = 'PREPARING',
   SHIPPING = 'SHIPPING',
   DELIVERED = 'DELIVERED',
@@ -407,7 +408,7 @@ export type TermsAgreeRequest = { agreements: { type: TermsType; version: number
 /** GET /wallets/me/balance. 지갑이 없으면 balance 0. 충전 가능 금액 = maxBalance − balance */
 export type BuyerBalance = { balance: number; maxBalance: number }
 
-/** POST /wallets/me/charges. 10,000원 이상 10,000원 단위, 충전 뒤 잔액 ≤ maxBalance */
+/** POST /wallets/me/charges. 10,000원 이상, 충전 뒤 잔액 ≤ maxBalance */
 export type WalletChargeRequest = { amount: number }
 
 /** 201. chargeNo를 토스 결제창의 orderId로 넘긴다 */
@@ -562,7 +563,7 @@ export enum ShipmentStatus {
 /** 기본 배송지 저장 PUT /shipments/addresses/default. 연락처는 하이픈이 있어도 되고 숫자만 저장된다 */
 export type ShipmentAddressRequest = {
   recipientName: string
-  recipientPhone: string // 숫자 10~11자리
+  recipientPhone: string // 숫자 9~11자리 (하이픈 있어도 됨)
   postalCode: string // 숫자 5자리
   address: string
   addressDetail: string

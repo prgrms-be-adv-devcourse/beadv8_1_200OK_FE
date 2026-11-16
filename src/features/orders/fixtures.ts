@@ -66,7 +66,7 @@ const cabbage = item(
   '평창 고랭지 알배기배추',
   '2포기',
   9900,
-  OrderItemStatus.REFUNDED,
+  OrderItemStatus.CANCELED,
 )
 const sweetPotato5 = item(
   931,

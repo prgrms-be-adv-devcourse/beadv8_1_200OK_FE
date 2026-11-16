@@ -104,6 +104,11 @@ export const orderPreviews: ScreenPreview[] = [
       },
       { id: 'refunded', label: '환불 완료', render: status(OrderItemStatus.REFUNDED) },
       {
+        id: 'canceled',
+        label: '주문 취소 (결제 전 무산)',
+        render: status(OrderItemStatus.CANCELED),
+      },
+      {
         id: 'payment-failed',
         label: '결제 실패',
         render: status(OrderItemStatus.PAYMENT_FAILED),
