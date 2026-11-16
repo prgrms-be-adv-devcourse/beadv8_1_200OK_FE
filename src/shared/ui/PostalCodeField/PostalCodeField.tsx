@@ -48,6 +48,7 @@ export function PostalCodeField({
           <div style={{ flex: 1 }}>{input}</div>
           <Button
             variant="outline"
+            mih="var(--pd-touch-min)"
             leftSection={<Search size={16} aria-hidden="true" />}
             loading={searching}
             onClick={search}

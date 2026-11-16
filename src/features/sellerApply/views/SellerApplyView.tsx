@@ -178,7 +178,7 @@ export function SellerApplyView({
             />
             <PostalCodeField
               label="출고지 우편번호"
-              description="상품을 보내는 곳이에요. 배송비 계산에 써요"
+              description="상품을 보내는 곳이에요. 배송비 계산에 쓰고, 승인 뒤에는 상점 프로필에서 바꿀 수 있어요"
               error={errors.originPostalCode?.message}
               onPick={(zipCode) => setValue('originPostalCode', zipCode, { shouldValidate: true })}
               {...register('originPostalCode')}
