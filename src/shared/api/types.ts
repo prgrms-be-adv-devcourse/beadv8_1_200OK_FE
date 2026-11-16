@@ -380,7 +380,8 @@ export type Cart = {
 
 export type CartItemAddRequest = { productOptionId: number; quantity: number }
 
-export type CartItemAddResponse = { cartItemId: number }
+/** quantity는 담은 뒤 수량. 이미 담긴 옵션이면 더한 값이고 서버가 MAX_CART_QUANTITY에서 멈춘다 */
+export type CartItemAddResponse = { cartItemId: number; quantity: number }
 
 export type CartQuantityRequest = { quantity: number }
 
