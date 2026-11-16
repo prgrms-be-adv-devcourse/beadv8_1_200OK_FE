@@ -208,7 +208,7 @@ export const mePreviews: ScreenPreview[] = [
         render: () =>
           accountLive('address', {
             defaultOpen: true,
-            serverErrors: { recipientPhone: '연락처는 숫자 10~11자리여야 합니다.' },
+            serverErrors: { recipientPhone: '연락처는 숫자 9~11자리여야 합니다.' },
             errorMessage: '배송지를 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요',
           }),
       },

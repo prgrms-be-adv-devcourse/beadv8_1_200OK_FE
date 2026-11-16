@@ -9,10 +9,11 @@ export const addressSchema = z.object({
     .trim()
     .min(1, '받는 분을 입력해 주세요')
     .max(50, '받는 분은 50자 이하로 입력해 주세요'),
+  // 기본 배송지 API와 같은 규칙(숫자 9~11자리, 하이픈 선택). 저장할 때 formatPhone으로 하이픈을 붙여 주문 생성 형식에도 맞춘다
   recipientPhone: z
     .string()
     .trim()
-    .regex(/^01\d-\d{3,4}-\d{4}$/, '연락처를 010-1234-5678 형식으로 입력해 주세요'),
+    .regex(/^\d(?:-?\d){8,10}$/, '연락처를 숫자 9~11자리로 입력해 주세요'),
   zipCode: z
     .string()
     .trim()

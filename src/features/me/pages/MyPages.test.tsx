@@ -364,7 +364,7 @@ describe('AccountPage', () => {
               status: 422,
               detail: '요청 값이 올바르지 않습니다.',
               instance: '/x',
-              errors: [{ path: 'recipientPhone', detail: '연락처는 숫자 10~11자리여야 합니다.' }],
+              errors: [{ path: 'recipientPhone', detail: '연락처는 숫자 9~11자리여야 합니다.' }],
             },
             { status: 422, headers: { 'Content-Type': 'application/problem+json' } },
           ),
@@ -374,7 +374,7 @@ describe('AccountPage', () => {
       renderAt('/me/account?tab=address')
       await user.click(await screen.findByRole('button', { name: '수정' }))
       await user.click(await screen.findByRole('button', { name: '저장' }))
-      expect(await screen.findByText('연락처는 숫자 10~11자리여야 합니다.')).toBeInTheDocument()
+      expect(await screen.findByText('연락처는 숫자 9~11자리여야 합니다.')).toBeInTheDocument()
       expect(screen.getByLabelText('연락처')).toHaveFocus()
     })
 
