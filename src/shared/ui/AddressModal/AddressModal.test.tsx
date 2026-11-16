@@ -47,6 +47,7 @@ describe('AddressModal', () => {
     await user.type(await screen.findByLabelText('받는 분'), '이서연')
     await user.type(screen.getByLabelText('연락처'), '021234567')
     await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+    await user.type(screen.getByLabelText('상세주소'), '3층')
     await user.click(screen.getByRole('button', { name: '이번 주문에 적용' }))
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ recipientPhone: '02-123-4567' }))
