@@ -174,3 +174,17 @@
     font-weight: 600;
   }
 }
+
+.reviewFocus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: var(--pd-color-error);
+  font-weight: 600;
+}
+
+.reviewCalm {
+  margin: 0;
+  font-weight: 600;
+}

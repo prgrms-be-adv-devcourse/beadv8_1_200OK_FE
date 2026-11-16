@@ -17,6 +17,7 @@ import {
   type SellerProfile,
   type SellerProfileResponse,
   type SellerShipmentSummary,
+  type SentimentCounts,
   ShipmentCarrier,
   type ShipmentDetail,
   ShipmentStatus,
@@ -24,6 +25,7 @@ import {
 import { LOW_STOCK_THRESHOLD, PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { WithdrawalState } from '@/shared/lib/withdrawalState'
 import type { ProductFormValues } from './productSchema'
+import { type ReviewOverview, summarizeSellerSentiments } from './reviewOverview'
 import type {
   Follower,
   PayoutOutlook,
@@ -329,6 +331,64 @@ export const noReviewSentiments: ReviewSentimentSummary = {
     sentiments: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
   })),
 }
+
+/** [긍정, 부정, 중립, 혼합] → 감성 집계. 항목은 넘긴 것만 채우고 나머지는 언급 0 */
+function sentimentSummary(
+  overall: [number, number, number, number],
+  aspects: Partial<Record<ReviewAspect, [number, number, number, number]>> = {},
+): ReviewSentimentSummary {
+  const counts = ([positive, negative, neutral, mixed]: number[]): SentimentCounts => ({
+    positive: positive ?? 0,
+    negative: negative ?? 0,
+    neutral: neutral ?? 0,
+    mixed: mixed ?? 0,
+  })
+  const total = (values: number[]) => values.reduce((sum, n) => sum + n, 0)
+  return {
+    analyzedReviewCount: total(overall),
+    overall: counts(overall),
+    aspects: Object.values(ReviewAspect).map((aspect) => {
+      const values = aspects[aspect] ?? [0, 0, 0, 0]
+      return { aspect, mentionedReviewCount: total(values), sentiments: counts(values) }
+    }),
+  }
+}
+
+/**
+ * 내 상품(mySellerProducts)별 감성 집계. 판매자 전체로 합치면 포장이 먼저 볼 항목(언급 15개 중 부정 6개)이다.
+ * 109는 분석 리뷰 3개라 ‘리뷰가 더 모이면 보여요’ 묶음에 들어간다.
+ */
+export const reviewSentimentsByProduct: Record<number, ReviewSentimentSummary> = {
+  101: reviewSentiments101,
+  106: sentimentSummary([20, 6, 2, 2], {
+    [ReviewAspect.TASTE]: [17, 2, 1, 0],
+    [ReviewAspect.CONDITION]: [2, 0, 0, 0],
+    [ReviewAspect.PACKAGING]: [5, 5, 1, 1],
+    [ReviewAspect.DELIVERY]: [6, 1, 1, 0],
+    [ReviewAspect.PRICE]: [4, 1, 1, 0],
+  }),
+  109: sentimentSummary([2, 1, 0, 0], { [ReviewAspect.TASTE]: [2, 1, 0, 0] }),
+  110: sentimentSummary([5, 2, 1, 0], {
+    [ReviewAspect.TASTE]: [5, 1, 0, 0],
+    [ReviewAspect.FRESHNESS]: [3, 2, 0, 0],
+    [ReviewAspect.CONDITION]: [1, 0, 0, 0],
+    [ReviewAspect.DELIVERY]: [2, 2, 0, 0],
+  }),
+}
+
+/** S-10 미리보기용 합산 결과. failedIds의 상품은 반응을 못 불러온 것으로 본다 */
+export const reviewOverviewOf = (failedIds: number[] = []): ReviewOverview =>
+  summarizeSellerSentiments(
+    mySellerProducts,
+    new Map(
+      mySellerProducts.map((p) => [
+        p.productId,
+        failedIds.includes(p.productId)
+          ? 'error'
+          : (reviewSentimentsByProduct[p.productId] ?? 'error'),
+      ]),
+    ),
+  )
 
 // ─── 출고 (✅ GET /seller/shipments · /seller/shipments/{id}) — 테스트(MSW)·/__design 전용 ───
 

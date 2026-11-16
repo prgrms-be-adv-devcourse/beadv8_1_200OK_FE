@@ -3,6 +3,7 @@ import { ClipboardCheck, Info, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { LOW_STOCK_THRESHOLD } from '@/shared/lib/constants'
 import { formatAmount, formatDate } from '@/shared/lib/format'
+import { reviewAspectLabels } from '@/shared/lib/labels'
 import {
   EmptyView,
   NotConnected,
@@ -11,11 +12,12 @@ import {
   PriceText,
   QueryState,
 } from '@/shared/ui'
+import { formatRate, type ReviewOverviewState } from '../reviewOverview'
 import type { SellerHomeStats, SellerProductStats, SellerTodo } from '../types'
 import classes from './SellerHomeView.module.css'
 
 // S-03 판매자 센터 홈. 시안: seller/SellerHome, SellerHomeMobile
-// 오늘 요약(새 주문 · 출고 대기 · 취소 요청 · 정산 예정) · 오늘 처리할 일 · 판매자 지갑 · 상품 현황 · 상점 프로필 미입력 안내
+// 오늘 요약(새 주문 · 출고 대기 · 취소 요청 · 정산 예정) · 오늘 처리할 일 · 판매자 지갑 · 리뷰 분석 요약 · 상품 현황 · 상점 프로필 미입력 안내
 // 취소 요청이 걸린 주문은 송장 등록 대신 취소 요청 처리로 보낸다(C-10).
 // ✅ 지갑 잔액 GET /wallets/sellers/me/balance · 상품 현황은 내 상품 목록에서 센다 · 프로필 미입력은 GET /sellers/me/profile
 //    · 정산 예정 금액은 미정산 후보 합계 GET /payouts/me/candidates?unsettledOnly=true (정산 내역 화면과 같은 값).
@@ -36,6 +38,8 @@ export type SellerHomeViewProps = {
   products: SellerProductStats
   /** 상점 프로필을 아직 등록하지 않았거나 소개·사진이 비었으면 안내 */
   profileIncomplete?: boolean
+  /** 리뷰 분석 요약 카드. S-10과 같은 쿼리라 캐시를 나눠 쓴다 */
+  reviews: ReviewOverviewState
   onRetry?: () => void
   errorMessage?: string
 }
@@ -59,6 +63,7 @@ export function SellerHomeView({
   walletBalance,
   products,
   profileIncomplete = false,
+  reviews,
   onRetry,
   errorMessage,
 }: SellerHomeViewProps) {
@@ -240,6 +245,7 @@ export function SellerHomeView({
                   </Button>
                 </div>
               </section>
+              <ReviewCard state={reviews} />
               <section className={classes.card} aria-labelledby="seller-products">
                 <h2 id="seller-products" className={classes.cardLabel}>
                   상품
@@ -269,5 +275,54 @@ export function SellerHomeView({
         </Stack>
       </QueryState>
     </div>
+  )
+}
+
+function ReviewCard({ state }: { state: ReviewOverviewState }) {
+  const overview = state.status === 'success' ? state.overview : null
+  const focus = overview?.focus ?? null
+  const focusWorstCount = focus
+    ? (overview?.ranked.filter((row) => row.worst?.aspect === focus.aspect).length ?? 0)
+    : 0
+  return (
+    <section className={classes.card} aria-labelledby="seller-reviews">
+      <h2 id="seller-reviews" className={classes.cardLabel}>
+        리뷰 분석
+      </h2>
+      {state.status === 'pending' ? (
+        <>
+          <Skeleton h={24} w="70%" radius="sm" />
+          <VisuallyHidden>불러오고 있어요</VisuallyHidden>
+        </>
+      ) : state.status === 'error' || !overview ? (
+        <span className={classes.help}>리뷰 반응을 불러오지 못했어요</span>
+      ) : overview.analyzedReviewCount === 0 ? (
+        <span className={classes.help}>아직 분석한 리뷰가 없어요</span>
+      ) : (
+        <>
+          {focus ? (
+            <p className={classes.reviewFocus}>
+              <TriangleAlert size={18} aria-hidden="true" />
+              {focusWorstCount > 0
+                ? `${reviewAspectLabels[focus.aspect]} 반응이 나쁜 상품 ${formatAmount(focusWorstCount)}개`
+                : `${reviewAspectLabels[focus.aspect]} 반응을 먼저 봐 주세요`}
+            </p>
+          ) : (
+            <p className={classes.reviewCalm}>부정 반응이 두드러진 항목은 없어요</p>
+          )}
+          <span className={`pd-num ${classes.help}`}>
+            {focus &&
+              `${reviewAspectLabels[focus.aspect]} 부정 ${formatRate(focus.negativeRate)} · `}
+            분석 리뷰 {formatAmount(overview.analyzedReviewCount)}개
+            {overview.failed.length > 0 && ' · 불러온 상품 기준'} · AI 분석, 참고용
+          </span>
+        </>
+      )}
+      <div className={classes.cardActions}>
+        <Button component={Link} to="/seller/reviews" variant="outline" size="sm">
+          리뷰 분석 보기
+        </Button>
+      </div>
+    </section>
   )
 }

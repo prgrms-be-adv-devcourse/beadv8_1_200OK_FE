@@ -113,6 +113,7 @@ describe('SellerHomeView', () => {
           todos={todos}
           walletBalance={sellerWalletBalance}
           products={productStats}
+          reviews={{ status: 'pending' }}
         />
       </MemoryRouter>,
     )
@@ -131,6 +132,7 @@ describe('SellerHomeView', () => {
           todos={null}
           walletBalance={sellerWalletBalance}
           products={productStats}
+          reviews={{ status: 'pending' }}
         />
       </MemoryRouter>,
     )
