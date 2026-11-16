@@ -35,6 +35,7 @@ const screens: [path: string, title: string][] = [
   ['/wallet/charge/fail', '충전하지 못했어요'],
   ['/wallet/charge', '예치금 충전'],
   ['/orders', '주문 내역'],
+  ['/orders/refunds', '취소 요청 내역'],
   ['/orders/184', '주문 상세'],
   ['/orders/151/shipments/3', '배송 조회'],
   ['/orders/1/inquiry', '고객센터 문의'],

@@ -1,3 +1,4 @@
+import { type Refund, RefundStatus } from '@/shared/api/refund'
 import {
   PayoutEventType,
   type PayoutSellerCandidate,
@@ -20,12 +21,10 @@ import {
   type ShipmentDetail,
   ShipmentStatus,
 } from '@/shared/api/types'
-import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { WithdrawalState } from '@/shared/lib/withdrawalState'
 import type { ProductFormValues } from './productSchema'
 import type {
-  CancelClaim,
   Follower,
   PayoutOutlook,
   SellerHomeStats,
@@ -453,55 +452,87 @@ export const sellerShipmentDetails: ShipmentDetail[] = [sellerShipmentDetail2]
 
 // ─── 취소 요청 ───────────────────────────────────────────
 
-export const cancelClaims: CancelClaim[] = [
-  {
-    claimId: 31,
-    state: ClaimState.CLAIM_PENDING,
-    requestedAt: '2026-10-18T11:40:00',
-    orderNumber: '20261018-0178',
-    buyerNickname: '사과먹는곰',
-    itemText: '청송 꿀사과 부사 3kg (16~18과) × 1',
-    reason: '주문 실수 (옵션·수량)',
-    amount: 33900,
-    shippingFee: 0,
-    rejectReason: null,
-  },
-  {
-    claimId: 30,
-    state: ClaimState.CLAIM_PENDING,
+const refund = (patch: Partial<Refund> & Pick<Refund, 'refundId' | 'status'>): Refund => ({
+  orderId: 178,
+  orderItemId: 1781,
+  productName: '청송 꿀사과 부사',
+  optionName: '3kg (16~18과)',
+  quantity: 1,
+  unitPrice: 33900,
+  itemAmount: 33900,
+  shippingFeeAmount: 0,
+  remoteAreaFeeAmount: 0,
+  deductedShippingFeeAmount: 0,
+  refundAmount: 33900,
+  cancelReason: '옵션을 잘못 골랐어요',
+  rejectReason: null,
+  requestedAt: '2026-10-18T11:40:00',
+  decidedAt: null,
+  completedAt: null,
+  ...patch,
+})
+
+/** 승인 대기 2 · 처리 중(배송비 환불) · 완료(배송비 차감) · 거절 · 철회 */
+export const sellerRefunds: Refund[] = [
+  refund({ refundId: 31, status: RefundStatus.REQUESTED }),
+  refund({
+    refundId: 30,
+    status: RefundStatus.REQUESTED,
+    orderId: 149,
+    orderItemId: 1491,
+    quantity: 2,
+    itemAmount: 67800,
+    refundAmount: 67800,
+    cancelReason: null,
     requestedAt: '2026-10-17T20:10:00',
-    orderNumber: '20261017-0149',
-    buyerNickname: '망원동카페',
-    itemText: '청송 꿀사과 부사 3kg (16~18과) × 2',
-    reason: '다른 상품으로 다시 주문',
-    amount: 67800,
-    shippingFee: 0,
-    rejectReason: null,
-  },
-  {
-    claimId: 22,
-    state: ClaimState.CLAIM_APPROVED,
+  }),
+  refund({
+    refundId: 24,
+    status: RefundStatus.PROCESSING,
+    orderId: 120,
+    orderItemId: 1201,
+    optionName: '1kg (5~6과)',
+    unitPrice: 12900,
+    itemAmount: 12900,
+    shippingFeeAmount: 3000,
+    refundAmount: 15900,
+    cancelReason: '배송지를 잘못 적었어요',
+    requestedAt: '2026-10-13T09:00:00',
+    decidedAt: '2026-10-13T10:00:00',
+  }),
+  refund({
+    refundId: 22,
+    status: RefundStatus.COMPLETED,
+    orderId: 88,
+    orderItemId: 881,
+    deductedShippingFeeAmount: 3000,
+    refundAmount: 30900,
     requestedAt: '2026-10-12T09:00:00',
-    orderNumber: '20261011-0088',
-    buyerNickname: '부산사과러',
-    itemText: '청송 꿀사과 부사 1kg (5~6과) × 1',
-    reason: '배송지 문제',
-    amount: 12900,
-    shippingFee: 0,
-    rejectReason: null,
-  },
-  {
-    claimId: 21,
-    state: ClaimState.CLAIM_REJECTED,
-    requestedAt: '2026-10-10T16:30:00',
-    orderNumber: '20261010-0071',
-    buyerNickname: '연남동부엌',
-    itemText: '청송 사과즙 100% (30포) × 1',
-    reason: '주문 실수 (옵션·수량)',
-    amount: 29900,
-    shippingFee: 0,
+    decidedAt: '2026-10-12T09:30:00',
+    completedAt: '2026-10-12T09:31:00',
+  }),
+  refund({
+    refundId: 21,
+    status: RefundStatus.REJECTED,
+    orderId: 71,
+    orderItemId: 711,
+    productName: '청송 사과즙 100%',
+    optionName: '30포',
+    unitPrice: 29900,
+    itemAmount: 29900,
+    refundAmount: 29900,
     rejectReason: '이미 포장을 마쳐 오늘 출고했어요',
-  },
+    requestedAt: '2026-10-10T16:30:00',
+    decidedAt: '2026-10-10T17:00:00',
+  }),
+  refund({
+    refundId: 20,
+    status: RefundStatus.WITHDRAWN,
+    orderId: 70,
+    orderItemId: 701,
+    requestedAt: '2026-10-09T08:00:00',
+    decidedAt: '2026-10-09T08:20:00',
+  }),
 ]
 
 // ─── 정산 ────────────────────────────────────────────────

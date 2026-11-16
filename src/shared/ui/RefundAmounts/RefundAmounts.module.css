@@ -1,0 +1,46 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+}
+
+.rows {
+  margin: 0;
+
+  & > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mantine-spacing-sm);
+    padding: 0.25rem 0;
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  & dt {
+    color: var(--pd-color-text-secondary);
+  }
+
+  & dd {
+    margin: 0;
+  }
+}
+
+.total {
+  border-top: 1px dashed var(--pd-color-border);
+  font-weight: 600;
+
+  & dt {
+    color: var(--pd-color-text);
+  }
+}
+
+.muted {
+  color: var(--pd-color-text-muted);
+}
+
+.note {
+  margin: 0;
+  color: var(--pd-color-text-muted);
+  font-size: var(--pd-font-caption);
+  line-height: var(--pd-line-caption);
+}

@@ -1,6 +1,7 @@
 import { Button, Group, Radio, SimpleGrid, Stack } from '@mantine/core'
 import { Heart, ShoppingCart } from 'lucide-react'
 import { useState } from 'react'
+import { RefundStatus } from '@/shared/api/refund'
 import {
   OrderItemStatus,
   ProductCategory,
@@ -9,7 +10,6 @@ import {
   ProductStatus,
   type ProductSummary,
 } from '@/shared/api/types'
-import { ClaimState } from '@/shared/lib/claimState'
 import { ProductSaleState } from '@/shared/lib/productState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { ShipmentState } from '@/shared/lib/shipmentState'
@@ -39,6 +39,7 @@ import {
   QuantityStepper,
   QueryState,
   RatingStars,
+  RefundStatusBadge,
   StatusBadge,
 } from '@/shared/ui'
 import classes from '../DesignGallery.module.css'
@@ -132,13 +133,13 @@ export function BadgeTagSection() {
           ))}
         </div>
       </Panel>
-      <Panel title="판매자 상품 판매 상태 (ProductStatusBadge) · 취소 요청 처리 · 출금">
+      <Panel title="판매자 상품 판매 상태 (ProductStatusBadge) · 취소 요청 (RefundStatusBadge) · 출금">
         <div className={classes.chipRow}>
           {Object.values(ProductStatus).map((status) => (
             <ProductStatusBadge key={status} status={status} />
           ))}
-          {Object.values(ClaimState).map((state) => (
-            <StatusBadge key={state} status={state} />
+          {Object.values(RefundStatus).map((status) => (
+            <RefundStatusBadge key={status} status={status} />
           ))}
           {Object.values(WithdrawalState).map((state) => (
             <StatusBadge key={state} status={state} />

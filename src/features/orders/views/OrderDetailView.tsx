@@ -1,6 +1,8 @@
 import { Button, Skeleton, Stack } from '@mantine/core'
 import { PackageX } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router'
+import { type Refund, RefundStatus } from '@/shared/api/refund'
 import {
   type OrderDetail,
   type OrderDetailItem,
@@ -15,7 +17,6 @@ import {
   shipmentStatusLabels,
 } from '@/shared/lib/shipmentState'
 import {
-  DisabledReason,
   FarmAvatar,
   OrderStatusBadge,
   PageHeader,
@@ -24,14 +25,18 @@ import {
   QueryState,
   StatusBadge,
 } from '@/shared/ui'
+import { CancelRequestModal } from '../components/CancelRequestModal'
 import { ConfirmItemButton } from '../components/ConfirmItemButton'
 import { OrderItemRow } from '../components/OrderItemRow'
+import { RefundCard } from '../components/RefundCard'
+import { type ItemCancel, itemCancelOf } from '../itemCancel'
 import classes from './OrderDetailView.module.css'
 
 // B-08 주문 상세. 시안: b2c/OrderDetail, OrderDetailMobile
 // ✅ GET /orders/{orderId}: 판매자별 묶음(sellerGroups) · 상품별 상태 · 배송지 · 결제 금액. 리뷰 쓰기는 구매확정한 상품 단위.
 // 시안에 있던 동작 중 API가 없는 것은 비활성 버튼 + 이유 문구로 남기거나 뺐다:
-// TODO(api): ❌ 취소 요청 API 없음 → ‘취소 요청’ 비활성 + 이유
+// ✅ 취소 요청 POST /refunds · 철회 POST /refunds/{id}/withdraw: 출고 전(PREPARING) 상품 단위, 개수와 사유(선택).
+//   요청해도 상품 상태는 그대로라, 내 취소 요청 목록(GET /refunds)에서 이 주문 것을 찾아 상품마다 진행 상태를 보여 준다.
 // ✅ 구매확정 POST /orders/{orderId}/items/{orderItemId}/confirm: 배송 완료(DELIVERED)된 상품 단위. 3일 뒤 서버가 자동으로 확정한다.
 // ✅ 배송 GET /shipments(주문 상세에 shipmentId가 없어 orderId로 찾는다) → ‘배송 조회’ 링크. 배송지 변경 요청 화면은 아직 없다.
 // TODO(api): ❌ 문의 API 없음 → 고객센터 문의 링크 숨김(SupportPage는 fixtures 전용)
@@ -48,6 +53,19 @@ export type OrderDetailViewProps = {
   onConfirm?: (orderItemId: number) => void
   /** 구매확정 요청 중인 주문 상품 */
   confirmingItemId?: number | null
+  /** 이 주문의 취소 요청. 모르면(로딩 중) 취소 요청 버튼을 그리지 않는다 */
+  refunds?: Refund[]
+  /** 취소 요청. 성공하면 null, 실패하면 오류 문구. 없으면 버튼을 그리지 않는다 */
+  onRequestCancel?: (
+    orderItemId: number,
+    quantity: number,
+    cancelReason: string,
+  ) => Promise<string | null>
+  requestingCancel?: boolean
+  onWithdrawRefund?: (refundId: number) => void
+  withdrawingRefundId?: number | null
+  /** 미리보기용: 처음부터 열어 둘 취소 요청 창 */
+  defaultCancelItemId?: number | null
 }
 
 const STEPS = ['결제 완료', '상품 준비 중', '배송 중', '배송 완료', '구매확정']
@@ -82,13 +100,7 @@ function DetailSkeleton() {
 function GroupAction({ status }: { status: OrderItemStatus | null }) {
   switch (status) {
     case OrderItemStatus.PREPARING:
-      return (
-        <DisabledReason reason="취소 요청은 아직 준비 중이에요">
-          <Button variant="outline" size="sm" disabled>
-            취소 요청
-          </Button>
-        </DisabledReason>
-      )
+      return <span>출고 전에는 상품마다 취소를 요청할 수 있어요</span>
     case OrderItemStatus.CANCEL_REQUESTED:
       return <span>판매자가 확인하고 있어요</span>
     case OrderItemStatus.SHIPPING:
@@ -100,17 +112,60 @@ function GroupAction({ status }: { status: OrderItemStatus | null }) {
   }
 }
 
+const cancelNotes: Partial<Record<RefundStatus, string>> = {
+  [RefundStatus.REQUESTED]: '취소 승인 대기 중',
+  [RefundStatus.PROCESSING]: '환불 처리 중',
+}
+
+function CancelAction({
+  item,
+  cancel,
+  onOpen,
+}: {
+  item: OrderDetailItem
+  cancel: ItemCancel
+  onOpen?: () => void
+}) {
+  switch (cancel.kind) {
+    case 'available':
+      if (!onOpen) return null
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={`${item.productName} 취소 요청`}
+          onClick={onOpen}
+        >
+          취소 요청
+        </Button>
+      )
+    case 'inProgress':
+      return <span className={classes.note}>{cancelNotes[cancel.refund.status]}</span>
+    case 'allCanceled':
+      return <span className={classes.note}>모두 취소했어요</span>
+    default:
+      return null
+  }
+}
+
 function ItemAction({
   orderId,
   item,
   onConfirm,
   confirming,
+  cancel,
+  onOpenCancel,
 }: {
   orderId: number
   item: OrderDetailItem
   onConfirm?: (orderItemId: number) => void
   confirming: boolean
+  cancel: ItemCancel | null
+  onOpenCancel?: () => void
 }) {
+  if (cancel && cancel.kind !== 'unavailable') {
+    return <CancelAction item={item} cancel={cancel} onOpen={onOpenCancel} />
+  }
   if (item.status === OrderItemStatus.DELIVERED) {
     if (!onConfirm) return null
     return (
@@ -142,7 +197,14 @@ export function OrderDetailView({
   shipments = [],
   onConfirm,
   confirmingItemId = null,
+  refunds,
+  onRequestCancel,
+  requestingCancel = false,
+  onWithdrawRefund,
+  withdrawingRefundId = null,
+  defaultCancelItemId = null,
 }: OrderDetailViewProps) {
+  const [cancelItemId, setCancelItemId] = useState<number | null>(defaultCancelItemId)
   const resolvedStatus = status === 'success' && !order ? 'notFound' : status
 
   if (resolvedStatus !== 'success' || !order) {
@@ -165,6 +227,11 @@ export function OrderDetailView({
       </div>
     )
   }
+
+  const cancelTarget =
+    order.sellerGroups.flatMap((g) => g.items).find((i) => i.orderItemId === cancelItemId) ?? null
+  const cancelState = cancelTarget && refunds ? itemCancelOf(cancelTarget, refunds) : null
+  const cancelTargetMax = cancelState?.kind === 'available' ? cancelState.maxQuantity : 0
 
   return (
     <div className={classes.root}>
@@ -268,6 +335,10 @@ export function OrderDetailView({
                         item={item}
                         onConfirm={onConfirm}
                         confirming={confirmingItemId === item.orderItemId}
+                        cancel={refunds ? itemCancelOf(item, refunds) : null}
+                        onOpenCancel={
+                          onRequestCancel ? () => setCancelItemId(item.orderItemId) : undefined
+                        }
                       />
                     }
                   />
@@ -293,6 +364,29 @@ export function OrderDetailView({
               </section>
             )
           })}
+
+          {refunds && refunds.length > 0 && (
+            <section className={classes.card} aria-labelledby="order-refunds">
+              <h2 id="order-refunds" className={classes.cardTitle}>
+                취소 요청
+              </h2>
+              <Stack gap="sm">
+                {refunds.map((refund) => (
+                  <RefundCard
+                    key={refund.refundId}
+                    refund={refund}
+                    onWithdraw={onWithdrawRefund}
+                    withdrawing={withdrawingRefundId === refund.refundId}
+                  />
+                ))}
+              </Stack>
+              <div className={classes.action}>
+                <Button component={Link} to="/orders/refunds" variant="subtle" size="sm">
+                  취소 요청 내역 전체 보기
+                </Button>
+              </div>
+            </section>
+          )}
         </Stack>
 
         <aside aria-labelledby="order-pay" className={classes.card}>
@@ -333,6 +427,20 @@ export function OrderDetailView({
           </dl>
         </aside>
       </div>
+
+      {onRequestCancel && (
+        <CancelRequestModal
+          item={cancelTargetMax > 0 ? cancelTarget : null}
+          maxQuantity={cancelTargetMax}
+          onClose={() => setCancelItemId(null)}
+          onSubmit={(quantity, reason) =>
+            cancelTarget
+              ? onRequestCancel(cancelTarget.orderItemId, quantity, reason)
+              : Promise.resolve(null)
+          }
+          submitting={requestingCancel}
+        />
+      )}
     </div>
   )
 }

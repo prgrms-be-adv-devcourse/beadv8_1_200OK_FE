@@ -1,5 +1,5 @@
+import { RefundStatus } from '@/shared/api/refund'
 import { ProductStatus } from '@/shared/api/types'
-import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
@@ -12,7 +12,6 @@ import {
   adjustedPayoutDetail,
   adjustedPayoutItems,
   appleFormValues,
-  cancelClaims,
   followers,
   homeAsOf,
   homeStats,
@@ -26,6 +25,7 @@ import {
   productStats,
   reviewSentiments101,
   sellerProducts,
+  sellerRefunds,
   sellerShipmentDetail2,
   sellerShipments,
   sellerWallet,
@@ -34,11 +34,7 @@ import {
   todos,
   withdrawals,
 } from './fixtures'
-import {
-  SellerClaimsNotConnectedView,
-  SellerClaimsView,
-  type SellerClaimsViewProps,
-} from './views/SellerClaimsView'
+import { SellerClaimsView, type SellerClaimsViewProps } from './views/SellerClaimsView'
 import { SellerHomeView, type SellerHomeViewProps } from './views/SellerHomeView'
 import { SellerOrdersView, type SellerOrdersViewProps } from './views/SellerOrdersView'
 import { SellerPayoutsView, type SellerPayoutsViewProps } from './views/SellerPayoutsView'
@@ -333,17 +329,18 @@ const withAddressModal = (props: Partial<AddressRequestModalProps> = {}) => (
   </>
 )
 
-const pendingClaims = cancelClaims.filter((c) => c.state === ClaimState.CLAIM_PENDING)
+const pendingRefunds = sellerRefunds.filter((r) => r.status === RefundStatus.REQUESTED)
+const resolved = async () => null
 
 const claims = (props: Partial<SellerClaimsViewProps> = {}) => (
   <SellerClaimsView
     status="success"
-    claims={pendingClaims}
-    tab="PENDING"
-    onTabChange={noop}
-    counts={{ PENDING: 2, DONE: 2 }}
-    onApprove={noop}
-    onReject={noop}
+    refunds={pendingRefunds}
+    filter={RefundStatus.REQUESTED}
+    onFilterChange={noop}
+    pendingCount={pendingRefunds.length}
+    onApprove={resolved}
+    onReject={resolved}
     {...props}
   />
 )
@@ -600,40 +597,48 @@ export const sellerWorkPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/claims',
     states: [
-      {
-        id: 'not-connected',
-        label: '지금 연결 모양 (연결 전)',
-        session: 'seller',
-        render: () => <SellerClaimsNotConnectedView />,
-      },
-      { id: 'pending', label: '처리 대기', session: 'seller', render: () => claims() },
+      { id: 'pending', label: '승인 대기', session: 'seller', render: () => claims() },
       {
         id: 'approve',
         label: '승인 확인',
         session: 'seller',
-        render: () => claims({ defaultModal: { type: 'approve', claimId: 31 } }),
+        render: () => claims({ defaultModal: { type: 'approve', refundId: 31 } }),
       },
       {
         id: 'reject',
         label: '거절 사유',
         session: 'seller',
-        render: () => claims({ defaultModal: { type: 'reject', claimId: 31 } }),
+        render: () => claims({ defaultModal: { type: 'reject', refundId: 31 } }),
       },
       {
-        id: 'done',
-        label: '처리 완료',
+        id: 'all',
+        label: '전체 (처리 중 · 완료 · 거절 · 철회)',
         session: 'seller',
-        render: () =>
-          claims({
-            tab: 'DONE',
-            claims: cancelClaims.filter((c) => c.state !== ClaimState.CLAIM_PENDING),
-          }),
+        render: () => claims({ filter: 'ALL', refunds: sellerRefunds }),
+      },
+      {
+        id: 'more',
+        label: '더 보기',
+        session: 'seller',
+        render: () => claims({ filter: 'ALL', refunds: sellerRefunds, hasMore: true }),
       },
       {
         id: 'empty',
         label: '처리할 요청 없음',
         session: 'seller',
-        render: () => claims({ claims: [], counts: { PENDING: 0, DONE: 2 } }),
+        render: () => claims({ refunds: [], pendingCount: 0 }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () => claims({ status: 'pending' }),
+      },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        session: 'seller',
+        render: () => claims({ status: 'error' }),
       },
     ],
   },

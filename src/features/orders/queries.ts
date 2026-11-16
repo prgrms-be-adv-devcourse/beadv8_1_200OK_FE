@@ -6,11 +6,21 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import { isApiError } from '@/shared/api/ApiError'
 import { orderDetailQueryOptions } from '@/shared/api/orderDetail'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
+import type { Refund, RefundCreateRequest } from '@/shared/api/refund'
 import type { ShipmentSummary } from '@/shared/api/types'
-import { confirmOrderItem, fetchOrders, fetchShipmentDetail, fetchShipments } from './api'
+import {
+  confirmOrderItem,
+  fetchMyRefunds,
+  fetchOrders,
+  fetchShipmentDetail,
+  fetchShipments,
+  requestRefund,
+  withdrawRefund,
+} from './api'
 
 // 주문 쿼리 키·훅. 키는 [orders, ...]로 시작한다. 주문을 만든 쪽(checkout)은 접두어 [orders]로 무효화한다.
 
@@ -96,6 +106,78 @@ export function useShipment(shipmentId: number | null) {
   return useQuery({
     ...shipmentDetailQueryOptions(shipmentId ?? 0),
     enabled: shipmentId !== null,
+  })
+}
+
+// ─── 취소 요청(환불) ─────────────────────────────────────
+
+export const refundKeys = {
+  all: [queryKeyPrefix.refunds] as const,
+  list: () => [queryKeyPrefix.refunds, 'list'] as const,
+  forOrder: (orderId: number) => [queryKeyPrefix.refunds, 'order', orderId] as const,
+}
+
+/** 내 취소 요청. 25건씩 ‘더 보기’로 이어 받는다 */
+export function useMyRefunds() {
+  return useInfiniteQuery({
+    queryKey: refundKeys.list(),
+    queryFn: ({ pageParam }) => fetchMyRefunds(pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
+  })
+}
+
+/** 한 주문의 취소 요청을 찾으려고 넘겨 볼 최대 쪽 수(25건씩) */
+const REFUND_SCAN_PAGES = 8
+
+/**
+ * 한 주문의 취소 요청. 주문으로 거르는 API가 없어 내 요청 목록(요청 시각 최신순)에서 orderId로 찾는다.
+ * 주문 시각보다 먼저 한 요청이 나오면 그 뒤에는 이 주문의 요청이 있을 수 없어 더 넘기지 않는다.
+ */
+export const orderRefundsQueryOptions = (orderId: number, orderedAt: string) =>
+  queryOptions({
+    queryKey: refundKeys.forOrder(orderId),
+    queryFn: async (): Promise<Refund[]> => {
+      const found: Refund[] = []
+      for (let page = 0; page < REFUND_SCAN_PAGES; page += 1) {
+        const result = await fetchMyRefunds(page)
+        found.push(...result.content.filter((refund) => refund.orderId === orderId))
+        const reachedOlder = result.content.some((refund) =>
+          dayjs(refund.requestedAt).isBefore(orderedAt),
+        )
+        if (reachedOlder || page + 1 >= result.totalPages) break
+      }
+      return found
+    },
+  })
+
+/** 주문 상세의 취소 요청. 주문을 받은 뒤에 찾는다 */
+export function useOrderRefunds(order: { orderId: number; orderedAt: string } | undefined) {
+  return useQuery({
+    ...orderRefundsQueryOptions(order?.orderId ?? 0, order?.orderedAt ?? ''),
+    enabled: order !== undefined,
+  })
+}
+
+/** 취소 요청·철회 뒤에는 요청 목록을 모두 다시 받는다 */
+function useRefreshRefunds() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: refundKeys.all })
+}
+
+export function useRequestRefund() {
+  const refresh = useRefreshRefunds()
+  return useMutation({
+    mutationFn: (body: RefundCreateRequest) => requestRefund(body),
+    onSettled: refresh,
+  })
+}
+
+export function useWithdrawRefund() {
+  const refresh = useRefreshRefunds()
+  return useMutation({
+    mutationFn: (refundId: number) => withdrawRefund(refundId),
+    onSettled: refresh,
   })
 }
 

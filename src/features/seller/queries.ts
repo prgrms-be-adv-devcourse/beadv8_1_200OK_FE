@@ -1,9 +1,21 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useSyncExternalStore } from 'react'
 import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
+import {
+  type Refund,
+  type RefundDecisionRequest,
+  type RefundPage,
+  RefundStatus,
+} from '@/shared/api/refund'
 import {
   fetchMyApplication,
   fetchMyApplications,
@@ -46,6 +58,7 @@ import {
   createMyProfile,
   createProduct,
   decideAddressChange,
+  decideRefund,
   deleteProduct,
   dispatchShipment,
   fetchMyProductDetail,
@@ -53,6 +66,7 @@ import {
   fetchMyProducts,
   fetchMyProfile,
   fetchSellerBalance,
+  fetchSellerRefunds,
   fetchSellerShipmentDetail,
   fetchSellerShipments,
   getPayout,
@@ -80,6 +94,10 @@ export const sellerKeys = {
   shipmentPage: (page: number) => [queryKeyPrefix.seller, 'shipments', 'page', page] as const,
   shipmentDetail: (shipmentId: number) =>
     [queryKeyPrefix.seller, 'shipments', 'detail', shipmentId] as const,
+  refunds: () => [queryKeyPrefix.seller, 'refunds'] as const,
+  refundList: (status: RefundStatus | null) =>
+    [queryKeyPrefix.seller, 'refunds', 'list', status] as const,
+  pendingRefundCount: () => [queryKeyPrefix.seller, 'refunds', 'pendingCount'] as const,
 }
 
 export const payoutKeys = {
@@ -145,6 +163,50 @@ export function useDecideAddressChange() {
     mutationFn: ({ shipmentId, requestId, decision }) =>
       decideAddressChange(shipmentId, requestId, decision),
     onSettled: refresh,
+  })
+}
+
+// ─── 취소 요청(환불) ─────────────────────────────────────
+
+/** 상태로 거른 취소 요청(null이면 전체). 25건씩 ‘더 보기’로 이어 받는다 */
+export function useSellerRefunds(status: RefundStatus | null) {
+  return useInfiniteQuery<
+    RefundPage,
+    ApiError,
+    InfiniteData<RefundPage>,
+    ReturnType<typeof sellerKeys.refundList>,
+    number
+  >({
+    queryKey: sellerKeys.refundList(status),
+    queryFn: ({ pageParam }) => fetchSellerRefunds(pageParam, status ?? undefined),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
+  })
+}
+
+/** 승인 대기 요청 수. 메뉴 배지·탭 숫자에 쓴다(첫 쪽의 totalElements) */
+export function usePendingRefundCount() {
+  return useQuery<number, ApiError>({
+    queryKey: sellerKeys.pendingRefundCount(),
+    queryFn: async () => (await fetchSellerRefunds(0, RefundStatus.REQUESTED)).totalElements,
+    staleTime: 30_000,
+  })
+}
+
+/**
+ * 승인·거절. 성공이든 409(이미 처리됨)든 목록·대기 수를 다시 받는다.
+ * 승인하면 출고가 취소되고 정산 대상이 바뀌므로 출고 목록과 정산 캐시도 비운다.
+ */
+export function useDecideRefund() {
+  const queryClient = useQueryClient()
+  return useMutation<Refund, ApiError, { refundId: number; body: RefundDecisionRequest }>({
+    mutationFn: ({ refundId, body }) => decideRefund(refundId, body),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: sellerKeys.refunds() }),
+        queryClient.invalidateQueries({ queryKey: sellerKeys.shipments() }),
+        queryClient.invalidateQueries({ queryKey: payoutKeys.all }),
+      ]),
   })
 }
 
