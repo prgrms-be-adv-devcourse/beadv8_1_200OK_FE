@@ -1,7 +1,7 @@
 import { Alert, Button, Skeleton, Stack, Text } from '@mantine/core'
 import { CircleAlert, Store } from 'lucide-react'
 import { Link } from 'react-router'
-import type { SellerProfile } from '@/shared/api/types'
+import type { SellerProfile, StoreProfile } from '@/shared/api/types'
 import { formatAmount } from '@/shared/lib/format'
 import { ProductSaleState } from '@/shared/lib/productState'
 import {
@@ -13,8 +13,8 @@ import {
   LoginRequiredModal,
   NOT_CONNECTED_REASON,
   NotConnected,
+  NotConnectedValue,
   OriginTag,
-  PageHeader,
   ProductCard,
   type ProductCardItem,
   ProductGrid,
@@ -27,17 +27,20 @@ import classes from './FarmStoreView.module.css'
 // B-11 판매자 상점. 시안: b2c/Store, StoreMobile
 // 상점 머리(사진 96 · 상호 명조 · 지역 · 소개 · 대표자 · 고객센터 · 팔로워) + 판매 중인 상품.
 // 정지된 판매자는 경고 + 배지, 내 상점은 팔로우 대신 프로필 수정(C-9).
-// API가 없어 지금 라우트는 status 'notConnected'(제목 + ‘연결 전’)만 그린다. 나머지 상태는 /__design 시안용.
+// ✅ 상점 프로필 GET /stores/{sellerId}. 사진이 없으면 상호 첫 글자, 소개가 없으면 소개 줄을 뺀다.
+// 응답에 없는 지역·팔로워 수·판매 중지는 넘기지 않으면 지역은 빼고 팔로워 수는 ‘–’(연결 전)로 둔다.
+
+/** 서버 응답(StoreProfile) + 아직 API가 없는 값. TODO(api): ❌ 지역·팔로워 수·판매 중지 여부 */
+export type FarmStore = StoreProfile &
+  Partial<Pick<SellerProfile, 'region' | 'followerCount' | 'suspended'>>
 
 export type FarmStoreViewProps = {
-  /** notConnected: 상점 API가 없어 ‘연결 전’만 그린다 */
-  status: 'pending' | 'error' | 'notFound' | 'success' | 'notConnected'
-  /** TODO(api): 📝 GET /sellers/{sellerId} */
-  seller?: SellerProfile
+  status: 'pending' | 'error' | 'notFound' | 'success'
+  seller?: FarmStore
   following?: boolean
-  /** 내 상점. TODO(api): 내 판매자 ID를 줄 API가 없다(A-12) */
+  /** 내 상점(로그인한 판매자의 회원 번호 = sellerId) */
   isOwner?: boolean
-  /** TODO(api): ❌ 판매자별 상품 목록 API 없음 */
+  /** 없으면 ‘연결 전’. TODO(api): ❌ 판매자별 상품 목록 API 없음(GET /products에 sellerId 없음) */
   products?: ProductCardItem[]
   onToggleFollow?: () => void
   onToggleLike?: (productId: number) => void
@@ -68,7 +71,7 @@ export function FarmStoreView({
   seller,
   following = false,
   isOwner = false,
-  products = [],
+  products,
   onToggleFollow,
   onToggleLike,
   onRetry,
@@ -76,23 +79,6 @@ export function FarmStoreView({
   loginPrompt = null,
   onLoginPromptClose = () => {},
 }: FarmStoreViewProps) {
-  if (status === 'notConnected') {
-    return (
-      <>
-        <PageHeader
-          title="농가 상점"
-          breadcrumbs={[{ label: '홈', to: '/' }, { label: '농가 상점' }]}
-          backTo="/"
-        />
-        <NotConnected
-          title="농가 상점은 아직 연결되지 않았어요"
-          api="📝 GET /sellers/{sellerId}, 판매자별 상품 목록"
-          action={{ label: '상품 둘러보기', to: '/products' }}
-        />
-      </>
-    )
-  }
-
   const resolvedStatus = status === 'success' && !seller ? 'notFound' : status
 
   if (resolvedStatus !== 'success' || !seller) {
@@ -149,7 +135,15 @@ export function FarmStoreView({
         </div>
         <div className={classes.side}>
           <span className={`pd-num ${classes.followers}`}>
-            팔로워 <strong>{formatAmount(seller.followerCount)}</strong>명
+            팔로워{' '}
+            <strong>
+              {seller.followerCount === undefined ? (
+                <NotConnectedValue />
+              ) : (
+                formatAmount(seller.followerCount)
+              )}
+            </strong>
+            명
           </span>
           {isOwner ? (
             <>
@@ -172,9 +166,17 @@ export function FarmStoreView({
 
       <section aria-labelledby="farm-products" className={classes.products}>
         <h2 id="farm-products" className={classes.sectionTitle}>
-          판매 중인 상품 <span className={`pd-num ${classes.count}`}>{products.length}</span>
+          판매 중인 상품{' '}
+          {products && <span className={`pd-num ${classes.count}`}>{products.length}</span>}
         </h2>
-        {products.length === 0 ? (
+        {!products ? (
+          <NotConnected
+            title="판매 중인 상품은 아직 연결되지 않았어요"
+            description="농가의 상품은 상품 목록에서 찾아볼 수 있어요."
+            api="❌ 판매자별 상품 목록(GET /products에 sellerId 없음)"
+            action={{ label: '상품 둘러보기', to: '/products' }}
+          />
+        ) : products.length === 0 ? (
           <EmptyView
             icon={<Store />}
             title="아직 판매 중인 상품이 없어요"
@@ -189,7 +191,7 @@ export function FarmStoreView({
               <ProductCard
                 key={item.product.productId}
                 {...item}
-                sellerSuspended={seller.suspended}
+                sellerSuspended={seller.suspended ?? false}
                 onToggleLike={onToggleLike && (() => onToggleLike(item.product.productId))}
               />
             ))}
