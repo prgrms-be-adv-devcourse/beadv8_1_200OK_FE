@@ -1,0 +1,25 @@
+# 운영 EC2(/opt/paldo-gotgan-bff)에서 deploy.sh로 실행해요. 절차는 deploy/README.md (ADR-0010)
+# 백엔드와 같은 EC2지만 compose 프로젝트를 나눠, BFF 배포가 백엔드 컨테이너를 건드리지 않게 해요
+name: paldo-gotgan-bff
+
+services:
+  bff:
+    # 이름은 .github/workflows/bff-image.yml의 IMAGE와 같아야 해요
+    image: ghcr.io/prgrms-be-adv-devcourse/paldo-gotgan-bff:${BFF_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # 호스트 포트는 열지 않아요. 백엔드 nginx가 paldo-edge에서 bff:8787로 보내요
+    networks: [paldo-edge]
+    environment:
+      NODE_ENV: production
+      # 백엔드 compose의 app 서비스 이름이에요. paldo-edge에서 이 이름으로 닿아요
+      BACKEND_URL: http://app:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS가 필요해요}
+      # 힙을 mem_limit보다 작게 묶어 힙 밖(버퍼·스택) 몫을 남겨요
+      NODE_OPTIONS: --max-old-space-size=192
+    mem_limit: 256m
+    # healthcheck는 이미지(bff/Dockerfile HEALTHCHECK)에 있어요. deploy.sh가 없으면 배포를 멈춰요
+
+networks:
+  # 백엔드 compose가 만들고 app·nginx를 붙여 둔 네트워크예요. 여기서는 만들지 않아요
+  paldo-edge:
+    external: true

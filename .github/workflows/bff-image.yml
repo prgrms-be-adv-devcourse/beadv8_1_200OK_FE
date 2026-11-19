@@ -1,5 +1,6 @@
 # main에 bff/가 바뀌어 push되면 BFF 이미지를 빌드해 GHCR에 올려요. 서버 배포는 EC2에서
-# 백엔드 레포의 deploy.sh로 해요(`./deploy.sh bff`). 이미지 이름은 백엔드 deploy/compose.prod.yml과 같아야 해요 (ADR-0008)
+# 이 레포의 deploy/deploy.sh로 해요. 이미지 이름은 deploy/compose.prod.yml과 같아야 해요 (ADR-0010)
+# deploy/만 바뀐 push는 이미지가 그대로라 빌드하지 않아요
 name: BFF Image
 
 on:
@@ -45,7 +46,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 롤백할 때 백엔드 deploy/.env의 BFF_IMAGE_TAG에 넣는 값이에요
+      # 롤백할 때 deploy/.env(서버 /opt/paldo-gotgan-bff/.env)의 BFF_IMAGE_TAG에 넣는 값이에요
       - name: 커밋 SHA 7자리
         id: sha
         run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
@@ -60,5 +61,7 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ steps.sha.outputs.short }}
+          # deploy.sh가 배포 성공 때 어느 커밋인지 출력해요
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=bff
           cache-to: type=gha,mode=max,scope=bff
