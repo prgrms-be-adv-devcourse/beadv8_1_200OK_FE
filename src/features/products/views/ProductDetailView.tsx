@@ -39,7 +39,8 @@ import classes from './ProductDetailView.module.css'
 // 데스크톱: 사진 | 정보 + 옵션 + 수량 + 담기. 모바일: 하단 CTA 바(관심 + 담기) → 옵션 시트.
 // 판매자 정보·수확일은 상세 API에 없어 따로 받는다(A-2). 재고 임박은 표시하지 않는다(A-7).
 // 배송비는 상품 API에 없고 정책도 미정이라(A-8, C-1) 주문서에서 안내한다고만 쓴다.
-// TODO(api): 📝 GET /sellers/{sellerId}(상세에 sellerId 없음), 📝 관심·팔로우 API.
+// TODO(api): 상세 응답에 sellerId가 없어(BE #741) 판매자를 모른다. sellerId가 생기면 ✅ GET /stores/{sellerId}
+//   (shared/api/storeProfile.ts의 storeProfileQueryOptions)로 받아 넘긴다. 📝 관심·팔로우 API.
 //   seller가 없으면 생산 정보에 ‘연결 전’ 안내, onToggleLike·onToggleFollow가 없으면 버튼을 막고 이유(NOT_CONNECTED_REASON)를 보인다.
 
 export type DetailStatus = 'pending' | 'error' | 'notFound' | 'success'
@@ -47,7 +48,7 @@ export type DetailStatus = 'pending' | 'error' | 'notFound' | 'success'
 export type ProductDetailViewProps = {
   status: DetailStatus
   product?: ProductDetail
-  /** TODO(api): 상세 API에 판매자가 없다. 📝 GET /sellers/{sellerId}. 없으면 ‘연결 전’ */
+  /** TODO(api): 상세 응답에 sellerId가 없다(BE #741). 생기면 GET /stores/{sellerId}로 받는다. 없으면 ‘연결 전’ */
   seller?: SellerProfile
   /** TODO(api): 수확일 필드 없음(A-2) */
   harvestDate?: string
@@ -470,7 +471,7 @@ export function ProductDetailView({
               <NotConnected
                 layout="inline"
                 title="판매자 정보는 아직 연결되지 않았어요"
-                api="📝 GET /sellers/{sellerId} (상세에 sellerId 없음)"
+                api="상세 응답의 sellerId(BE #741) → GET /stores/{sellerId}"
               />
               {followControl}
             </Stack>

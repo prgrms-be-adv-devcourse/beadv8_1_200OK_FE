@@ -288,18 +288,23 @@ export type ProductListParams = {
   size?: number
 }
 
-// ─── 판매자 상점 (구매자가 보는 쪽, 계획 API) ─────────────
+// ─── 판매자 상점 (구매자가 보는 쪽) ─────────────────────
 
-// TODO(api): 📝 GET /sellers/{sellerId} 없음. 구매자 화면(상품 상세·농가·찜) fixtures 전용 임시 타입.
-// 상품 목록·상세에도 판매자 정보가 없어 화면이 따로 받는다(DECISIONS.md A-2). 판매자 본인 프로필은 아래 SellerProfileResponse.
-export type SellerProfile = {
+/** ✅ 상점 프로필 GET /stores/{sellerId}. 로그인 없이 누구나 부른다. sellerId는 판매자의 회원 번호다.
+ * 판매자 본인 프로필(출고지 우편번호 포함)은 아래 SellerProfileResponse */
+export type StoreProfile = {
   sellerId: number
   storeName: string
   representativeName: string
+  customerServicePhone: string
+  introduction: string | null
+  profileImageUrl: string | null // 없으면 상호 첫 글자를 보여 준다
+}
+
+// TODO(api): 지역·팔로워 수·판매 중지 여부는 서버 응답에 없다(❌). 구매자 화면 fixtures·시안 전용 확장 타입.
+// 실제 화면은 StoreProfile만 받고 이 값들은 ‘연결 전’으로 둔다.
+export type SellerProfile = StoreProfile & {
   region: ProductRegion | null
-  introduction: string | null // 200자 이하
-  customerServicePhone: string | null
-  profileImageUrl: string | null
   followerCount: number
   suspended: boolean // 판매 중지(정지)된 판매자. API 미정(C-9)
 }

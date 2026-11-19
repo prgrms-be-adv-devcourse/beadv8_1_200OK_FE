@@ -18,8 +18,8 @@ import { type DetailStatus, ProductDetailView } from '../views/ProductDetailView
 // 리뷰 키워드 칩을 누르면 목록을 그 키워드로 거르고, 다시 누르면 전체 목록으로 돌아간다.
 // 로그인했으면 이 상품의 내 리뷰(GET /products/{productId}/reviews/me)를 목록 맨 위에 둔다. ‘내 리뷰’ 표시는 리뷰의 memberId와 토큰의 회원 번호로 판단한다.
 // 담기는 features/cart 공개 hook(products → cart 예외). 비회원이면 로그인 안내 모달을 띄운다.
-// TODO(api): 📝 판매자 정보(GET /sellers/{sellerId}, 상세에 sellerId 없음)·관심·팔로우 API가 없다.
-//   판매자는 넘기지 않고(‘연결 전’ 안내), 관심·팔로우 핸들러도 넘기지 않아 버튼을 막고 이유를 보인다.
+// TODO(api): 상세 응답에 sellerId가 없어(BE #741) 판매자 정보(✅ GET /stores/{sellerId}, shared/api/storeProfile.ts)를 부르지 못한다.
+//   관심·팔로우 API도 없다(📝). 판매자는 넘기지 않고(‘연결 전’ 안내), 관심·팔로우 핸들러도 넘기지 않아 버튼을 막고 이유를 보인다.
 
 const asProductId = (value: string | undefined) => {
   const id = Number(value)
