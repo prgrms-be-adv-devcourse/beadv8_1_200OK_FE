@@ -161,6 +161,8 @@ export const chargeStatusLabels: Record<ChargeStatus, string> = {
 export const ledgerTypeLabels: Record<LedgerType, string> = {
   [LedgerType.CHARGE]: '충전',
   [LedgerType.PAYMENT]: '결제',
+  [LedgerType.REFUND]: '환불',
+  [LedgerType.REFUND_REVERT]: '환불 취소',
 }
 
 export const carrierLabels: Record<ShipmentCarrier, string> = {

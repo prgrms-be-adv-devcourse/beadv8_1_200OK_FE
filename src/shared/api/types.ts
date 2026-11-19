@@ -140,9 +140,14 @@ export enum ChargeStatus {
 }
 
 /** 예치금 이용 내역 유형 */
+/** 예치금 이용 내역 유형. 충전·환불 반환은 +, 결제·환불 되돌리기는 − */
 export enum LedgerType {
   CHARGE = 'CHARGE',
   PAYMENT = 'PAYMENT',
+  /** 환불로 돌려받은 돈 */
+  REFUND = 'REFUND',
+  /** 환불을 되돌려 다시 가져간 돈 */
+  REFUND_REVERT = 'REFUND_REVERT',
 }
 
 /** 택배사 (출고 등록) */
@@ -468,7 +473,10 @@ export type ChargeFailRequest = { chargeNo: string; code: string; message?: stri
 export type LedgerEntry = {
   occurredAt: string
   type: LedgerType
-  orderId: number | null // 결제일 때만
+  /** 결제·환불 반환·환불 되돌리기일 때. 충전이면 null, 서버가 기록을 못 찾아도 null */
+  orderId: number | null
+  /** 주문 요약(예: "사과 외 3건", 최대 120자). 충전·요약 저장 전 결제는 null */
+  orderSummary: string | null
   amount: number
   balanceAfter: number
 }

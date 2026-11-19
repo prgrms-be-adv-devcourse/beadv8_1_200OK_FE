@@ -214,6 +214,31 @@ export const walletHistoryPreviews: ScreenPreview[] = [
           }),
       },
       {
+        id: 'refund',
+        label: '유형: 환불',
+        render: () =>
+          history({
+            type: WalletTxType.REFUND,
+            transactions: walletTransactions.filter((tx) => tx.type === WalletTxType.REFUND),
+          }),
+      },
+      {
+        id: 'no-summary',
+        label: '주문 요약·주문 번호 없음',
+        render: () =>
+          history({
+            transactions: [
+              ...walletTransactions.filter((tx) => tx.orderId === 93),
+              ...walletTransactions.slice(2, 3).map((tx) => ({
+                ...tx,
+                key: 'refund-no-order',
+                description: '환불',
+                orderId: null,
+              })),
+            ],
+          }),
+      },
+      {
         id: 'custom',
         label: '직접 선택',
         render: () =>
