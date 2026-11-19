@@ -75,6 +75,19 @@
   font-size: var(--mantine-font-size-sm);
 }
 
+/* 주문 요약은 최대 120자라 한 줄로 말줄임한다(전체는 title) */
+.description {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.descriptionCell {
+  max-width: 20rem;
+}
+
 .plus {
   display: inline-flex;
   align-items: baseline;
@@ -114,6 +127,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--mantine-spacing-sm);
+}
+
+.itemMain > :last-child {
+  flex-shrink: 0;
 }
 
 .itemBalance {

@@ -61,6 +61,7 @@ export const walletBalance = { balance: BALANCE_DEFAULT, maxBalance: MAX_BALANCE
 
 // ─── 이용 내역 (최신 순, GET /wallets/me/ledgers 모양) ────────────────────
 // 마지막 잔액 128,000원 = BALANCE_DEFAULT. 주문 번호·금액은 orders/fixtures.ts와 같다.
+// 151은 환불됐다가 되돌려졌고(+13,900 → −13,900), 93·27·66 결제는 주문 요약을 저장하기 전이라 orderSummary가 null이다.
 
 const ledger = (
   occurredAt: string,
@@ -68,12 +69,26 @@ const ledger = (
   amount: number,
   balanceAfter: number,
   orderId: number | null = null,
-): LedgerEntry => ({ occurredAt, type, orderId, amount, balanceAfter })
+  orderSummary: string | null = null,
+): LedgerEntry => ({ occurredAt, type, orderId, orderSummary, amount, balanceAfter })
+
+/** 화면에서 말줄임되는 긴 주문 요약 (서버 최대 120자) */
+export const LONG_ORDER_SUMMARY =
+  '해남 꿀고구마 베니하루카 5kg 한입 크기 선별 산지 직송 햇고구마 특품 외 2건'
 
 export const walletLedgers: LedgerEntry[] = [
-  ledger('2026-10-18T14:30:00', LedgerType.PAYMENT, 39800, 128000, 184),
-  ledger('2026-10-15T09:12:00', LedgerType.PAYMENT, 13900, 167800, 151),
-  ledger('2026-10-14T20:05:00', LedgerType.PAYMENT, 9900, 181700, 140),
+  ledger('2026-10-18T14:30:00', LedgerType.PAYMENT, 39800, 128000, 184, LONG_ORDER_SUMMARY),
+  ledger(
+    '2026-10-17T10:05:00',
+    LedgerType.REFUND_REVERT,
+    13900,
+    167800,
+    151,
+    '제주 노지 조생 감귤',
+  ),
+  ledger('2026-10-16T16:40:00', LedgerType.REFUND, 13900, 181700, 151, '제주 노지 조생 감귤'),
+  ledger('2026-10-15T09:12:00', LedgerType.PAYMENT, 13900, 167800, 151, '제주 노지 조생 감귤'),
+  ledger('2026-10-14T20:05:00', LedgerType.PAYMENT, 9900, 181700, 140, '평창 고랭지 알배기배추'),
   ledger('2026-10-12T11:40:00', LedgerType.PAYMENT, 23900, 191600, 93),
   ledger('2026-10-12T11:30:00', LedgerType.CHARGE, 200000, 215500),
   ledger('2026-10-06T08:20:00', LedgerType.PAYMENT, 29900, 15500, 27),
