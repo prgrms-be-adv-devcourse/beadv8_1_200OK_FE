@@ -277,6 +277,10 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
         path: '__design/screen/:screenId',
         lazy: async () => ({ Component: (await import('./dev/ScreenPreview')).ScreenPreview }),
       },
+      {
+        path: '__design/sentry',
+        lazy: async () => ({ Component: (await import('./dev/SentryLab')).SentryLab }),
+      },
     ]
   : []
 
