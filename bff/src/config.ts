@@ -50,6 +50,8 @@ export type Config = {
   allowedOrigins: string[]
   /** vite는 5173이 차 있으면 5174로 뜬다. 그때도 개발이 막히지 않게 한다 */
   allowAnyLocalhostOrigin: boolean
+  /** 개발 환경 전용 경로(devRoutes.ts: Sentry 테스트 오류)를 열지 */
+  devRoutes: boolean
   cookieSecure: boolean
   timeouts: { upstream: number; upload: number; optional: number }
 }
@@ -71,6 +73,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     allowedOrigins: parsed.ALLOWED_ORIGINS,
     allowAnyLocalhostOrigin: parsed.NODE_ENV === 'development',
+    devRoutes: parsed.NODE_ENV === 'development',
     cookieSecure: parsed.COOKIE_SECURE ?? parsed.NODE_ENV === 'production',
     timeouts: {
       upstream: parsed.UPSTREAM_TIMEOUT_MS,
