@@ -6,8 +6,10 @@ export {
   SellerOrdersPage,
   SellerPayoutsPage,
   SellerProductFormPage,
+  SellerProductReviewsPage,
   SellerProductsPage,
   SellerProfilePage,
+  SellerReviewsPage,
   SellerWalletPage,
 } from '@/features/seller'
 export { SellerLayout } from '../layouts/SellerLayout'

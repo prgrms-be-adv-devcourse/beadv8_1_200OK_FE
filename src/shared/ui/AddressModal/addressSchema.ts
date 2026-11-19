@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// 배송지 검증. 규칙은 Bruno CreateOrderRequest 필드 제약 그대로(DECISIONS.md A-6).
+// 배송지 검증. 규칙은 CreateOrderRequest·배송 AddressRequest 필드 제약 그대로(DECISIONS.md A-6). 상세주소는 둘 다 필수(@NotBlank).
 // shared/ui 안에서만 쓴다(AddressModal).
 
 export const addressSchema = z.object({
@@ -9,10 +9,11 @@ export const addressSchema = z.object({
     .trim()
     .min(1, '받는 분을 입력해 주세요')
     .max(50, '받는 분은 50자 이하로 입력해 주세요'),
+  // 기본 배송지 API와 같은 규칙(숫자 9~11자리, 하이픈 선택). 저장할 때 formatPhone으로 하이픈을 붙여 주문 생성 형식에도 맞춘다
   recipientPhone: z
     .string()
     .trim()
-    .regex(/^01\d-\d{3,4}-\d{4}$/, '연락처를 010-1234-5678 형식으로 입력해 주세요'),
+    .regex(/^\d(?:-?\d){8,10}$/, '연락처를 숫자 9~11자리로 입력해 주세요'),
   zipCode: z
     .string()
     .trim()
@@ -22,7 +23,11 @@ export const addressSchema = z.object({
     .trim()
     .min(1, '주소를 입력해 주세요')
     .max(200, '주소는 200자 이하로 입력해 주세요'),
-  addressDetail: z.string().trim().max(100, '상세주소는 100자 이하로 입력해 주세요'),
+  addressDetail: z
+    .string()
+    .trim()
+    .min(1, '상세주소를 입력해 주세요')
+    .max(100, '상세주소는 100자 이하로 입력해 주세요'),
 })
 
 export type AddressFormValues = z.infer<typeof addressSchema>

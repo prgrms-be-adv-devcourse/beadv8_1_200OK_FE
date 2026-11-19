@@ -6,10 +6,17 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole, type ProductPage, type ProductSummary } from '@/shared/api/types'
+import { MAX_CART_QUANTITY } from '@/shared/lib/constants'
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { appleReviews, MY_MEMBER_ID, productDetailOf, productSummaries } from '../fixtures'
+import {
+  appleReviewKeywords,
+  appleReviews,
+  MY_MEMBER_ID,
+  productDetailOf,
+  productSummaries,
+} from '../fixtures'
 import { HomePage } from './HomePage'
 import { ProductDetailPage } from './ProductDetailPage'
 import { ProductListPage } from './ProductListPage'
@@ -168,6 +175,125 @@ describe('ProductDetailPage', () => {
   })
 })
 
+describe('ProductDetailPage 리뷰 키워드', () => {
+  const [mine, other, third] = appleReviews
+
+  const reviewContents = (region: HTMLElement) =>
+    within(region)
+      .queryAllByRole('article')
+      .map((article) => article.querySelector('p')?.textContent)
+
+  const reviewsRegion = async () => {
+    await screen.findByRole('heading', { level: 1, name: productDetailOf(101)?.name })
+    return screen.getByRole('region', { name: /리뷰/ })
+  }
+
+  it('리뷰 키워드를 문구와 리뷰 수로 보여 준다', async () => {
+    renderAt('/products/101')
+
+    const group = await screen.findByRole('group', { name: '리뷰 키워드' })
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(appleReviewKeywords.keywords.length)
+    for (const keyword of appleReviewKeywords.keywords) {
+      expect(
+        within(group).getByRole('checkbox', { name: `${keyword.phrase} ${keyword.reviewCount}` }),
+      ).toBeInTheDocument()
+    }
+    expect(within(group).getByRole('checkbox', { name: '달아요 17' })).not.toBeChecked()
+  })
+
+  it('리뷰 키워드가 없으면 칩 영역을 보이지 않는다', async () => {
+    const requested: string[] = []
+    server.use(
+      http.get('*/api/v1/products/:productId/review-keywords', ({ request }) => {
+        requested.push(request.url)
+        return HttpResponse.json({ analyzedReviewCount: 4, keywords: [] })
+      }),
+    )
+    renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await within(region).findByText(other?.content ?? '')
+    await vi.waitFor(() => expect(requested).toHaveLength(1))
+    expect(screen.queryByRole('group', { name: '리뷰 키워드' })).not.toBeInTheDocument()
+  })
+
+  it('더 본 뒤 칩을 누르면 그 키워드로 0페이지부터 다시 부르고, 다시 누르면 전체로 돌아간다', async () => {
+    const requests: URLSearchParams[] = []
+    server.use(
+      http.get('*/api/v1/products/:productId/reviews', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        requests.push(params)
+        if (params.get('keyword') === 'C02') return HttpResponse.json(pageOf([third], 0, 1))
+        return params.get('page') === '0'
+          ? HttpResponse.json(pageOf([mine, other], 0, 2))
+          : HttpResponse.json(pageOf([third], 1, 2))
+      }),
+    )
+    const { user } = renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await user.click(await within(region).findByRole('button', { name: '리뷰 더 보기' }))
+    await within(region).findByText(third?.content ?? '')
+    expect(requests.map((params) => [params.get('page'), params.has('keyword')])).toEqual([
+      ['0', false],
+      ['1', false],
+    ])
+
+    await user.click(within(region).getByRole('checkbox', { name: '달아요 17' }))
+    expect(within(region).getByRole('checkbox', { name: '달아요 17' })).toBeChecked()
+    await vi.waitFor(() => expect(reviewContents(region)).toEqual([third?.content]))
+    const filtered = requests.at(-1)
+    expect(filtered?.get('keyword')).toBe('C02')
+    expect(filtered?.get('page')).toBe('0')
+    expect(within(region).queryByRole('button', { name: '리뷰 더 보기' })).not.toBeInTheDocument()
+
+    const before = requests.length
+    await user.click(within(region).getByRole('checkbox', { name: '달아요 17' }))
+    expect(within(region).getByRole('checkbox', { name: '달아요 17' })).not.toBeChecked()
+    await vi.waitFor(() =>
+      expect(reviewContents(region)).toEqual([mine?.content, other?.content, third?.content]),
+    )
+    expect(requests.slice(before).filter((params) => params.has('keyword'))).toEqual([])
+  })
+
+  it('키워드로 거르지 못하면(400) 선택을 풀라고 안내하고 칩은 그대로 둔다', async () => {
+    server.use(
+      http.get('*/api/v1/products/:productId/reviews', ({ request }) =>
+        new URL(request.url).searchParams.has('keyword')
+          ? problem(400, '리뷰 키워드를 찾을 수 없습니다.')
+          : HttpResponse.json(pageOf(appleReviews, 0, 1)),
+      ),
+    )
+    const { user } = renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await user.click(await within(region).findByRole('checkbox', { name: '아삭해요 12' }))
+
+    expect(await within(region).findByRole('alert')).toHaveTextContent(
+      '키워드 선택을 풀고 전체 리뷰를 봐 주세요.',
+    )
+    const group = within(region).getByRole('group', { name: '리뷰 키워드' })
+    expect(within(group).getByRole('checkbox', { name: '아삭해요 12' })).toBeChecked()
+  })
+
+  it('리뷰 키워드를 못 불러와도(404) 칩만 빼고 리뷰는 보여 준다', async () => {
+    let keywordsRequested = false
+    server.use(
+      http.get('*/api/v1/products/:productId/review-keywords', () => {
+        keywordsRequested = true
+        return problem(404, '상품을 찾을 수 없습니다.')
+      }),
+    )
+    renderAt('/products/101')
+
+    const region = await reviewsRegion()
+    await within(region).findByText(other?.content ?? '')
+    await vi.waitFor(() => expect(keywordsRequested).toBe(true))
+    expect(screen.queryByRole('group', { name: '리뷰 키워드' })).not.toBeInTheDocument()
+    expect(within(region).queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
 describe('ProductDetailPage 장바구니 담기', () => {
   const addButton = async () => {
     const [add] = await screen.findAllByRole('button', { name: '장바구니 담기' })
@@ -178,6 +304,7 @@ describe('ProductDetailPage 장바구니 담기', () => {
   afterEach(() => {
     localStorage.clear()
     notifications.clean()
+    server.events.removeAllListeners()
   })
 
   it('비회원이면 담지 않고 로그인 안내를 띄운다', async () => {
@@ -185,7 +312,7 @@ describe('ProductDetailPage 장바구니 담기', () => {
     server.use(
       http.post('*/api/v1/cart/items', () => {
         posted = true
-        return HttpResponse.json({ cartItemId: 1 }, { status: 201 })
+        return HttpResponse.json({ cartItemId: 1, quantity: 1 }, { status: 201 })
       }),
     )
     const { user } = renderAt('/products/101')
@@ -201,7 +328,7 @@ describe('ProductDetailPage 장바구니 담기', () => {
     server.use(
       http.post('*/api/v1/cart/items', async ({ request }) => {
         bodies.push(await request.json())
-        return HttpResponse.json({ cartItemId: 1 }, { status: 201 })
+        return HttpResponse.json({ cartItemId: 1, quantity: 1 }, { status: 201 })
       }),
     )
     const { user } = renderAt('/products/101')
@@ -211,37 +338,38 @@ describe('ProductDetailPage 장바구니 담기', () => {
     expect(bodies).toEqual([{ productOptionId: 1011, quantity: 1 }])
   })
 
-  it('이미 담긴 옵션(409)이면 담긴 수량에 더하고, 장바구니에 없으면 서버 문구를 알린다', async () => {
+  it('이미 담긴 옵션이면 서버가 더한 수량(200)을 알리고, 다른 요청은 보내지 않는다', async () => {
     setAccessToken(fakeToken({ role: MemberRole.BUYER }))
-    let inCart = true
-    const patched: unknown[] = []
+    const added = [3, MAX_CART_QUANTITY]
+    const sent: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (request.method !== 'GET') sent.push(`${request.method} ${new URL(request.url).pathname}`)
+    })
     server.use(
       http.post('*/api/v1/cart/items', () =>
-        problem(409, inCart ? '이미 장바구니에 담긴 상품입니다.' : '판매 중인 상품이 아닙니다.'),
+        HttpResponse.json({ cartItemId: 5, quantity: added.shift() }, { status: 200 }),
       ),
-      http.get('*/api/v1/cart', () =>
-        HttpResponse.json({
-          cartId: 1,
-          items: inCart
-            ? [{ cartItemId: 5, productOptionId: 1011, quantity: 2, selected: true }]
-            : [],
-        }),
-      ),
-      http.patch('*/api/v1/cart/items/:cartItemId', async ({ request, params }) => {
-        patched.push({ cartItemId: params.cartItemId, ...((await request.json()) as object) })
-        return new HttpResponse(null, { status: 204 })
-      }),
     )
     const { user } = renderAt('/products/101')
 
     await user.click(await addButton())
-    expect(await screen.findByText('이미 담긴 상품이라 수량을 더했어요')).toBeInTheDocument()
-    expect(patched).toEqual([{ cartItemId: '5', quantity: 3 }])
+    expect(
+      await screen.findByText('이미 담긴 상품이라 수량을 더했어요. 지금 3개 담겨 있어요'),
+    ).toBeInTheDocument()
+    await user.click(await addButton())
+    expect(
+      await screen.findByText(`이미 담긴 상품이라 최대 수량(${MAX_CART_QUANTITY}개)까지 담았어요`),
+    ).toBeInTheDocument()
+    expect(sent).toEqual(['POST /api/v1/cart/items', 'POST /api/v1/cart/items'])
+  })
 
-    inCart = false
+  it('판매 중이 아닌 상품(409)이면 서버 문구를 알린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    server.use(http.post('*/api/v1/cart/items', () => problem(409, '판매 중인 상품이 아닙니다.')))
+    const { user } = renderAt('/products/101')
+
     await user.click(await addButton())
     expect(await screen.findByText('판매 중인 상품이 아닙니다.')).toBeInTheDocument()
-    expect(patched).toHaveLength(1)
   })
 })
 

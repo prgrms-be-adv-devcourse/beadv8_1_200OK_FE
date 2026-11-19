@@ -57,6 +57,16 @@ export const sellerApplyPreviews: ScreenPreview[] = [
           }),
       },
       {
+        id: 'postal-code-error',
+        label: '출고지 우편번호 오류 (422 → 칸)',
+        render: () =>
+          apply({
+            defaultValues: { ...applyValues, originPostalCode: '3742' },
+            defaultStep: 1,
+            serverErrors: { originPostalCode: '출고지 우편번호는 5자리 숫자여야 합니다.' },
+          }),
+      },
+      {
         id: 'in-progress',
         label: '진행 중인 신청 있음 (409 → 문구)',
         render: () =>

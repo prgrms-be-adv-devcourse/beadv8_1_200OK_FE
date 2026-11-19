@@ -9,6 +9,7 @@ export const queryKeyPrefix = {
   checkout: 'checkout',
   orders: 'orders',
   shipments: 'shipments',
+  refunds: 'refunds',
   addresses: 'addresses',
   wallet: 'wallet',
   reviews: 'reviews',

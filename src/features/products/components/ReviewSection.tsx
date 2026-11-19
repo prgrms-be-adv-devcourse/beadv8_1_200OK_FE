@@ -1,7 +1,7 @@
-import { Badge, Button, Skeleton, Stack } from '@mantine/core'
+import { Badge, Button, Chip, Skeleton, Stack } from '@mantine/core'
 import { MessageSquareText } from 'lucide-react'
 import { Link } from 'react-router'
-import type { ProductReview } from '@/shared/api/types'
+import type { ProductReview, ReviewKeyword } from '@/shared/api/types'
 import { formatAmount, formatDate } from '@/shared/lib/format'
 import { toStarRating } from '@/shared/lib/rating'
 import { EmptyView, QueryState, RatingStars } from '@/shared/ui'
@@ -9,7 +9,7 @@ import type { ListStatus } from '../types'
 import { ReviewMediaGallery } from './ReviewMediaGallery'
 import classes from './ReviewSection.module.css'
 
-// 상품 상세의 리뷰: 요약(평균 26 + 별 20 + 리뷰 수) → 목록(최신순) → 더 보기. 리뷰 0개면 “아직 리뷰가 없어요”(A-4)
+// 상품 상세의 리뷰: 요약(평균 26 + 별 20 + 리뷰 수) → 리뷰 키워드 칩(하나만 고름) → 목록(최신순) → 더 보기. 리뷰 0개면 “아직 리뷰가 없어요”(A-4)
 // 리뷰 별점 rating은 1~10이라 /2로 바꿔 그린다. 작성자 닉네임은 API에 없어 ‘구매자’로 쓴다(TODO(api)).
 
 export type ReviewSectionProps = {
@@ -26,6 +26,10 @@ export type ReviewSectionProps = {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
+  keywords?: ReviewKeyword[]
+  selectedKeywordId?: string
+  /** 고른 칩을 다시 누르면 undefined로 선택을 푼다 */
+  onSelectKeyword?: (keywordId: string | undefined) => void
   onDeleteReview?: (reviewId: number) => void
 }
 
@@ -41,6 +45,9 @@ export function ReviewSection({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  keywords = [],
+  selectedKeywordId,
+  onSelectKeyword,
   onDeleteReview,
 }: ReviewSectionProps) {
   return (
@@ -76,6 +83,26 @@ export function ReviewSection({
               리뷰 {formatAmount(reviewCount)}개
             </span>
           </div>
+
+          {keywords.length > 0 && onSelectKeyword && (
+            <fieldset aria-label="리뷰 키워드" className={classes.keywords}>
+              {keywords.map((keyword) => (
+                <Chip
+                  key={keyword.keywordId}
+                  checked={keyword.keywordId === selectedKeywordId}
+                  onChange={() =>
+                    onSelectKeyword(
+                      keyword.keywordId === selectedKeywordId ? undefined : keyword.keywordId,
+                    )
+                  }
+                  classNames={{ label: classes.keywordLabel }}
+                >
+                  {keyword.phrase}{' '}
+                  <span className="pd-num">{formatAmount(keyword.reviewCount)}</span>
+                </Chip>
+              ))}
+            </fieldset>
+          )}
 
           <QueryState
             status={status}

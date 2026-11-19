@@ -358,3 +358,16 @@ describe('상품 수정', () => {
     )
   })
 })
+
+describe('상품 수정 · 리뷰 반응', () => {
+  it('감성 집계 대신 이 상품의 리뷰 분석 화면으로 가는 링크를 둔다', async () => {
+    renderAt('/seller/products/101/edit')
+
+    const region = within(await screen.findByRole('region', { name: '리뷰 반응' }))
+    expect(region.getByRole('link', { name: '이 상품 리뷰 분석 보기' })).toHaveAttribute(
+      'href',
+      '/seller/reviews/101',
+    )
+    expect(region.queryByText(/분석을 마친 리뷰/)).not.toBeInTheDocument()
+  })
+})

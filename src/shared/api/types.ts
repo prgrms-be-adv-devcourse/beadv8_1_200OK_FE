@@ -75,6 +75,35 @@ export enum ReviewMediaType {
   VIDEO = 'VIDEO',
 }
 
+/** 리뷰 키워드가 말하는 상품의 면 */
+export enum ReviewKeywordAspect {
+  TASTE = 'TASTE',
+  FRESHNESS = 'FRESHNESS',
+  CONDITION = 'CONDITION',
+  PACKAGING = 'PACKAGING',
+  DELIVERY = 'DELIVERY',
+  PRICE = 'PRICE',
+  OTHER = 'OTHER',
+}
+
+/** 리뷰 감성을 나눠 보는 6개 항목. 서버가 주는 순서이자 화면 순서 */
+export enum ReviewAspect {
+  TASTE = 'TASTE',
+  FRESHNESS = 'FRESHNESS',
+  CONDITION = 'CONDITION',
+  PACKAGING = 'PACKAGING',
+  DELIVERY = 'DELIVERY',
+  PRICE = 'PRICE',
+}
+
+export enum ReviewSentiment {
+  POSITIVE = 'POSITIVE',
+  NEGATIVE = 'NEGATIVE',
+  NEUTRAL = 'NEUTRAL',
+  MIXED = 'MIXED',
+  NOT_MENTIONED = 'NOT_MENTIONED',
+}
+
 export enum PayoutEventType {
   SALE_AMOUNT = 'SALE_AMOUNT',
   SALE_SHIPPING_FEE = 'SALE_SHIPPING_FEE',
@@ -85,6 +114,7 @@ export enum PayoutEventType {
 export enum OrderItemStatus {
   PAYMENT_PENDING = 'PAYMENT_PENDING',
   PAYMENT_FAILED = 'PAYMENT_FAILED',
+  CANCELED = 'CANCELED', // 결제까지 가지 못하고 무산된 주문의 상품
   PREPARING = 'PREPARING',
   SHIPPING = 'SHIPPING',
   DELIVERED = 'DELIVERED',
@@ -311,6 +341,30 @@ export type SellerProductOption = {
   availableStock: number // 총재고 − 배정 수량
 }
 
+/** 감성별 리뷰 수 */
+export type SentimentCounts = {
+  positive: number
+  negative: number
+  neutral: number
+  mixed: number
+}
+
+export type AspectSentimentSummary = {
+  aspect: ReviewAspect
+  mentionedReviewCount: number // 이 항목을 언급한 분석 완료 리뷰 수. sentiments의 합이다
+  sentiments: SentimentCounts
+}
+
+/**
+ * 내 상품 리뷰 감성 집계 GET /sellers/me/products/{productId}/review-sentiments.
+ * 분석을 기다리거나 실패한 리뷰는 세지 않는다. 404 없거나 삭제됐거나 내 상품이 아님
+ */
+export type ReviewSentimentSummary = {
+  analyzedReviewCount: number // 분석 완료 리뷰 수. overall의 분모
+  overall: SentimentCounts
+  aspects: AspectSentimentSummary[] // 6개 항목 모두, 언급이 없으면 0. 순서는 ReviewAspect 순서로 고정
+}
+
 export type SellerProductListParams = {
   status?: ProductStatus
   visibility?: ProductVisibility
@@ -369,7 +423,8 @@ export type Cart = {
 
 export type CartItemAddRequest = { productOptionId: number; quantity: number }
 
-export type CartItemAddResponse = { cartItemId: number }
+/** quantity는 담은 뒤 수량. 이미 담긴 옵션이면 더한 값이고 서버가 MAX_CART_QUANTITY에서 멈춘다 */
+export type CartItemAddResponse = { cartItemId: number; quantity: number }
 
 export type CartQuantityRequest = { quantity: number }
 
@@ -395,7 +450,7 @@ export type TermsAgreeRequest = { agreements: { type: TermsType; version: number
 /** GET /wallets/me/balance. 지갑이 없으면 balance 0. 충전 가능 금액 = maxBalance − balance */
 export type BuyerBalance = { balance: number; maxBalance: number }
 
-/** POST /wallets/me/charges. 10,000원 이상 10,000원 단위, 충전 뒤 잔액 ≤ maxBalance */
+/** POST /wallets/me/charges. 10,000원 이상, 충전 뒤 잔액 ≤ maxBalance */
 export type WalletChargeRequest = { amount: number }
 
 /** 201. chargeNo를 토스 결제창의 orderId로 넘긴다 */
@@ -443,15 +498,13 @@ export type CheckoutItem = {
 
 export type CheckoutSellerGroup = {
   sellerId: number
-  shippingFee: number // 판매자 묶음 기본 배송비. 도서산간 추가 운임은 빠져 있다
   items: CheckoutItem[]
 }
 
+/** 주문서 GET /orders/checkout. 배송비·합계는 없다 → 배송비는 견적(fee-quotes)으로만 받는다 */
 export type Checkout = {
   sellerGroups: CheckoutSellerGroup[]
   totalProductAmount: number
-  totalShippingFee: number
-  totalAmount: number // 도서산간 운임 제외 → 견적(fee-quotes)의 regionSurcharge를 더해 expectedTotalAmount로 보낸다
 }
 
 export type CreateOrderRequest = {
@@ -459,9 +512,10 @@ export type CreateOrderRequest = {
   recipientPhone: string // "010-1234-5678" 형식 (하이픈 필수)
   zipCode: string // 숫자 5자리
   address: string // 200자 이하
-  addressDetail?: string // 100자 이하
+  addressDetail: string // 필수, 100자 이하
+  deliveryNote?: string // 선택, 255자 이하. 공백만이면 서버가 null로 본다
   thirdPartyProvisionAgreed: true
-  expectedTotalAmount: number // 화면에 보여준 최종 금액 (totalAmount + 도서산간 운임)
+  expectedTotalAmount: number // 화면에 보여준 최종 금액 (totalProductAmount + 견적 totalShippingFee)
 }
 
 export type CreateOrderResponse = { orderId: number }
@@ -551,7 +605,7 @@ export enum ShipmentStatus {
 /** 기본 배송지 저장 PUT /shipments/addresses/default. 연락처는 하이픈이 있어도 되고 숫자만 저장된다 */
 export type ShipmentAddressRequest = {
   recipientName: string
-  recipientPhone: string // 숫자 10~11자리
+  recipientPhone: string // 숫자 9~11자리 (하이픈 있어도 됨)
   postalCode: string // 숫자 5자리
   address: string
   addressDetail: string
@@ -686,11 +740,14 @@ export type ShipmentDetail = {
   latestAddressChange: LatestAddressChange | null
 }
 
-/** 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다 */
+/**
+ * 배송지 (주문 생성 요청의 받는 사람·주소 부분). 주문서·주문 상세·계정 관리가 같이 쓴다.
+ * 상세주소는 주문할 때 필수지만, 예전에 저장한 배송지(초안·주문 상세)에는 없을 수 있어 선택으로 둔다
+ */
 export type ShippingAddress = Pick<
   CreateOrderRequest,
-  'recipientName' | 'recipientPhone' | 'zipCode' | 'address' | 'addressDetail'
->
+  'recipientName' | 'recipientPhone' | 'zipCode' | 'address'
+> & { addressDetail?: string }
 
 // ─── 리뷰 ────────────────────────────────────────────────
 
@@ -723,6 +780,20 @@ export type ProductReview = {
   updatedAt: string
 }
 
+/** 여러 구매자가 반복해 칭찬한 장점. keywordId는 리뷰 목록의 keyword 파라미터로 보낸다 */
+export type ReviewKeyword = {
+  keywordId: string
+  phrase: string // "달아요" 같은 짧은 긍정 표현
+  aspect: ReviewKeywordAspect
+  reviewCount: number // 이 키워드를 표현한 리뷰 수 = 키워드로 거른 목록의 totalElements
+}
+
+// 분석한 리뷰가 10개 미만이면 keywords는 빈 배열. 리뷰 3개 이상이 표현한 것만, 많은 순 최대 10개
+export type ProductReviewKeywords = {
+  analyzedReviewCount: number
+  keywords: ReviewKeyword[]
+}
+
 // ─── 판매자 신청 ─────────────────────────────────────────
 
 /** POST /sellers/me/applications (BUYER). businessNumber는 10자리 숫자 또는 000-00-00000 */
@@ -731,6 +802,7 @@ export type SellerApplyRequest = {
   representativeName: string // 50자 이하
   businessNumber: string
   mailOrderNumber: string // 통신판매업 신고번호, 50자 이하
+  originPostalCode: string // 출고지 우편번호 \d{5}. 승인 때 배송 모듈로 넘어가고, 이후에는 프로필에서 바꾼다
 }
 
 export type SellerApplyResponse = { applicationId: number }
@@ -755,6 +827,7 @@ export type SellerApplicationResponse = {
   storeName: string
   representativeName: string
   businessNumber: string
+  originPostalCode: string | null // 이 칸이 생기기 전 신청은 null
   appliedAt: string
 }
 
@@ -772,6 +845,7 @@ export type SellerApplicationAdminSummary = {
 /** 관리자 신청 상세. review/approve/reject도 처리 뒤 상세를 돌려준다 */
 export type SellerApplicationAdminDetail = SellerApplicationAdminSummary & {
   mailOrderNumber: string
+  originPostalCode: string | null // 신청 당시 출고지 우편번호. 이 칸이 생기기 전 신청은 null
   reviewStartedAt: string | null
   approvedAt: string | null
   rejectedAt: string | null
@@ -794,6 +868,7 @@ export type SellerProfileRequest = {
   storeName: string // 50자 이하
   representativeName: string // 50자 이하
   customerServicePhone: string // 0\d{1,2}-\d{3,4}-\d{4} 또는 1\d{3}-\d{4}
+  originPostalCode: string // 출고지 우편번호 \d{5}. 배송비 계산에 쓴다
   introduction?: string | null // 200자 이하
   profileImageUrl?: string | null // POST /media/SELLER_PROFILE 응답 url. null이면 사진 삭제
 }
@@ -802,6 +877,7 @@ export type SellerProfileResponse = {
   storeName: string
   representativeName: string
   customerServicePhone: string
+  originPostalCode: string | null // 이 칸이 생기기 전 프로필은 null
   introduction: string | null
   profileImageUrl: string | null
 }

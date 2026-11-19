@@ -21,4 +21,5 @@ USER node
 EXPOSE 8787
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:8787/health | grep -q UP || exit 1
-CMD ["node", "src/main.ts"]
+# instrument.ts(Sentry)를 앱보다 먼저 읽는다. SENTRY_DSN이 없으면 아무것도 보내지 않는다
+CMD ["node", "--import", "./src/instrument.ts", "src/main.ts"]

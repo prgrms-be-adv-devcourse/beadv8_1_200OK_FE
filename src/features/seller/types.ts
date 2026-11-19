@@ -1,5 +1,4 @@
 import type { ProductStatus, ProductVisibility } from '@/shared/api/types'
-import type { ClaimState } from '@/shared/lib/claimState'
 import type { WithdrawalState } from '@/shared/lib/withdrawalState'
 
 // 판매자 센터 화면 전용 타입. TODO(api): ❌ 센터 홈 주문 집계 API 없음 → 화면엔 연결 전(–). 주문 쪽 필드는 시안 기준 임시.
@@ -48,22 +47,6 @@ export type SellerProductRow = {
   updatedAt: string
   /** 판매 가능 수량이 LOW_STOCK_THRESHOLD 이하 */
   hasLowStock: boolean
-}
-
-// ─── 취소 요청 ───────────────────────────────────────────
-// TODO(api): ❌ 판매자 클레임(취소 요청) 목록·승인·거절 API 없음 → 화면은 연결 전, 이 타입은 미리보기용
-
-export type CancelClaim = {
-  claimId: number
-  state: ClaimState
-  requestedAt: string
-  orderNumber: string
-  buyerNickname: string
-  itemText: string
-  reason: string
-  amount: number
-  shippingFee: number
-  rejectReason: string | null
 }
 
 // ─── 정산 ────────────────────────────────────────────────

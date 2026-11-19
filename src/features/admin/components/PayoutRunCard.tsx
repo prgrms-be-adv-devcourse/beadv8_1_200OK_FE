@@ -8,7 +8,8 @@ import classes from './PayoutCards.module.css'
 
 // 정산 실행 카드 + 확인 모달. 시안: admin/AdminSettlements ‘정산 실행’
 // ✅ POST /api/v1/admin/payouts/run (대기 기간 지난 후보), POST …/run/skip-wait (대기 건너뛰기 · 테스트용).
-// 응답은 실행 번호와 배치 상태뿐이라 결과는 그 둘만 보여 준다. prod에서는 두 API가 닫혀 있다.
+// 응답은 실행 번호와 배치 상태뿐이라 결과는 그 둘만 보여 준다.
+// 409(이미 실행 중 · 대기 건너뛰기 꺼짐)는 페이지가 해요체 문구로 바꿔 result로 넘긴다(errors.ts).
 // TODO(api): ❌ 마지막 실행 정보 API 없음 → 줄을 뺐다
 
 type MaybeAsync = unknown

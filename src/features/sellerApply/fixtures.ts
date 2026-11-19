@@ -15,6 +15,7 @@ export const applyValues: SellerApplyRequest = {
   representativeName: '김영수',
   businessNumber: '512-81-04273',
   mailOrderNumber: '제2026-경북청송-0031호',
+  originPostalCode: '37421',
 }
 
 export const rejectReason = '통신판매업 신고번호를 확인할 수 없어요'
@@ -59,6 +60,7 @@ export const applicationDetail: SellerApplicationResponse = {
   storeName: applyValues.storeName,
   representativeName: applyValues.representativeName,
   businessNumber: applyValues.businessNumber,
+  originPostalCode: applyValues.originPostalCode,
   appliedAt: base.appliedAt,
 }
 

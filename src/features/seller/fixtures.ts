@@ -1,3 +1,4 @@
+import { type Refund, RefundStatus } from '@/shared/api/refund'
 import {
   PayoutEventType,
   type PayoutSellerCandidate,
@@ -9,21 +10,23 @@ import {
   ProductRegion,
   ProductStatus,
   ProductVisibility,
+  ReviewAspect,
+  type ReviewSentimentSummary,
   type SellerProductDetail,
   type SellerProductSummary,
   type SellerProfile,
   type SellerProfileResponse,
   type SellerShipmentSummary,
+  type SentimentCounts,
   ShipmentCarrier,
   type ShipmentDetail,
   ShipmentStatus,
 } from '@/shared/api/types'
-import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { WithdrawalState } from '@/shared/lib/withdrawalState'
 import type { ProductFormValues } from './productSchema'
+import { type ReviewOverview, summarizeSellerSentiments } from './reviewOverview'
 import type {
-  CancelClaim,
   Follower,
   PayoutOutlook,
   SellerHomeStats,
@@ -44,6 +47,7 @@ export const myProfile: SellerProfileResponse = {
   storeName: '청송 햇살농원',
   representativeName: '김영수',
   customerServicePhone: '054-873-2210',
+  originPostalCode: '37421',
   introduction: '3대째 사과만 키우는 청송 부남면 과수원이에요.',
   profileImageUrl: null,
 }
@@ -279,6 +283,113 @@ export const sellerProductDetail101: SellerProductDetail = {
   updatedAt: '2026-10-12T18:20:00',
 }
 
+/** ✅ GET /sellers/me/products/101/review-sentiments 응답 모양. 항목별 합은 mentionedReviewCount와 같다 */
+export const reviewSentiments101: ReviewSentimentSummary = {
+  analyzedReviewCount: 18,
+  overall: { positive: 12, negative: 3, neutral: 2, mixed: 1 },
+  aspects: [
+    {
+      aspect: ReviewAspect.TASTE,
+      mentionedReviewCount: 15,
+      sentiments: { positive: 12, negative: 2, neutral: 1, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.FRESHNESS,
+      mentionedReviewCount: 9,
+      sentiments: { positive: 7, negative: 1, neutral: 0, mixed: 1 },
+    },
+    {
+      aspect: ReviewAspect.CONDITION,
+      mentionedReviewCount: 4,
+      sentiments: { positive: 2, negative: 2, neutral: 0, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.PACKAGING,
+      mentionedReviewCount: 3,
+      sentiments: { positive: 1, negative: 1, neutral: 1, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.DELIVERY,
+      mentionedReviewCount: 6,
+      sentiments: { positive: 4, negative: 2, neutral: 0, mixed: 0 },
+    },
+    {
+      aspect: ReviewAspect.PRICE,
+      mentionedReviewCount: 0,
+      sentiments: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
+    },
+  ],
+}
+
+/** 분석을 마친 리뷰가 아직 없는 상품. 항목 6개는 모두 0으로 온다 */
+export const noReviewSentiments: ReviewSentimentSummary = {
+  analyzedReviewCount: 0,
+  overall: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
+  aspects: reviewSentiments101.aspects.map(({ aspect }) => ({
+    aspect,
+    mentionedReviewCount: 0,
+    sentiments: { positive: 0, negative: 0, neutral: 0, mixed: 0 },
+  })),
+}
+
+/** [긍정, 부정, 중립, 혼합] → 감성 집계. 항목은 넘긴 것만 채우고 나머지는 언급 0 */
+function sentimentSummary(
+  overall: [number, number, number, number],
+  aspects: Partial<Record<ReviewAspect, [number, number, number, number]>> = {},
+): ReviewSentimentSummary {
+  const counts = ([positive, negative, neutral, mixed]: number[]): SentimentCounts => ({
+    positive: positive ?? 0,
+    negative: negative ?? 0,
+    neutral: neutral ?? 0,
+    mixed: mixed ?? 0,
+  })
+  const total = (values: number[]) => values.reduce((sum, n) => sum + n, 0)
+  return {
+    analyzedReviewCount: total(overall),
+    overall: counts(overall),
+    aspects: Object.values(ReviewAspect).map((aspect) => {
+      const values = aspects[aspect] ?? [0, 0, 0, 0]
+      return { aspect, mentionedReviewCount: total(values), sentiments: counts(values) }
+    }),
+  }
+}
+
+/**
+ * 내 상품(mySellerProducts)별 감성 집계. 판매자 전체로 합치면 포장이 먼저 볼 항목(언급 15개 중 부정 6개)이다.
+ * 109는 분석 리뷰 3개라 ‘리뷰가 더 모이면 보여요’ 묶음에 들어간다.
+ */
+export const reviewSentimentsByProduct: Record<number, ReviewSentimentSummary> = {
+  101: reviewSentiments101,
+  106: sentimentSummary([20, 6, 2, 2], {
+    [ReviewAspect.TASTE]: [17, 2, 1, 0],
+    [ReviewAspect.CONDITION]: [2, 0, 0, 0],
+    [ReviewAspect.PACKAGING]: [5, 5, 1, 1],
+    [ReviewAspect.DELIVERY]: [6, 1, 1, 0],
+    [ReviewAspect.PRICE]: [4, 1, 1, 0],
+  }),
+  109: sentimentSummary([2, 1, 0, 0], { [ReviewAspect.TASTE]: [2, 1, 0, 0] }),
+  110: sentimentSummary([5, 2, 1, 0], {
+    [ReviewAspect.TASTE]: [5, 1, 0, 0],
+    [ReviewAspect.FRESHNESS]: [3, 2, 0, 0],
+    [ReviewAspect.CONDITION]: [1, 0, 0, 0],
+    [ReviewAspect.DELIVERY]: [2, 2, 0, 0],
+  }),
+}
+
+/** S-10 미리보기용 합산 결과. failedIds의 상품은 반응을 못 불러온 것으로 본다 */
+export const reviewOverviewOf = (failedIds: number[] = []): ReviewOverview =>
+  summarizeSellerSentiments(
+    mySellerProducts,
+    new Map(
+      mySellerProducts.map((p) => [
+        p.productId,
+        failedIds.includes(p.productId)
+          ? 'error'
+          : (reviewSentimentsByProduct[p.productId] ?? 'error'),
+      ]),
+    ),
+  )
+
 // ─── 출고 (✅ GET /seller/shipments · /seller/shipments/{id}) — 테스트(MSW)·/__design 전용 ───
 
 const sellerShipment = (
@@ -401,55 +512,87 @@ export const sellerShipmentDetails: ShipmentDetail[] = [sellerShipmentDetail2]
 
 // ─── 취소 요청 ───────────────────────────────────────────
 
-export const cancelClaims: CancelClaim[] = [
-  {
-    claimId: 31,
-    state: ClaimState.CLAIM_PENDING,
-    requestedAt: '2026-10-18T11:40:00',
-    orderNumber: '20261018-0178',
-    buyerNickname: '사과먹는곰',
-    itemText: '청송 꿀사과 부사 3kg (16~18과) × 1',
-    reason: '주문 실수 (옵션·수량)',
-    amount: 33900,
-    shippingFee: 0,
-    rejectReason: null,
-  },
-  {
-    claimId: 30,
-    state: ClaimState.CLAIM_PENDING,
+const refund = (patch: Partial<Refund> & Pick<Refund, 'refundId' | 'status'>): Refund => ({
+  orderId: 178,
+  orderItemId: 1781,
+  productName: '청송 꿀사과 부사',
+  optionName: '3kg (16~18과)',
+  quantity: 1,
+  unitPrice: 33900,
+  itemAmount: 33900,
+  shippingFeeAmount: 0,
+  remoteAreaFeeAmount: 0,
+  deductedShippingFeeAmount: 0,
+  refundAmount: 33900,
+  cancelReason: '옵션을 잘못 골랐어요',
+  rejectReason: null,
+  requestedAt: '2026-10-18T11:40:00',
+  decidedAt: null,
+  completedAt: null,
+  ...patch,
+})
+
+/** 승인 대기 2 · 처리 중(배송비 환불) · 완료(배송비 차감) · 거절 · 철회 */
+export const sellerRefunds: Refund[] = [
+  refund({ refundId: 31, status: RefundStatus.REQUESTED }),
+  refund({
+    refundId: 30,
+    status: RefundStatus.REQUESTED,
+    orderId: 149,
+    orderItemId: 1491,
+    quantity: 2,
+    itemAmount: 67800,
+    refundAmount: 67800,
+    cancelReason: null,
     requestedAt: '2026-10-17T20:10:00',
-    orderNumber: '20261017-0149',
-    buyerNickname: '망원동카페',
-    itemText: '청송 꿀사과 부사 3kg (16~18과) × 2',
-    reason: '다른 상품으로 다시 주문',
-    amount: 67800,
-    shippingFee: 0,
-    rejectReason: null,
-  },
-  {
-    claimId: 22,
-    state: ClaimState.CLAIM_APPROVED,
+  }),
+  refund({
+    refundId: 24,
+    status: RefundStatus.PROCESSING,
+    orderId: 120,
+    orderItemId: 1201,
+    optionName: '1kg (5~6과)',
+    unitPrice: 12900,
+    itemAmount: 12900,
+    shippingFeeAmount: 3000,
+    refundAmount: 15900,
+    cancelReason: '배송지를 잘못 적었어요',
+    requestedAt: '2026-10-13T09:00:00',
+    decidedAt: '2026-10-13T10:00:00',
+  }),
+  refund({
+    refundId: 22,
+    status: RefundStatus.COMPLETED,
+    orderId: 88,
+    orderItemId: 881,
+    deductedShippingFeeAmount: 3000,
+    refundAmount: 30900,
     requestedAt: '2026-10-12T09:00:00',
-    orderNumber: '20261011-0088',
-    buyerNickname: '부산사과러',
-    itemText: '청송 꿀사과 부사 1kg (5~6과) × 1',
-    reason: '배송지 문제',
-    amount: 12900,
-    shippingFee: 0,
-    rejectReason: null,
-  },
-  {
-    claimId: 21,
-    state: ClaimState.CLAIM_REJECTED,
-    requestedAt: '2026-10-10T16:30:00',
-    orderNumber: '20261010-0071',
-    buyerNickname: '연남동부엌',
-    itemText: '청송 사과즙 100% (30포) × 1',
-    reason: '주문 실수 (옵션·수량)',
-    amount: 29900,
-    shippingFee: 0,
+    decidedAt: '2026-10-12T09:30:00',
+    completedAt: '2026-10-12T09:31:00',
+  }),
+  refund({
+    refundId: 21,
+    status: RefundStatus.REJECTED,
+    orderId: 71,
+    orderItemId: 711,
+    productName: '청송 사과즙 100%',
+    optionName: '30포',
+    unitPrice: 29900,
+    itemAmount: 29900,
+    refundAmount: 29900,
     rejectReason: '이미 포장을 마쳐 오늘 출고했어요',
-  },
+    requestedAt: '2026-10-10T16:30:00',
+    decidedAt: '2026-10-10T17:00:00',
+  }),
+  refund({
+    refundId: 20,
+    status: RefundStatus.WITHDRAWN,
+    orderId: 70,
+    orderItemId: 701,
+    requestedAt: '2026-10-09T08:00:00',
+    decidedAt: '2026-10-09T08:20:00',
+  }),
 ]
 
 // ─── 정산 ────────────────────────────────────────────────

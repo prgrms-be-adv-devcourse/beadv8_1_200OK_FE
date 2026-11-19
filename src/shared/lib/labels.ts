@@ -12,7 +12,9 @@ import {
   ProductStatus,
   ProductVisibility,
   type RegionGroup,
+  ReviewAspect,
   ReviewMediaType,
+  ReviewSentiment,
   ShipmentCarrier,
   TermsType,
 } from '@/shared/api/types'
@@ -105,16 +107,34 @@ export const reviewMediaTypeLabels: Record<ReviewMediaType, string> = {
   [ReviewMediaType.VIDEO]: '영상',
 }
 
+export const reviewAspectLabels: Record<ReviewAspect, string> = {
+  [ReviewAspect.TASTE]: '맛',
+  [ReviewAspect.FRESHNESS]: '신선도',
+  [ReviewAspect.CONDITION]: '상품 상태',
+  [ReviewAspect.PACKAGING]: '포장',
+  [ReviewAspect.DELIVERY]: '배송',
+  [ReviewAspect.PRICE]: '가격',
+}
+
+export const reviewSentimentLabels: Record<ReviewSentiment, string> = {
+  [ReviewSentiment.POSITIVE]: '긍정',
+  [ReviewSentiment.NEGATIVE]: '부정',
+  [ReviewSentiment.NEUTRAL]: '중립',
+  [ReviewSentiment.MIXED]: '혼합',
+  [ReviewSentiment.NOT_MENTIONED]: '언급 없음',
+}
+
 export const payoutEventTypeLabels: Record<PayoutEventType, string> = {
   [PayoutEventType.SALE_AMOUNT]: '상품판매 대금',
   [PayoutEventType.SALE_FEE]: '상품판매 수수료',
   [PayoutEventType.SALE_SHIPPING_FEE]: '상품판매 배송비',
 }
 
-// 주문 상품 상태 8종 (GET /orders/{orderId} items[].status, design/COMPONENTS.md 상태 배지 세트)
+// 주문 상품 상태 9종 (GET /orders/{orderId} items[].status, design/COMPONENTS.md 상태 배지 세트)
 export const orderItemStatusLabels: Record<OrderItemStatus, string> = {
   [OrderItemStatus.PAYMENT_PENDING]: '결제 대기',
   [OrderItemStatus.PAYMENT_FAILED]: '결제 실패',
+  [OrderItemStatus.CANCELED]: '주문 취소',
   [OrderItemStatus.PREPARING]: '상품 준비 중',
   [OrderItemStatus.SHIPPING]: '배송 중',
   [OrderItemStatus.DELIVERED]: '배송 완료',

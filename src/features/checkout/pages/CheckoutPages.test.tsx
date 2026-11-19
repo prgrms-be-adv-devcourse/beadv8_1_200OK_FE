@@ -52,6 +52,7 @@ async function fillAndAgree(user: User) {
   await user.type(await screen.findByLabelText('받는 분'), '이서연')
   await user.type(screen.getByLabelText('연락처'), '010-2468-1357')
   await user.click(screen.getByRole('button', { name: '우편번호 찾기' }))
+  await user.type(screen.getByLabelText('상세주소'), '3층')
   await user.click(screen.getByRole('button', { name: '이번 주문에 적용' }))
   await user.click(screen.getByLabelText('[필수] 주문 정보를 판매자에게 제공하는 데 동의해요'))
 }
@@ -79,7 +80,12 @@ describe('CheckoutPage', () => {
         return HttpResponse.json({
           ...remoteQuoteSample,
           regionGroup: 'GENERAL',
-          sellers: remoteQuoteSample.sellers.map((s) => ({ ...s, regionSurcharge: 0 })),
+          sellers: remoteQuoteSample.sellers.map((s) => ({
+            ...s,
+            regionSurcharge: 0,
+            shippingFee: 0,
+          })),
+          totalShippingFee: 0,
         })
       }),
       http.post('*/api/v1/orders', async ({ request }) => {
@@ -114,6 +120,7 @@ describe('CheckoutPage', () => {
         recipientPhone: '010-2468-1357',
         zipCode: '04524',
         address: '서울 중구 세종대로 110',
+        addressDetail: '3층',
         thirdPartyProvisionAgreed: true,
         expectedTotalAmount: 39800,
       },
@@ -141,6 +148,27 @@ describe('CheckoutPage', () => {
     expect(bodies[0]).toMatchObject({ expectedTotalAmount: 45800 })
   })
 
+  it('견적에 실패하면 결제를 막고, 다시 불러오면 견적 금액으로 결제할 수 있다', async () => {
+    let fail = true
+    server.use(
+      http.post('*/api/v1/shipments/fee-quotes', () =>
+        fail ? problem(500, '서버 오류') : HttpResponse.json(remoteQuoteSample),
+      ),
+    )
+    const { user } = renderCheckout()
+
+    await fillAndAgree(user)
+    expect(await screen.findByText('배송비를 불러오지 못했어요')).toBeInTheDocument()
+    for (const button of screen.getAllByRole('button', { name: '결제하기' })) {
+      expect(button).toBeDisabled()
+    }
+    fail = false
+    await user.click(screen.getByRole('button', { name: '배송비 다시 불러오기' }))
+    for (const button of await screen.findAllByRole('button', { name: '45,800원 결제하기' })) {
+      expect(button).toBeEnabled()
+    }
+  })
+
   it('잔액이 부족하면 부족한 만큼 충전하러 보낸다', async () => {
     server.use(
       http.get('*/api/v1/wallets/me/balance', () =>
@@ -156,7 +184,7 @@ describe('CheckoutPage', () => {
   })
 
   it('금액이 바뀌면(409) 주문서를 다시 불러와 바뀐 금액을 알리고, 입력한 배송지는 그대로 둔다', async () => {
-    const changed: Checkout = { ...checkoutSample, totalProductAmount: 41800, totalAmount: 41800 }
+    const changed: Checkout = { ...checkoutSample, totalProductAmount: 41800 }
     let loads = 0
     server.use(
       http.get('*/api/v1/orders/checkout', () => {
@@ -200,6 +228,89 @@ describe('CheckoutPage', () => {
     fail = false
     await user.click(screen.getByRole('button', { name: '다시 결제하기' }))
     await waitFor(() => expect(screen.getByText(/주문번호 184/)).toBeInTheDocument())
+  })
+
+  it('주문에 Idempotency-Key를 보내고, 다시 결제할 때도 같은 키를 쓴다', async () => {
+    const keys: (string | null)[] = []
+    server.use(
+      http.post('*/api/v1/orders', ({ request }) => {
+        keys.push(request.headers.get('Idempotency-Key'))
+        return keys.length === 1
+          ? problem(409, '예치금 잔액이 부족합니다.')
+          : HttpResponse.json({ orderId: SAMPLE_ORDER_ID }, { status: 201 })
+      }),
+    )
+    const { user } = renderCheckout()
+
+    await fillAndAgree(user)
+    await pay(user, '39,800원 결제하기')
+    await user.click(await screen.findByRole('button', { name: '다시 결제하기' }))
+
+    expect(await screen.findByText(/주문번호 184/)).toBeInTheDocument()
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toMatch(/^[\w-]{1,64}$/)
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('주문서에 새로 들어오면 새 키를 쓴다', async () => {
+    const keys: (string | null)[] = []
+    server.use(
+      http.post('*/api/v1/orders', ({ request }) => {
+        keys.push(request.headers.get('Idempotency-Key'))
+        return problem(409, '예치금 잔액이 부족합니다.')
+      }),
+    )
+    const first = renderCheckout()
+    await fillAndAgree(first.user)
+    await pay(first.user, '39,800원 결제하기')
+    await screen.findByText('결제하지 못했어요')
+    first.unmount()
+
+    const { user } = renderCheckout()
+    await fillAndAgree(user)
+    await pay(user, '39,800원 결제하기')
+    await screen.findByText('결제하지 못했어요')
+
+    expect(keys).toHaveLength(2)
+    expect(keys[1]).not.toBe(keys[0])
+  })
+
+  it('같은 키의 처음 주문을 아직 처리 중이면(409) 잠시 뒤 다시 누르라고 해요체로 알린다', async () => {
+    server.use(
+      http.post('*/api/v1/orders', () =>
+        problem(409, '같은 주문 요청을 처리하고 있습니다. 잠시 후 주문 내역을 확인해 주세요.'),
+      ),
+    )
+    const { user } = renderCheckout()
+
+    await fillAndAgree(user)
+    await pay(user, '39,800원 결제하기')
+
+    expect(await screen.findByText('결제하지 못했어요')).toBeInTheDocument()
+    expect(screen.getByText(/앞서 보낸 주문을 아직 처리하고 있어요/)).toBeInTheDocument()
+    expect(screen.queryByText(/처리하고 있습니다/)).not.toBeInTheDocument()
+    expect(screen.queryByText('주문 금액이 바뀌었어요')).not.toBeInTheDocument()
+  })
+
+  it('배송 요청사항을 적으면 앞뒤 공백을 지워 보내고, 비우면 보내지 않는다', async () => {
+    const bodies: Record<string, unknown>[] = []
+    server.use(
+      http.post('*/api/v1/orders', async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>)
+        return problem(409, '예치금 잔액이 부족합니다.')
+      }),
+    )
+    const { user } = renderCheckout()
+
+    await fillAndAgree(user)
+    await pay(user, '39,800원 결제하기')
+    await screen.findByText('결제하지 못했어요')
+    await user.type(screen.getByLabelText('배송 요청사항 (선택)'), '  문 앞에 놓아 주세요 ')
+    await user.click(screen.getByRole('button', { name: '다시 결제하기' }))
+
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies[0]).not.toHaveProperty('deliveryNote')
+    expect(bodies[1]).toMatchObject({ deliveryNote: '문 앞에 놓아 주세요' })
   })
 
   it('충전에 다녀와도(다시 그려도) 적어 둔 배송지를 채우고, 주문하면 초안을 지운다', async () => {

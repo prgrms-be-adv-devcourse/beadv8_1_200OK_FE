@@ -14,7 +14,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core'
-import { CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronRight, CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   Controller,
@@ -81,6 +81,8 @@ export type SellerProductFormViewProps = {
   /** 처음부터 오류 요약을 보여 준다 (미리보기) */
   defaultShowErrors?: boolean
   defaultDeleteOpen?: boolean
+  /** 수정 화면 폼 아래 ‘리뷰 반응’ 링크(S-11 상품 리뷰 분석) */
+  reviewsTo?: string
 }
 
 /** 재고 칸 안내: 배정 수량이 있으면 그 아래로 못 줄인다고, 아니면 0일 때 품절 안내 */
@@ -162,6 +164,7 @@ export function SellerProductFormView({
   deleting = false,
   defaultShowErrors = false,
   defaultDeleteOpen = false,
+  reviewsTo,
 }: SellerProductFormViewProps) {
   const [submitted, setSubmitted] = useState(defaultShowErrors)
   const [deleteOpen, setDeleteOpen] = useState(defaultDeleteOpen)
@@ -601,6 +604,28 @@ export function SellerProductFormView({
           </DisabledReason>
         </div>
       </form>
+
+      {reviewsTo && (
+        <section className={classes.card} aria-labelledby="sec-reviews">
+          <div className={classes.sectionHead}>
+            <h2 id="sec-reviews" className={classes.sectionTitle}>
+              리뷰 반응
+            </h2>
+            <p className={classes.help}>
+              감성 분석 · 리뷰 키워드 · 리뷰 목록을 리뷰 분석 화면에서 한 번에 볼 수 있어요.
+            </p>
+          </div>
+          <Button
+            component={Link}
+            to={reviewsTo}
+            variant="outline"
+            rightSection={<ChevronRight size={16} aria-hidden="true" />}
+            className={classes.reviewsLink}
+          >
+            이 상품 리뷰 분석 보기
+          </Button>
+        </section>
+      )}
 
       <Modal opened={deleteOpen} onClose={() => setDeleteOpen(false)} title="상품을 삭제할까요?">
         <Text>

@@ -1,3 +1,6 @@
+// Sentry는 router.tsx가 라우터를 만들기 전에 켜야 한다. 맨 위에 둔다
+import './instrument'
+
 // CSS 순서: Mantine core → dates → notifications → dropzone → 서체 → tokens.css(맨 마지막).
 // Mantine은 *.layer.css(@layer mantine)로 불러온다. 레이어 밖에 있는 tokens.css와 테마 CSS Modules
 // (shared/styles/components)가 불러오는 순서·청크 순서와 상관없이 Mantine 기본 스타일보다 우선한다.
@@ -8,6 +11,7 @@ import '@mantine/dropzone/styles.layer.css'
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import '@/shared/styles/tokens.css'
 
+import * as Sentry from '@sentry/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
@@ -32,7 +36,12 @@ if (!container) {
   throw new Error('#root element not found')
 }
 
-createRoot(container).render(
+// 라우트 ErrorBoundary 밖에서 난 렌더 오류(AppProviders 등)도 Sentry로 보낸다.
+// 라우트 안 오류는 RootErrorBoundary가 보내므로 onCaughtError는 달지 않는다(같은 오류를 두 번 보냄)
+createRoot(container, {
+  onUncaughtError: Sentry.reactErrorHandler(),
+  onRecoverableError: Sentry.reactErrorHandler(),
+}).render(
   <StrictMode>
     <AppProviders>
       <RouterProvider router={router} />

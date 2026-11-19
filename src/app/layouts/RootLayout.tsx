@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/react'
+import { useEffect } from 'react'
 import { isRouteErrorResponse, Outlet, ScrollRestoration, useRouteError } from 'react-router'
 import { EmptyView, QueryState } from '@/shared/ui'
 import classes from './RootLayout.module.css'
@@ -23,6 +25,11 @@ export function RootHydrateFallback() {
 export function RootErrorBoundary() {
   const error = useRouteError()
   const notFound = isRouteErrorResponse(error) && error.status === 404
+
+  // React Router가 ErrorBoundary로 잡은 오류는 위로 던지지 않아 Sentry가 스스로 보지 못한다
+  useEffect(() => {
+    if (!notFound) Sentry.captureException(error)
+  }, [error, notFound])
 
   if (import.meta.env.DEV && !notFound) console.error(error)
 

@@ -1,3 +1,4 @@
+import { notifications } from '@mantine/notifications'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
@@ -6,13 +7,14 @@ import { SellerLayout } from '@/app/layouts/SellerLayout'
 import { pageOf, problem } from '@/mocks/handlers/_shared'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
+import { RefundStatus } from '@/shared/api/refund'
 import { MemberRole } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { cancelClaims, sellerShipments } from '../fixtures'
+import { sellerRefunds, sellerShipments } from '../fixtures'
 import { SellerClaimsPage, SellerOrdersPage } from './SellerWorkPages'
 
-// 주문·출고(출고 목록·송장·배송지 변경 승인·거절은 MSW로 연결) · 취소 요청 처리(클레임 API가 없어 화면 전체가 연결 전, 샘플 데이터를 그리지 않는다).
+// 주문·출고(출고 목록·송장·배송지 변경 승인·거절) · 취소 요청 처리(환불 목록·승인·거절). 모두 MSW로 연결.
 // 모바일 제목 줄은 판매자 레이아웃이 그리므로 레이아웃 안에서 렌더한다.
 
 function renderSeller(path: string) {
@@ -33,7 +35,10 @@ function renderSeller(path: string) {
 }
 
 beforeEach(() => setAccessToken(fakeToken({ memberId: 7, role: MemberRole.SELLER })))
-afterEach(() => clearAccessToken())
+afterEach(() => {
+  clearAccessToken()
+  notifications.clean()
+})
 
 describe('SellerOrdersPage', () => {
   it('내 출고 목록을 그리고 출고 전 배송에만 송장 등록을 둔다', async () => {
@@ -182,14 +187,115 @@ describe('SellerOrdersPage', () => {
 })
 
 describe('SellerClaimsPage', () => {
-  it('제목은 두고 본문은 연결 전 안내만 보여 준다', async () => {
+  const pending = sellerRefunds.filter((r) => r.status === RefundStatus.REQUESTED)
+
+  it('처음에는 승인 대기 요청만 받아 그리고, 대기 수를 탭과 메뉴에 보인다', async () => {
+    const statuses: (string | null)[] = []
+    server.use(
+      http.get('*/api/v1/seller/refunds', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        statuses.push(params.get('status'))
+        const status = params.get('status')
+        const rows = status ? sellerRefunds.filter((r) => r.status === status) : sellerRefunds
+        return HttpResponse.json(pageOf(rows, params, 25))
+      }),
+    )
     renderSeller('/seller/claims')
-    expect(await screen.findByText('아직 연결되지 않은 화면이에요')).toBeInTheDocument()
-    expect(screen.getAllByText('취소 요청 처리')).not.toHaveLength(0)
-    expect(screen.getByText(/필요한 API: 📝 판매자 취소 요청 목록/)).toBeInTheDocument()
-    for (const claim of cancelClaims) {
-      expect(screen.queryByText(claim.orderNumber, { exact: false })).not.toBeInTheDocument()
-    }
-    expect(screen.queryByRole('button', { name: /승인/ })).not.toBeInTheDocument()
+    expect(await screen.findAllByRole('button', { name: /취소 요청 승인$/ })).toHaveLength(
+      pending.length,
+    )
+    expect(screen.getAllByRole('article')).toHaveLength(pending.length)
+    expect(screen.getByRole('tab', { name: `승인 대기 ${pending.length}` })).toBeInTheDocument()
+    expect(statuses.every((status) => status === 'REQUESTED')).toBe(true)
+  })
+
+  it('전체 탭은 상태 없이 받는다', async () => {
+    const statuses: (string | null)[] = []
+    server.use(
+      http.get('*/api/v1/seller/refunds', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        statuses.push(params.get('status'))
+        return HttpResponse.json(pageOf(sellerRefunds, params, 25))
+      }),
+    )
+    const user = userEvent.setup()
+    renderSeller('/seller/claims')
+    await user.click(await screen.findByRole('tab', { name: '전체' }))
+    await waitFor(() => expect(statuses).toContain(null))
+    expect(await screen.findAllByRole('article')).toHaveLength(sellerRefunds.length)
+  })
+
+  it('승인하면 결정을 보내고 결과를 알린 뒤 목록을 다시 받는다', async () => {
+    let body: unknown
+    let listCalls = 0
+    server.use(
+      http.get('*/api/v1/seller/refunds', ({ request }) => {
+        listCalls += 1
+        return HttpResponse.json(pageOf(pending, new URL(request.url).searchParams, 25))
+      }),
+      http.patch('*/api/v1/seller/refunds/:refundId', async ({ params, request }) => {
+        body = { refundId: params.refundId, ...((await request.json()) as object) }
+        return HttpResponse.json({ ...pending[0], status: RefundStatus.PROCESSING })
+      }),
+    )
+    const user = userEvent.setup()
+    renderSeller('/seller/claims')
+    const [approve] = await screen.findAllByRole('button', { name: /취소 요청 승인$/ })
+    await user.click(approve as HTMLElement)
+    const dialog = await screen.findByRole('dialog', { name: '취소 요청을 승인할까요?' })
+    const callsBefore = listCalls
+    await user.click(within(dialog).getByRole('button', { name: '승인' }))
+
+    expect(
+      (await screen.findAllByText('승인했어요. 구매자에게 환불하고 있어요')).length,
+    ).toBeGreaterThan(0)
+    expect(body).toEqual({ refundId: '31', decision: 'APPROVE' })
+    await waitFor(() => expect(listCalls).toBeGreaterThan(callsBefore))
+  })
+
+  it('승인했어도 서버가 자동 거절하면 그 이유를 알린다', async () => {
+    server.use(
+      http.patch('*/api/v1/seller/refunds/:refundId', () =>
+        HttpResponse.json({
+          ...pending[0],
+          status: RefundStatus.REJECTED,
+          rejectReason: '이미 출고됐거나 취소된 상품이라 취소할 수 없습니다.',
+        }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderSeller('/seller/claims')
+    const [approve] = await screen.findAllByRole('button', { name: /취소 요청 승인$/ })
+    await user.click(approve as HTMLElement)
+    const dialog = await screen.findByRole('dialog', { name: '취소 요청을 승인할까요?' })
+    await user.click(within(dialog).getByRole('button', { name: '승인' }))
+    expect(
+      (await screen.findAllByText(/자동으로 거절됐어요. 이미 출고됐거나 취소된 상품이라/)).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('거절은 사유와 함께 보내고, 이미 처리된 요청(409)이면 창을 닫고 알린다', async () => {
+    let body: unknown
+    server.use(
+      http.patch('*/api/v1/seller/refunds/:refundId', async ({ request }) => {
+        body = await request.json()
+        return problem(409, '요청됨 상태의 환불만 처리할 수 있습니다.')
+      }),
+    )
+    const user = userEvent.setup()
+    renderSeller('/seller/claims')
+    const [reject] = await screen.findAllByRole('button', { name: /취소 요청 거절$/ })
+    await user.click(reject as HTMLElement)
+    const dialog = await screen.findByRole('dialog', { name: '취소 요청 거절' })
+    await user.type(within(dialog).getByLabelText(/거절 사유/), '이미 포장했어요')
+    await user.click(within(dialog).getByRole('button', { name: '거절하기' }))
+
+    expect(
+      (await screen.findAllByText('요청됨 상태의 환불만 처리할 수 있습니다.')).length,
+    ).toBeGreaterThan(0)
+    expect(body).toEqual({ decision: 'REJECT', rejectReason: '이미 포장했어요' })
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '취소 요청 거절' })).not.toBeInTheDocument(),
+    )
   })
 })

@@ -7,7 +7,7 @@ import type {
   ProductSummary,
 } from '@/shared/api/types'
 
-// 구매자 상품 조회. 모두 로그인 없이 부른다(04 Product, 08 Review 상품 리뷰 목록).
+// 구매자 상품 조회. 모두 로그인 없이 부른다(04 Product). 상품 리뷰 목록·키워드는 shared/api/productReviews.ts
 
 // ✅ GET /api/v1/products/categories
 export async function fetchCategories(): Promise<CategoryGroup[]> {
@@ -21,19 +21,6 @@ export async function fetchProducts(
   params: ProductListParams,
 ): Promise<ProductPage<ProductSummary>> {
   const { data } = await apiClient.get<ProductPage<ProductSummary>>('/api/v1/products', { params })
-  return data
-}
-
-// GET /api/v1/products/{productId}/reviews?page&size. 최신순.
-// TODO(api): 2026-10-18 로컬 서버에는 리뷰 API가 아직 없어 404(No static resource). Bruno 계약대로 연결해 둔다
-export async function fetchProductReviews(
-  productId: number,
-  params: { page: number; size: number },
-): Promise<ProductPage<ProductReview>> {
-  const { data } = await apiClient.get<ProductPage<ProductReview>>(
-    `/api/v1/products/${productId}/reviews`,
-    { params },
-  )
   return data
 }
 

@@ -12,10 +12,11 @@ import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { productDetailQueryOptions } from '@/shared/api/productDetail'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
-import type { Cart, CartItem, ProductDetail } from '@/shared/api/types'
+import { type Cart, type CartItem, MemberRole, type ProductDetail } from '@/shared/api/types'
 import { MAX_CART_QUANTITY } from '@/shared/lib/constants'
 import { showToast } from '@/shared/ui'
 import {
+  type AddCartItemResult,
   addCartItem,
   changeAllCartSelection,
   changeCartQuantity,
@@ -41,15 +42,16 @@ export const cartQueryOptions = () =>
 
 const useAuthSession = () => useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)
 
-/** 헤더 장바구니 개수(담긴 줄 수). 로그인하지 않았으면 부르지 않고 undefined */
+/** 헤더 장바구니 개수(담긴 줄 수). 비회원·관리자(장바구니 API 403)는 부르지 않고 undefined */
 export function useCartCount(): number | undefined {
   const auth = useAuthSession()
+  const canBuy = auth !== null && auth.role !== MemberRole.ADMIN
   const { data } = useQuery({
     ...cartQueryOptions(),
-    enabled: auth !== null,
+    enabled: canBuy,
     select: (cart) => cart.items.length,
   })
-  return auth ? data : undefined
+  return canBuy ? data : undefined
 }
 
 // 상품 상세를 이미 본 옵션이면 캐시에서 상품을 찾는다(products 상세 키: [products, 'detail', id])
@@ -221,46 +223,28 @@ export function useSettleCart() {
 
 export type AddToCartRequest = { productId: number; optionId: number; quantity: number }
 
-type AddResult = { merged: boolean; capped: boolean; added: boolean }
-
 /**
  * 상품 상세의 ‘장바구니 담기’(products → cart 공개 hook). 로그인 확인은 부르는 쪽이 한다(LoginRequiredModal).
- * 이미 담긴 옵션이면 서버가 409를 주므로 담긴 수량에 더한다(SCREENS ‘중복 담기 안내’, 최대 MAX_CART_QUANTITY).
+ * 이미 담긴 옵션이면 서버가 수량을 더해 200을 준다(SCREENS ‘중복 담기 안내’, 최대 MAX_CART_QUANTITY).
  * 결과·실패는 토스트로 알린다(실패는 서버 detail).
  */
 export function useAddToCart() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
-  const mutation = useMutation<AddResult, ApiError | Error, AddToCartRequest>({
+  const mutation = useMutation<AddCartItemResult, ApiError | Error, AddToCartRequest>({
     mutationKey: cartKeys.all,
-    mutationFn: async ({ productId, optionId, quantity }) => {
+    mutationFn: ({ productId, optionId, quantity }) => {
       rememberOptionProduct(optionId, productId)
-      try {
-        await addCartItem({ productOptionId: optionId, quantity })
-        return { merged: false, capped: false, added: true }
-      } catch (error) {
-        if (!isApiError(error) || error.status !== 409) throw error
-        // 409는 ‘이미 담긴 상품’ 말고도 판매 상태일 수 있어 장바구니에 그 옵션이 있을 때만 더한다
-        const cart = await queryClient.fetchQuery({ ...cartQueryOptions(), staleTime: 0 })
-        const existing = cart.items.find((item) => item.productOptionId === optionId)
-        if (!existing) throw error
-        const wanted = existing.quantity + quantity
-        // 한도를 넘게 담긴 줄(서버는 한도를 보지 않는다)은 줄이지 않는다
-        const next = Math.max(existing.quantity, Math.min(wanted, MAX_CART_QUANTITY))
-        if (next !== existing.quantity) await changeCartQuantity(existing.cartItemId, next)
-        return { merged: true, capped: next < wanted, added: next !== existing.quantity }
-      }
+      return addCartItem({ productOptionId: optionId, quantity })
     },
-    onSuccess: ({ merged, capped, added }) => {
+    onSuccess: ({ merged, quantity }) => {
       showToast({
-        message: !added
-          ? `이미 최대 수량(${MAX_CART_QUANTITY}개)을 담았어요`
-          : capped
-            ? `한 번에 ${MAX_CART_QUANTITY}개까지 담을 수 있어 ${MAX_CART_QUANTITY}개로 맞췄어요`
-            : merged
-              ? '이미 담긴 상품이라 수량을 더했어요'
-              : '장바구니에 담았어요',
+        message: !merged
+          ? '장바구니에 담았어요'
+          : quantity >= MAX_CART_QUANTITY
+            ? `이미 담긴 상품이라 최대 수량(${MAX_CART_QUANTITY}개)까지 담았어요`
+            : `이미 담긴 상품이라 수량을 더했어요. 지금 ${quantity}개 담겨 있어요`,
         action: { label: '장바구니 보기', onClick: () => navigate('/cart') },
       })
     },

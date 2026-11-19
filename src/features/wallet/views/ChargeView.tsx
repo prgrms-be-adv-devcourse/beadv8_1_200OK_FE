@@ -3,7 +3,7 @@ import { ChevronLeft, CircleAlert, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import type { TermsAgreeRequest, TermsItem } from '@/shared/api/types'
-import { CHARGE_AMOUNT_STEP, MIN_CHARGE_AMOUNT } from '@/shared/lib/constants'
+import { MIN_CHARGE_AMOUNT } from '@/shared/lib/constants'
 import { formatPrice } from '@/shared/lib/format'
 import { DisabledReason, PageHeader, PriceText } from '@/shared/ui'
 import { TermsAgreementModal } from '../components/TermsAgreementModal'
@@ -11,7 +11,7 @@ import classes from './ChargeView.module.css'
 
 // B-05 예치금 충전. 시안: b2c/Charge, ChargeMobile
 // 결제는 예치금으로만 하고 PG(토스페이먼츠)는 충전에만 쓴다(B-1). 주문서에서 잔액이 부족해 왔으면 부족 금액을 알려 주고 ‘부족한 금액만큼’을 준다.
-// 금액 규칙은 API(POST /wallets/me/charges): 10,000원 이상 · 10,000원 단위 · 충전 뒤 잔액 ≤ 보유 한도(GET /wallets/me/balance의 maxBalance).
+// 금액 규칙은 API(POST /wallets/me/charges): 10,000원 이상 · 충전 뒤 잔액 ≤ 보유 한도(GET /wallets/me/balance의 maxBalance).
 // 동의 안 한 필수 약관이 있으면 첫 충전 약관 시트를 먼저 띄운다.
 
 export type ChargeRequest = {
@@ -46,9 +46,9 @@ export const PG_UNAVAILABLE_MESSAGE = '결제 서비스를 준비하고 있어�
 
 const quickAmounts = [10_000, 30_000, 50_000, 100_000]
 
-/** 부족 금액을 최소 금액·단위에 맞춰 올림: 7,800 → 10,000, 12,000 → 20,000 */
+/** 부족 금액이 최소 충전 금액보다 적으면 최소 금액으로 올림: 7,800 → 10,000, 12,300 → 12,300 */
 export function roundUpCharge(shortfall: number): number {
-  return Math.max(MIN_CHARGE_AMOUNT, Math.ceil(shortfall / CHARGE_AMOUNT_STEP) * CHARGE_AMOUNT_STEP)
+  return Math.max(MIN_CHARGE_AMOUNT, shortfall)
 }
 
 export function ChargeView({
@@ -76,11 +76,9 @@ export function ChargeView({
   const amountError =
     amount > 0 && amount < MIN_CHARGE_AMOUNT
       ? `${formatPrice(MIN_CHARGE_AMOUNT)}부터 충전할 수 있어요`
-      : amount > 0 && amount % CHARGE_AMOUNT_STEP !== 0
-        ? `${formatPrice(CHARGE_AMOUNT_STEP)} 단위로 입력해 주세요`
-        : amount > room
-          ? `보유 한도를 넘어요. 지금은 ${formatPrice(room)}까지 충전할 수 있어요`
-          : null
+      : amount > room
+        ? `보유 한도를 넘어요. 지금은 ${formatPrice(room)}까지 충전할 수 있어요`
+        : null
   const chargeReason = pgUnavailable
     ? PG_UNAVAILABLE_MESSAGE
     : room === 0
@@ -134,8 +132,8 @@ export function ChargeView({
           icon={<CircleAlert />}
           title={`주문하려면 ${formatPrice(shortfall)}이 더 필요해요`}
         >
-          충전은 {formatPrice(MIN_CHARGE_AMOUNT)}부터 {formatPrice(CHARGE_AMOUNT_STEP)} 단위로 할 수
-          있어요. 충전하면 주문서로 돌아가 결제할 수 있어요.
+          충전은 {formatPrice(MIN_CHARGE_AMOUNT)}부터 할 수 있어요. 충전하면 주문서로 돌아가 결제할
+          수 있어요.
         </Alert>
       )}
       {errorMessage && (
@@ -189,7 +187,7 @@ export function ChargeView({
         </Group>
         {roundedUp && shortfall && (
           <Text className={`pd-num ${classes.help}`} role="status">
-            부족한 {formatPrice(shortfall)}을 {formatPrice(CHARGE_AMOUNT_STEP)} 단위로 맞춰{' '}
+            최소 충전 금액에 맞춰 부족한 {formatPrice(shortfall)} 대신{' '}
             {formatPrice(roundUpCharge(shortfall))}으로 정했어요
           </Text>
         )}
@@ -202,8 +200,8 @@ export function ChargeView({
       <ul className={classes.notes}>
         <li>토스페이먼츠 결제창에서 카드·간편결제로 결제해요</li>
         <li>
-          한 번에 {formatPrice(MIN_CHARGE_AMOUNT)}부터 {formatPrice(CHARGE_AMOUNT_STEP)} 단위로,
-          보유 예치금이 {formatPrice(maxBalance)}을 넘지 않게 충전할 수 있어요
+          한 번에 {formatPrice(MIN_CHARGE_AMOUNT)}부터, 보유 예치금이 {formatPrice(maxBalance)}을
+          넘지 않게 충전할 수 있어요
         </li>
       </ul>
 

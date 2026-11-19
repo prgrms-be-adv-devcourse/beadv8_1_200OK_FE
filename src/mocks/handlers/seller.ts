@@ -6,6 +6,7 @@ import {
   payoutDetails,
   payoutItems,
   payouts,
+  reviewSentimentsByProduct,
   sellerProductDetail101,
   sellerShipmentDetails,
   sellerShipments,
@@ -32,6 +33,10 @@ export const sellerHandlers = [
       ? HttpResponse.json(sellerProductDetail101)
       : problem(404, '상품을 찾을 수 없습니다.'),
   ),
+  http.get('*/api/v1/sellers/me/products/:productId/review-sentiments', ({ params }) => {
+    const summary = reviewSentimentsByProduct[Number(params.productId)]
+    return summary ? HttpResponse.json(summary) : problem(404, '상품을 찾을 수 없습니다.')
+  }),
   http.patch('*/api/v1/products/:productId/status', () => new HttpResponse(null, { status: 204 })),
   http.patch(
     '*/api/v1/products/:productId/visibility',

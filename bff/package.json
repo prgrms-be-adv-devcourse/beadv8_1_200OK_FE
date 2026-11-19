@@ -12,14 +12,16 @@
     }
   },
   "scripts": {
-    "dev": "node --watch --env-file-if-exists=.env src/main.ts",
-    "start": "node src/main.ts",
+    "dev": "node --watch --env-file-if-exists=.env --import ./src/instrument.ts src/main.ts",
+    "start": "node --import ./src/instrument.ts src/main.ts",
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "test:redis": "vitest run --config vitest.redis.config.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
+    "@sentry/hono": "11.14.0",
+    "@sentry/node": "11.14.0",
     "hono": "^4.13.14",
     "redis": "^6.3.0",
     "zod": "^4.6.7"

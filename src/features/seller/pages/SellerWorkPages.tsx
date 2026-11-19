@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { isApiError } from '@/shared/api/ApiError'
 import { uploadMedia } from '@/shared/api/media'
+import { type RefundDecisionRequest, RefundStatus } from '@/shared/api/refund'
 import {
   MediaPurpose,
   ProductStatus,
@@ -19,16 +21,19 @@ import {
   useChangeProductVisibility,
   useCreateProduct,
   useDecideAddressChange,
+  useDecideRefund,
   useDeleteProduct,
   useDispatchShipment,
   useMyProducts,
+  usePendingRefundCount,
   useSellerProductDetail,
+  useSellerRefunds,
   useSellerShipmentDetail,
   useSellerShipments,
   useUpdateProduct,
 } from '../queries'
 import type { SellerProductRow } from '../types'
-import { SellerClaimsNotConnectedView } from '../views/SellerClaimsView'
+import { refundFilters, SellerClaimsView } from '../views/SellerClaimsView'
 import { SellerOrdersView } from '../views/SellerOrdersView'
 import { SellerProductFormView } from '../views/SellerProductFormView'
 import { type ProductTab, SellerProductsView } from '../views/SellerProductsView'
@@ -37,8 +42,9 @@ import { type ProductTab, SellerProductsView } from '../views/SellerProductsView
 // 상품: ✅ 목록 GET /sellers/me/products, 등록 POST /products, 수정 PUT /products/{id}(version, 판매 상태·노출 포함),
 //   상태·노출 PATCH /products/{id}/status · /visibility(목록에서 바로), 삭제 DELETE, 사진 POST /media/PRODUCT.
 // 수정 화면은 ✅ GET /sellers/me/products/{id}(version · 옵션 id · 재고 · 상태 · 노출)로 채우고, 저장할 때 그 version을 그대로 보낸다.
+//   폼 아래 ‘리뷰 반응’은 S-11 상품 리뷰 분석(/seller/reviews/:productId)으로 보내는 링크다.
 //   저장·상태·노출 변경이 성공하면 서버 version이 오르므로 상세·목록을 다시 받는다. 409면 ‘최신 내용 불러오기’로 상세를 다시 받는다.
-// 주문·출고(S-06)는 ✅ 출고 API로 연결. TODO(api): 📝 판매자 취소 요청(클레임) API 없음 → 취소 요청 화면 전체를 연결 전(NotConnected)으로 둔다.
+// 주문·출고(S-06)는 ✅ 출고 API로, 취소 요청(S-07)은 ✅ 환불 API로 연결.
 
 const productTabs: ProductTab[] = ['ALL', ...Object.values(ProductStatus)]
 
@@ -262,6 +268,7 @@ function ProductEditForm({
       fieldErrors={failure.fieldErrors}
       conflict={failure.conflict}
       onReload={onReload}
+      reviewsTo={`/seller/reviews/${product.productId}`}
       onSubmit={(values) =>
         update.mutate(
           {
@@ -297,7 +304,7 @@ function ProductEditForm({
 
 // S-06 주문·출고 /seller/orders. ✅ 목록 GET /seller/shipments?page(?page=는 1부터), 송장 POST …/dispatch,
 //   배송지 변경 승인·거절 PATCH(대기 요청의 requestId는 상세 GET /seller/shipments/{id}에서 받는다).
-// TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 API 없음, 📝 판매자 취소 요청(클레임)은 아래 SellerClaimsPage.
+// TODO(api): ❌ 출고 지연 알리기 · 판매자 취소 API 없음. 구매자 취소 요청은 아래 SellerClaimsPage.
 type ShipmentModal = { type: 'invoice' | 'address'; shipmentId: number } | null
 
 export function SellerOrdersPage() {
@@ -390,7 +397,60 @@ export function SellerOrdersPage() {
   )
 }
 
-// TODO(api): 📝 판매자 취소 요청(클레임) 목록·승인·거절 API 없음 → 화면 전체를 연결 전으로 둔다.
+// S-07 취소 요청 처리 /seller/claims?status=(기본 승인 대기, ALL은 전체).
+// ✅ 목록 GET /seller/refunds?status&page, 승인·거절 PATCH /seller/refunds/{id}.
+// 409(이미 처리·철회됨)·404는 창을 닫고 안내만 한다. 목록은 성공·실패와 상관없이 다시 받는다.
+const approvedMessages: Partial<Record<RefundStatus, string>> = {
+  [RefundStatus.PROCESSING]: '승인했어요. 구매자에게 환불하고 있어요',
+  [RefundStatus.COMPLETED]: '승인하고 환불을 마쳤어요',
+}
+
 export function SellerClaimsPage() {
-  return <SellerClaimsNotConnectedView />
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('status')
+  const filter = refundFilters.find((value) => value === raw) ?? RefundStatus.REQUESTED
+  const refunds = useSellerRefunds(filter === 'ALL' ? null : filter)
+  const pendingCount = usePendingRefundCount()
+  const decide = useDecideRefund()
+
+  const submit = async (refundId: number, body: RefundDecisionRequest): Promise<string | null> => {
+    try {
+      const result = await decide.mutateAsync({ refundId, body })
+      if (body.decision === 'REJECT') {
+        showToast({ message: '취소 요청을 거절했어요' })
+      } else if (result.status === RefundStatus.REJECTED) {
+        showToast({ message: `자동으로 거절됐어요. ${result.rejectReason ?? ''}`.trim() })
+      } else {
+        showToast({ message: approvedMessages[result.status] ?? '승인했어요' })
+      }
+      return null
+    } catch (error) {
+      if (!isApiError(error)) return '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요'
+      if (error.status === 404 || error.status === 409) {
+        showToast({ message: error.detail })
+        return null
+      }
+      return error.detail
+    }
+  }
+
+  return (
+    <SellerClaimsView
+      status={refunds.data ? 'success' : refunds.isError ? 'error' : 'pending'}
+      refunds={refunds.data?.pages.flatMap((page) => page.content) ?? []}
+      filter={filter}
+      onFilterChange={(next) =>
+        setParams(next === RefundStatus.REQUESTED ? {} : { status: next }, { replace: true })
+      }
+      pendingCount={pendingCount.data}
+      hasMore={refunds.hasNextPage}
+      onLoadMore={() => void refunds.fetchNextPage()}
+      loadingMore={refunds.isFetchingNextPage}
+      onApprove={(refundId) => submit(refundId, { decision: 'APPROVE' })}
+      onReject={(refundId, rejectReason) => submit(refundId, { decision: 'REJECT', rejectReason })}
+      submitting={decide.isPending}
+      onRetry={() => void refunds.refetch()}
+      errorMessage={refunds.error?.detail}
+    />
+  )
 }

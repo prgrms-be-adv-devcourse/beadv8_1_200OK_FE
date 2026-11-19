@@ -50,15 +50,7 @@ export function useShippingFeeQuote(checkout: Checkout | undefined, postalCode: 
   })
 }
 
-/** 도서산간 추가 운임 합계 (견적 전이면 0) */
-export function regionSurchargeOf(quote: ShippingFeeQuote | undefined): number {
-  return quote?.sellers.reduce((sum, seller) => sum + seller.regionSurcharge, 0) ?? 0
-}
-
-/** 화면에 보여 주고 주문에 보낼 최종 금액 = 주문서 합계 + 도서산간 추가 운임 */
-export function expectedTotalOf(checkout: Checkout, quote: ShippingFeeQuote | undefined): number {
-  return checkout.totalAmount + regionSurchargeOf(quote)
-}
+export type CreateOrderVariables = { request: CreateOrderRequest; idempotencyKey: string }
 
 /**
  * 주문 생성. 성공하면 장바구니(주문한 상품이 빠짐)·주문·예치금 캐시를 무효화한다.
@@ -66,8 +58,8 @@ export function expectedTotalOf(checkout: Checkout, quote: ShippingFeeQuote | un
  */
 export function useCreateOrder() {
   const queryClient = useQueryClient()
-  return useMutation<CreateOrderResponse, ApiError | Error, CreateOrderRequest>({
-    mutationFn: createOrder,
+  return useMutation<CreateOrderResponse, ApiError | Error, CreateOrderVariables>({
+    mutationFn: ({ request, idempotencyKey }) => createOrder(request, idempotencyKey),
     onSuccess: () => {
       for (const prefix of [queryKeyPrefix.cart, queryKeyPrefix.orders, queryKeyPrefix.wallet]) {
         void queryClient.invalidateQueries({ queryKey: [prefix] })

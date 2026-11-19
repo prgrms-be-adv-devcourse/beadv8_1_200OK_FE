@@ -1,5 +1,6 @@
+import { appleReviewKeywords, appleReviews } from '@/features/products/fixtures'
+import { RefundStatus } from '@/shared/api/refund'
 import { ProductStatus } from '@/shared/api/types'
-import { ClaimState } from '@/shared/lib/claimState'
 import { LOW_STOCK_THRESHOLD, MIN_WITHDRAWAL_AMOUNT } from '@/shared/lib/constants'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
@@ -12,18 +13,21 @@ import {
   adjustedPayoutDetail,
   adjustedPayoutItems,
   appleFormValues,
-  cancelClaims,
   followers,
   homeAsOf,
   homeStats,
   myProfile,
   myStore,
+  noReviewSentiments,
   payoutDetails,
   payoutItems,
   payoutOutlook,
   payouts,
   productStats,
+  reviewOverviewOf,
+  reviewSentiments101,
   sellerProducts,
+  sellerRefunds,
   sellerShipmentDetail2,
   sellerShipments,
   sellerWallet,
@@ -32,11 +36,7 @@ import {
   todos,
   withdrawals,
 } from './fixtures'
-import {
-  SellerClaimsNotConnectedView,
-  SellerClaimsView,
-  type SellerClaimsViewProps,
-} from './views/SellerClaimsView'
+import { SellerClaimsView, type SellerClaimsViewProps } from './views/SellerClaimsView'
 import { SellerHomeView, type SellerHomeViewProps } from './views/SellerHomeView'
 import { SellerOrdersView, type SellerOrdersViewProps } from './views/SellerOrdersView'
 import { SellerPayoutsView, type SellerPayoutsViewProps } from './views/SellerPayoutsView'
@@ -44,8 +44,13 @@ import {
   SellerProductFormView,
   type SellerProductFormViewProps,
 } from './views/SellerProductFormView'
+import {
+  SellerProductReviewsView,
+  type SellerProductReviewsViewProps,
+} from './views/SellerProductReviewsView'
 import { SellerProductsView, type SellerProductsViewProps } from './views/SellerProductsView'
 import { SellerProfileView, type SellerProfileViewProps } from './views/SellerProfileView'
+import { SellerReviewOverviewView } from './views/SellerReviewOverviewView'
 import { SellerWalletView, type SellerWalletViewProps } from './views/SellerWalletView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 판매자 레이아웃 안에서 그린다.
@@ -61,6 +66,12 @@ const home = (props: Partial<SellerHomeViewProps> = {}) => (
     todos={todos}
     walletBalance={sellerWalletBalance}
     products={productStats}
+    reviews={{
+      status: 'success',
+      overview: reviewOverviewOf(),
+      onRetryFailed: noop,
+      retryingFailed: false,
+    }}
     {...props}
   />
 )
@@ -118,6 +129,32 @@ export const sellerCenterPreviews: ScreenPreview[] = [
             stats: { newOrders: 0, waitingShipment: 0, cancelRequests: 0 },
             expectedPayout: 0,
           }),
+      },
+      {
+        id: 'reviews-calm',
+        label: '리뷰 분석 · 먼저 볼 항목 없음',
+        session: 'seller',
+        render: () =>
+          home({
+            reviews: {
+              status: 'success',
+              overview: reviewOverviewOf([101, 106]),
+              onRetryFailed: noop,
+              retryingFailed: false,
+            },
+          }),
+      },
+      {
+        id: 'reviews-loading',
+        label: '리뷰 분석 · 로딩',
+        session: 'seller',
+        render: () => home({ reviews: { status: 'pending' } }),
+      },
+      {
+        id: 'reviews-error',
+        label: '리뷰 분석 · 오류',
+        session: 'seller',
+        render: () => home({ reviews: { status: 'error', onRetry: noop } }),
       },
       {
         id: 'payout-loading',
@@ -194,6 +231,22 @@ export const sellerCenterPreviews: ScreenPreview[] = [
           }),
       },
       {
+        id: 'no-postal-code',
+        label: '출고지 우편번호 없음 (이 칸이 생기기 전 프로필 · 신청 값도 없음)',
+        session: 'seller',
+        render: () => profile({ profile: { ...myProfile, originPostalCode: null } }),
+      },
+      {
+        id: 'postal-code-from-application',
+        label: '출고지 우편번호 없음 → 승인 신청 값으로 채움',
+        session: 'seller',
+        render: () =>
+          profile({
+            profile: { ...myProfile, originPostalCode: null },
+            fallbackPostalCode: '37421',
+          }),
+      },
+      {
         id: 'error',
         label: '저장 실패 (서버)',
         session: 'seller',
@@ -266,6 +319,7 @@ const edit = (props: Partial<SellerProductFormViewProps> = {}) =>
     defaultValues: appleFormValues,
     photos: photosOf(3),
     onDelete: noop,
+    reviewsTo: '/seller/reviews/101',
     ...props,
   })
 
@@ -306,17 +360,39 @@ const withAddressModal = (props: Partial<AddressRequestModalProps> = {}) => (
   </>
 )
 
-const pendingClaims = cancelClaims.filter((c) => c.state === ClaimState.CLAIM_PENDING)
+const pendingRefunds = sellerRefunds.filter((r) => r.status === RefundStatus.REQUESTED)
+const resolved = async () => null
 
 const claims = (props: Partial<SellerClaimsViewProps> = {}) => (
   <SellerClaimsView
     status="success"
-    claims={pendingClaims}
-    tab="PENDING"
-    onTabChange={noop}
-    counts={{ PENDING: 2, DONE: 2 }}
-    onApprove={noop}
-    onReject={noop}
+    refunds={pendingRefunds}
+    filter={RefundStatus.REQUESTED}
+    onFilterChange={noop}
+    pendingCount={pendingRefunds.length}
+    onApprove={resolved}
+    onReject={resolved}
+    {...props}
+  />
+)
+
+const overviewSuccess = (data = reviewOverviewOf(), retryingFailed = false) => (
+  <SellerReviewOverviewView
+    state={{ status: 'success', overview: data, onRetryFailed: noop, retryingFailed }}
+  />
+)
+
+const productReviews = (props: Partial<SellerProductReviewsViewProps> = {}) => (
+  <SellerProductReviewsView
+    productId={101}
+    productName="청송 꿀사과 부사"
+    sentiments={{ status: 'success', summary: reviewSentiments101 }}
+    keywordStatus="success"
+    keywords={appleReviewKeywords.keywords}
+    onSelectKeyword={noop}
+    reviewStatus="success"
+    reviews={appleReviews}
+    reviewTotal={appleReviews.length}
     {...props}
   />
 )
@@ -546,40 +622,205 @@ export const sellerWorkPreviews: ScreenPreview[] = [
     layout: 'seller',
     path: '/seller/claims',
     states: [
-      {
-        id: 'not-connected',
-        label: '지금 연결 모양 (연결 전)',
-        session: 'seller',
-        render: () => <SellerClaimsNotConnectedView />,
-      },
-      { id: 'pending', label: '처리 대기', session: 'seller', render: () => claims() },
+      { id: 'pending', label: '승인 대기', session: 'seller', render: () => claims() },
       {
         id: 'approve',
         label: '승인 확인',
         session: 'seller',
-        render: () => claims({ defaultModal: { type: 'approve', claimId: 31 } }),
+        render: () => claims({ defaultModal: { type: 'approve', refundId: 31 } }),
       },
       {
         id: 'reject',
         label: '거절 사유',
         session: 'seller',
-        render: () => claims({ defaultModal: { type: 'reject', claimId: 31 } }),
+        render: () => claims({ defaultModal: { type: 'reject', refundId: 31 } }),
       },
       {
-        id: 'done',
-        label: '처리 완료',
+        id: 'all',
+        label: '전체 (처리 중 · 완료 · 거절 · 철회)',
         session: 'seller',
-        render: () =>
-          claims({
-            tab: 'DONE',
-            claims: cancelClaims.filter((c) => c.state !== ClaimState.CLAIM_PENDING),
-          }),
+        render: () => claims({ filter: 'ALL', refunds: sellerRefunds }),
+      },
+      {
+        id: 'more',
+        label: '더 보기',
+        session: 'seller',
+        render: () => claims({ filter: 'ALL', refunds: sellerRefunds, hasMore: true }),
       },
       {
         id: 'empty',
         label: '처리할 요청 없음',
         session: 'seller',
-        render: () => claims({ claims: [], counts: { PENDING: 0, DONE: 2 } }),
+        render: () => claims({ refunds: [], pendingCount: 0 }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () => claims({ status: 'pending' }),
+      },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        session: 'seller',
+        render: () => claims({ status: 'error' }),
+      },
+    ],
+  },
+  {
+    id: 'seller-reviews',
+    title: 'S-10 리뷰 분석',
+    pageTitle: '리뷰 분석',
+    layout: 'seller',
+    path: '/seller/reviews',
+    states: [
+      { id: 'default', label: '상품 여러 개', session: 'seller', render: () => overviewSuccess() },
+      {
+        id: 'partial',
+        label: '일부 상품 반응 실패',
+        session: 'seller',
+        render: () => overviewSuccess(reviewOverviewOf([106])),
+      },
+      {
+        id: 'partial-retrying',
+        label: '일부 실패 · 다시 받는 중',
+        session: 'seller',
+        render: () => overviewSuccess(reviewOverviewOf([106]), true),
+      },
+      {
+        id: 'no-focus',
+        label: '먼저 볼 항목 없음 (언급 10개 이상 항목 없음)',
+        session: 'seller',
+        render: () => overviewSuccess(reviewOverviewOf([101, 106])),
+      },
+      {
+        id: 'zero-analyzed',
+        label: '분석 리뷰 0',
+        session: 'seller',
+        render: () =>
+          overviewSuccess({
+            ...reviewOverviewOf([101, 106, 109, 110]),
+            failed: [],
+          }),
+      },
+      {
+        id: 'no-products',
+        label: '상품 없음',
+        session: 'seller',
+        render: () =>
+          overviewSuccess({
+            ...reviewOverviewOf(),
+            productCount: 0,
+            analyzedReviewCount: 0,
+            ranked: [],
+            thin: [],
+            failed: [],
+          }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () => <SellerReviewOverviewView state={{ status: 'pending' }} />,
+      },
+      {
+        id: 'error',
+        label: '상품 목록 오류',
+        session: 'seller',
+        render: () => (
+          <SellerReviewOverviewView
+            state={{ status: 'error', errorMessage: '잠시 후 다시 시도해 주세요.', onRetry: noop }}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'seller-product-reviews',
+    title: 'S-11 상품 리뷰 분석',
+    pageTitle: '리뷰 분석',
+    layout: 'seller',
+    path: '/seller/reviews/101',
+    states: [
+      {
+        id: 'default',
+        label: '감성 · 키워드 · 리뷰',
+        session: 'seller',
+        render: () => productReviews(),
+      },
+      {
+        id: 'keyword',
+        label: '키워드로 거름',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            selectedKeywordId: 'C02',
+            reviews: appleReviews.slice(0, 1),
+            reviewTotal: 1,
+          }),
+      },
+      {
+        id: 'hidden',
+        label: '숨긴 상품 (공개 API 404)',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            keywordStatus: 'hidden',
+            keywords: [],
+            reviewStatus: 'hidden',
+            reviews: [],
+            reviewTotal: undefined,
+          }),
+      },
+      {
+        id: 'no-reviews',
+        label: '분석한 리뷰 · 리뷰 없음',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            sentiments: { status: 'success', summary: noReviewSentiments },
+            keywords: [],
+            reviews: [],
+            reviewTotal: 0,
+          }),
+      },
+      {
+        id: 'more',
+        label: '리뷰 더 보기',
+        session: 'seller',
+        render: () => productReviews({ hasMore: true, onLoadMore: noop }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            sentiments: { status: 'pending' },
+            keywordStatus: 'pending',
+            reviewStatus: 'pending',
+            reviews: [],
+            reviewTotal: undefined,
+          }),
+      },
+      {
+        id: 'error',
+        label: '감성 · 리뷰 오류',
+        session: 'seller',
+        render: () =>
+          productReviews({
+            sentiments: {
+              status: 'error',
+              errorMessage: '상품을 찾을 수 없습니다.',
+              onRetry: noop,
+            },
+            keywordStatus: 'error',
+            reviewStatus: 'error',
+            reviews: [],
+            reviewTotal: undefined,
+            reviewErrorMessage: '잠시 후 다시 시도해 주세요.',
+            onRetryReviews: noop,
+          }),
       },
     ],
   },

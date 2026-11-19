@@ -1,20 +1,35 @@
 import type { SellerApplicationAdminDetail } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
-import { UNSUPPORTED_MESSAGE } from './errors'
+import {
+  NOTHING_TO_RESOLVE_MESSAGE,
+  PAYOUT_RUNNING_MESSAGE,
+  SKIP_WAIT_DISABLED_MESSAGE,
+  UNSUPPORTED_MESSAGE,
+} from './errors'
 import {
   ADMIN_MEMBER_ID,
   adminPayoutItems,
   adminPayouts,
+  analysisApple,
+  analysisProductSummaries,
   applicationCounts,
+  blockedOrders,
   defaultPayoutFilter,
+  depositChecks,
   filterPayouts,
   findPayoutDetail,
+  keywordAnalysis,
+  keywordNotAnalyzed,
+  resolutionRequests,
+  resolutions,
   runResults,
   sampleAdjustment,
   sampleAdjustTarget,
   sellerApplicationSummaries,
   sellerApplications,
+  sentimentAnalysis,
+  sentimentNotAnalyzed,
 } from './fixtures'
 import { type AdjustLookup, SellerReviewAction } from './types'
 import { AdminPayoutsView, type AdminPayoutsViewProps, payeeNameOf } from './views/AdminPayoutsView'
@@ -23,6 +38,12 @@ import {
   type AdminSellerDetailViewProps,
 } from './views/AdminSellerDetailView'
 import { AdminSellersView, type AdminSellersViewProps } from './views/AdminSellersView'
+import { BlockedOrdersView, type BlockedOrdersViewProps } from './views/BlockedOrdersView'
+import { DepositChecksView, type DepositChecksViewProps } from './views/DepositChecksView'
+import {
+  ReviewAnalysisTestView,
+  type ReviewAnalysisTestViewProps,
+} from './views/ReviewAnalysisTestView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 관리자 레이아웃 안에서 그린다.
 
@@ -110,6 +131,7 @@ const payoutsView = ({
   ...props
 }: Partial<AdminPayoutsViewProps> = {}) => (
   <AdminPayoutsView
+    onSectionChange={noop}
     run={{
       pendingCandidateCount: 3,
       result: null,
@@ -162,6 +184,63 @@ const detailOf = (payoutId: number): AdminPayoutsViewProps['detail'] => {
     payeeName: detail ? payeeNameOf(detail) : undefined,
   }
 }
+
+// ─── 리뷰 분석 테스트 ────────────────────────────────────
+
+const analysisView = (props: Partial<ReviewAnalysisTestViewProps> = {}) => (
+  <ReviewAnalysisTestView
+    products={{ status: 'success', items: analysisProductSummaries, truncated: false }}
+    productId={analysisApple.productId}
+    onProductChange={noop}
+    options={{ status: 'success', items: analysisApple.options }}
+    optionId={analysisApple.options[0]?.optionId ?? null}
+    onOptionChange={noop}
+    content="달고 맛있는데 배송이 하루 늦었어요"
+    onContentChange={noop}
+    onAnalyze={noop}
+    keywords={{ status: 'success', data: keywordAnalysis }}
+    sentiment={{ status: 'success', data: sentimentAnalysis }}
+    {...props}
+  />
+)
+
+// ─── 막힌 주문 · 대사 확인 ───────────────────────────────
+
+const closedResolve = { orderId: null, onClose: noop, onConfirm: noop }
+const closedHistory: BlockedOrdersViewProps['history'] = {
+  orderId: null,
+  history: { view: 'requests', rows: [] },
+  onViewChange: noop,
+  status: 'success',
+  onClose: noop,
+}
+
+const blockedView = (props: Partial<BlockedOrdersViewProps> = {}) => (
+  <BlockedOrdersView
+    onSectionChange={noop}
+    status="success"
+    orders={blockedOrders}
+    totalElements={blockedOrders.length}
+    onResolve={noop}
+    onShowHistory={noop}
+    resolve={closedResolve}
+    history={closedHistory}
+    {...props}
+  />
+)
+
+const historyOpen = (history: BlockedOrdersViewProps['history']['history']) =>
+  blockedView({ history: { ...closedHistory, orderId: 2003, history } })
+
+const depositView = (props: Partial<DepositChecksViewProps> = {}) => (
+  <DepositChecksView
+    onSectionChange={noop}
+    status="success"
+    checks={depositChecks}
+    totalElements={depositChecks.length}
+    {...props}
+  />
+)
 
 export const adminPreviews: ScreenPreview[] = [
   {
@@ -248,6 +327,11 @@ export const adminPreviews: ScreenPreview[] = [
       },
       { id: 'rejected', label: '반려됨', render: () => detailView(appOf(S.REJECTED)) },
       {
+        id: 'no-postal-code',
+        label: '출고지 우편번호 없음 (이 칸이 생기기 전 신청)',
+        render: () => detailView({ ...pending, originPostalCode: null }),
+      },
+      {
         id: 'not-found',
         label: '없는 신청 (404)',
         render: () => detailView(null, { status: 'notFound' }),
@@ -307,6 +391,30 @@ export const adminPreviews: ScreenPreview[] = [
         label: '실행 · 배치 실패 (500)',
         render: () =>
           payoutsView({ run: { result: runResults.error, onRun: noop, onRunSkipWait: noop } }),
+      },
+      {
+        id: 'run-running',
+        label: '실행 · 이미 실행 중 (409)',
+        render: () =>
+          payoutsView({
+            run: {
+              result: { kind: 'error', message: PAYOUT_RUNNING_MESSAGE },
+              onRun: noop,
+              onRunSkipWait: noop,
+            },
+          }),
+      },
+      {
+        id: 'run-skip-wait-disabled',
+        label: '대기 건너뛰기 · 서버 설정 꺼짐 (409)',
+        render: () =>
+          payoutsView({
+            run: {
+              result: { kind: 'error', message: SKIP_WAIT_DISABLED_MESSAGE },
+              onRun: noop,
+              onRunSkipWait: noop,
+            },
+          }),
       },
       {
         id: 'single-unsupported',
@@ -429,6 +537,158 @@ export const adminPreviews: ScreenPreview[] = [
             status: 'error',
             onRetry: noop,
             errorMessage: '기간은 최대 1년까지 조회할 수 있습니다.',
+          }),
+      },
+    ],
+  },
+  {
+    id: 'admin-blocked-orders',
+    title: 'M-03 정산 관리 · 막힌 주문',
+    pageTitle: '정산 관리',
+    layout: 'admin',
+    path: '/admin/payouts/blocked-orders',
+    states: [
+      { id: 'default', label: '멈춤 · 잠김 · 해결됨', render: () => blockedView() },
+      {
+        id: 'resolve',
+        label: '해결 모달',
+        render: () => blockedView({ resolve: { ...closedResolve, orderId: 2001 } }),
+      },
+      {
+        id: 'resolve-memo-error',
+        label: '해결 · 메모 오류 (422)',
+        render: () =>
+          blockedView({
+            resolve: {
+              ...closedResolve,
+              orderId: 2001,
+              serverError: '해결 메모는 255자 이하여야 합니다.',
+            },
+          }),
+      },
+      {
+        id: 'resolve-conflict',
+        label: '해결 · 해결할 것 없음 (409)',
+        render: () =>
+          blockedView({
+            resolve: {
+              ...closedResolve,
+              orderId: 2002,
+              defaultMemo: '수수료 계산 코드 수정 배포',
+              errorMessage: NOTHING_TO_RESOLVE_MESSAGE,
+            },
+          }),
+      },
+      {
+        id: 'history-requests',
+        label: '해결 기록 · 요청별',
+        render: () => historyOpen({ view: 'requests', rows: resolutionRequests }),
+      },
+      {
+        id: 'history-lines',
+        label: '해결 기록 · 실패 기록별',
+        render: () => historyOpen({ view: 'lines', rows: resolutions }),
+      },
+      {
+        id: 'history-empty',
+        label: '해결 기록 없음',
+        render: () => historyOpen({ view: 'requests', rows: [] }),
+      },
+      {
+        id: 'empty',
+        label: '막힌 주문 없음',
+        render: () => blockedView({ orders: [], totalElements: 0 }),
+      },
+      { id: 'loading', label: '로딩', render: () => blockedView({ status: 'pending' }) },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        render: () =>
+          blockedView({
+            status: 'error',
+            onRetry: noop,
+            errorMessage: '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요',
+          }),
+      },
+    ],
+  },
+  {
+    id: 'admin-deposit-checks',
+    title: 'M-03 정산 관리 · 대사 확인',
+    pageTitle: '정산 관리',
+    layout: 'admin',
+    path: '/admin/payouts/deposit-checks',
+    states: [
+      { id: 'default', label: '이유 4종', render: () => depositView() },
+      {
+        id: 'empty',
+        label: '확인할 정산 없음',
+        render: () => depositView({ checks: [], totalElements: 0 }),
+      },
+      { id: 'loading', label: '로딩', render: () => depositView({ status: 'pending' }) },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        render: () =>
+          depositView({
+            status: 'error',
+            onRetry: noop,
+            errorMessage: '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요',
+          }),
+      },
+    ],
+  },
+  {
+    id: 'admin-review-analysis-test',
+    title: 'M-04 리뷰 분석 테스트',
+    pageTitle: '리뷰 분석 테스트',
+    layout: 'admin',
+    path: '/admin/review-analysis-test',
+    states: [
+      { id: 'result', label: '결과 있음', render: () => analysisView() },
+      {
+        id: 'keyword-failed',
+        label: '한쪽 실패 (키워드 502)',
+        render: () =>
+          analysisView({
+            keywords: { status: 'error', message: '키워드 분석기 응답을 받지 못했습니다.' },
+          }),
+      },
+      {
+        id: 'not-analyzed',
+        label: '분석 안 함 (글자 없는 본문)',
+        render: () =>
+          analysisView({
+            content: '!!!',
+            keywords: { status: 'success', data: keywordNotAnalyzed },
+            sentiment: { status: 'success', data: sentimentNotAnalyzed },
+          }),
+      },
+      {
+        id: 'analyzing',
+        label: '분석 중',
+        render: () =>
+          analysisView({ keywords: { status: 'pending' }, sentiment: { status: 'pending' } }),
+      },
+      {
+        id: 'idle',
+        label: '처음 (상품 고르기 전)',
+        render: () =>
+          analysisView({
+            productId: null,
+            options: { status: 'idle' },
+            optionId: null,
+            content: '',
+            keywords: { status: 'idle' },
+            sentiment: { status: 'idle' },
+          }),
+      },
+      {
+        id: 'many-products',
+        label: '상품 100개 넘음',
+        render: () =>
+          analysisView({
+            products: { status: 'success', items: analysisProductSummaries, truncated: true },
           }),
       },
     ],

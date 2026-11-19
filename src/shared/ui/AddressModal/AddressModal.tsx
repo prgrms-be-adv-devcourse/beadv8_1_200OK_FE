@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { ShippingAddress } from '@/shared/api/types'
 import { openPostcode } from '@/shared/lib/daumPostcode'
+import { formatPhone } from '@/shared/lib/format'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
 import { type AddressFormValues, addressSchema } from './addressSchema'
 
@@ -85,8 +86,8 @@ function AddressForm({
 
   return (
     <form
-      onSubmit={handleSubmit(({ addressDetail, ...values }) =>
-        onSave({ ...values, ...(addressDetail ? { addressDetail } : {}) }),
+      onSubmit={handleSubmit((values) =>
+        onSave({ ...values, recipientPhone: formatPhone(values.recipientPhone) }),
       )}
       noValidate
     >

@@ -6,9 +6,14 @@ import classes from './ApplicationSummary.module.css'
 
 // 신청 정보 장부: 확인 단계(‘수정’), 신청 완료, 신청 현황이 같이 쓴다.
 // 신청 현황은 서버 상세(GET .../applications/{id})를 받는데 통신판매업 신고번호가 없어 그 줄은 있을 때만 그린다.
+// 출고지 우편번호도 이 칸이 생기기 전 신청은 null이라 있을 때만 그린다.
 
-export type ApplicationSummaryValues = Omit<SellerApplyRequest, 'mailOrderNumber'> & {
+export type ApplicationSummaryValues = Omit<
+  SellerApplyRequest,
+  'mailOrderNumber' | 'originPostalCode'
+> & {
   mailOrderNumber?: string
+  originPostalCode?: string | null
 }
 
 type Row = { label: string; value: string; num?: boolean }
@@ -34,6 +39,9 @@ export function ApplicationSummary({
     { label: '사업자등록번호', value: values.businessNumber, num: true },
     ...(values.mailOrderNumber
       ? [{ label: '통신판매업 신고번호', value: values.mailOrderNumber, num: true }]
+      : []),
+    ...(values.originPostalCode
+      ? [{ label: '출고지 우편번호', value: values.originPostalCode, num: true }]
       : []),
     ...(appliedAt ? [{ label: '신청일', value: formatDate(appliedAt), num: true }] : []),
   ]

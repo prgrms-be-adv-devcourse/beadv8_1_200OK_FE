@@ -1,32 +1,60 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  type InfiniteData,
+  queryOptions,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useSyncExternalStore } from 'react'
 import { type ApiError, isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
+import {
+  productReviewKeywordsQueryOptions,
+  productReviewsQueryOptions,
+} from '@/shared/api/productReviews'
 import { queryKeyPrefix } from '@/shared/api/queryKeys'
-import type {
-  AddressChangeDecision,
-  AddressChangeRequestResult,
-  PageResponse,
-  PayoutSellerCandidate,
-  PayoutSellerDetail,
-  PayoutSummary,
-  ProductCreateRequest,
-  ProductStatus,
-  ProductUpdateRequest,
-  ProductVisibility,
-  SellerBalanceResponse,
-  SellerPayoutCandidateParams,
-  SellerPayoutListParams,
-  SellerProductDetail,
-  SellerProductListParams,
-  SellerProductSummary,
-  SellerProfileRequest,
-  SellerProfileResponse,
-  SellerShipmentPage,
-  ShipmentDetail,
-  ShipmentDispatchRequest,
-  ShipmentDispatchResponse,
+import {
+  type Refund,
+  type RefundDecisionRequest,
+  type RefundPage,
+  RefundStatus,
+} from '@/shared/api/refund'
+import {
+  fetchMyApplication,
+  fetchMyApplications,
+  myApplicationQueryKey,
+  myApplicationsQueryKey,
+} from '@/shared/api/sellerApplication'
+import {
+  type AddressChangeDecision,
+  type AddressChangeRequestResult,
+  type PageResponse,
+  type PayoutSellerCandidate,
+  type PayoutSellerDetail,
+  type PayoutSummary,
+  type ProductCreateRequest,
+  type ProductStatus,
+  type ProductUpdateRequest,
+  type ProductVisibility,
+  type ReviewSentimentSummary,
+  type SellerApplicationHistoryResponse,
+  type SellerApplicationResponse,
+  SellerApplicationStatus,
+  type SellerBalanceResponse,
+  type SellerPayoutCandidateParams,
+  type SellerPayoutListParams,
+  type SellerProductDetail,
+  type SellerProductListParams,
+  type SellerProductSummary,
+  type SellerProfileRequest,
+  type SellerProfileResponse,
+  type SellerShipmentPage,
+  type ShipmentDetail,
+  type ShipmentDispatchRequest,
+  type ShipmentDispatchResponse,
 } from '@/shared/api/types'
 import { PAYOUT_RUN_HOUR } from '@/shared/lib/constants'
 import { recentYear, thisMonth, toServerDateTime } from '@/shared/lib/dateRange'
@@ -36,12 +64,15 @@ import {
   createMyProfile,
   createProduct,
   decideAddressChange,
+  decideRefund,
   deleteProduct,
   dispatchShipment,
   fetchMyProductDetail,
+  fetchMyProductReviewSentiments,
   fetchMyProducts,
   fetchMyProfile,
   fetchSellerBalance,
+  fetchSellerRefunds,
   fetchSellerShipmentDetail,
   fetchSellerShipments,
   getPayout,
@@ -51,6 +82,11 @@ import {
   updateMyProfile,
   updateProduct,
 } from './api'
+import {
+  type ReviewOverviewState,
+  type SentimentResult,
+  summarizeSellerSentiments,
+} from './reviewOverview'
 import type { PayoutOutlook } from './types'
 
 // 판매자 센터 쿼리 키 · 훅. 상품을 바꾸면 구매자 화면 캐시도 [products] 접두어로 비운다(ADR-0003).
@@ -59,14 +95,21 @@ export const sellerKeys = {
   all: [queryKeyPrefix.seller] as const,
   myProducts: (params: SellerProductListParams) =>
     [queryKeyPrefix.seller, 'myProducts', params] as const,
+  allMyProducts: () => [queryKeyPrefix.seller, 'myProducts', 'all'] as const,
   productDetail: (productId: number) =>
     [queryKeyPrefix.seller, 'productDetail', productId] as const,
+  reviewSentiments: (productId: number) =>
+    [queryKeyPrefix.seller, 'reviewSentiments', productId] as const,
   profile: () => [queryKeyPrefix.seller, 'profile'] as const,
   balance: () => [queryKeyPrefix.seller, 'balance'] as const,
   shipments: () => [queryKeyPrefix.seller, 'shipments'] as const,
   shipmentPage: (page: number) => [queryKeyPrefix.seller, 'shipments', 'page', page] as const,
   shipmentDetail: (shipmentId: number) =>
     [queryKeyPrefix.seller, 'shipments', 'detail', shipmentId] as const,
+  refunds: () => [queryKeyPrefix.seller, 'refunds'] as const,
+  refundList: (status: RefundStatus | null) =>
+    [queryKeyPrefix.seller, 'refunds', 'list', status] as const,
+  pendingRefundCount: () => [queryKeyPrefix.seller, 'refunds', 'pendingCount'] as const,
 }
 
 export const payoutKeys = {
@@ -135,6 +178,50 @@ export function useDecideAddressChange() {
   })
 }
 
+// ─── 취소 요청(환불) ─────────────────────────────────────
+
+/** 상태로 거른 취소 요청(null이면 전체). 25건씩 ‘더 보기’로 이어 받는다 */
+export function useSellerRefunds(status: RefundStatus | null) {
+  return useInfiniteQuery<
+    RefundPage,
+    ApiError,
+    InfiniteData<RefundPage>,
+    ReturnType<typeof sellerKeys.refundList>,
+    number
+  >({
+    queryKey: sellerKeys.refundList(status),
+    queryFn: ({ pageParam }) => fetchSellerRefunds(pageParam, status ?? undefined),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
+  })
+}
+
+/** 승인 대기 요청 수. 메뉴 배지·탭 숫자에 쓴다(첫 쪽의 totalElements) */
+export function usePendingRefundCount() {
+  return useQuery<number, ApiError>({
+    queryKey: sellerKeys.pendingRefundCount(),
+    queryFn: async () => (await fetchSellerRefunds(0, RefundStatus.REQUESTED)).totalElements,
+    staleTime: 30_000,
+  })
+}
+
+/**
+ * 승인·거절. 성공이든 409(이미 처리됨)든 목록·대기 수를 다시 받는다.
+ * 승인하면 출고가 취소되고 정산 대상이 바뀌므로 출고 목록과 정산 캐시도 비운다.
+ */
+export function useDecideRefund() {
+  const queryClient = useQueryClient()
+  return useMutation<Refund, ApiError, { refundId: number; body: RefundDecisionRequest }>({
+    mutationFn: ({ refundId, body }) => decideRefund(refundId, body),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: sellerKeys.refunds() }),
+        queryClient.invalidateQueries({ queryKey: sellerKeys.shipments() }),
+        queryClient.invalidateQueries({ queryKey: payoutKeys.all }),
+      ]),
+  })
+}
+
 // ─── 상품 ────────────────────────────────────────────────
 
 export const PRODUCT_PAGE_SIZE = 20
@@ -162,6 +249,93 @@ export function useSellerProductDetail(productId: number) {
     // 폼을 연 뒤에 version만 몰래 바뀌면 안 되므로 창 포커스로 다시 받지 않는다. 다시 받는 건 저장·409 때뿐이다
     staleTime: Number.POSITIVE_INFINITY,
   })
+}
+
+const ALL_PRODUCTS_PAGE_SIZE = 100
+
+/** 내 상품 전부(숨긴 상품 포함, 최신순). 100개씩 받고 남은 쪽은 한꺼번에 이어 받는다 */
+async function fetchAllMyProducts(): Promise<SellerProductSummary[]> {
+  const first = await fetchMyProducts({ page: 0, size: ALL_PRODUCTS_PAGE_SIZE })
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(first.totalPages - 1, 0) }, (_, i) =>
+      fetchMyProducts({ page: i + 1, size: ALL_PRODUCTS_PAGE_SIZE }),
+    ),
+  )
+  // 받는 사이에 상품이 생기면 쪽 경계가 밀려 같은 상품이 두 번 올 수 있다
+  const seen = new Set<number>()
+  return [first, ...rest]
+    .flatMap((page) => page.content)
+    .filter((product) => !seen.has(product.productId) && seen.add(product.productId))
+}
+
+/** 센터 홈 상품 현황 · 리뷰 분석이 같이 쓴다 */
+export function useAllMyProducts() {
+  return useQuery<SellerProductSummary[], ApiError>({
+    queryKey: sellerKeys.allMyProducts(),
+    queryFn: fetchAllMyProducts,
+  })
+}
+
+const reviewSentimentsQueryOptions = (productId: number) =>
+  queryOptions<ReviewSentimentSummary, ApiError>({
+    queryKey: sellerKeys.reviewSentiments(productId),
+    queryFn: () => fetchMyProductReviewSentiments(productId),
+  })
+
+/** 상품 하나의 리뷰 감성 집계(S-11). 리뷰 분석 전체 화면과 캐시를 나눠 쓴다 */
+export function useMyProductReviewSentiments(productId: number) {
+  return useQuery({
+    ...reviewSentimentsQueryOptions(productId),
+    enabled: Number.isInteger(productId),
+  })
+}
+
+/**
+ * S-10 리뷰 분석: 내 상품 전부의 감성 집계를 동시에 받아 합친다. 상품마다 따로 실패할 수 있다.
+ * TODO(api): 판매자 전체 요약 API가 생기면 상품 수만큼 부르지 않고 그 API 하나로 바꾼다.
+ */
+export function useSellerReviewOverview(): ReviewOverviewState {
+  const products = useAllMyProducts()
+  const list = products.data ?? []
+  const sentiments = useQueries({
+    queries: list.map((product) => reviewSentimentsQueryOptions(product.productId)),
+  })
+
+  if (products.isError) {
+    return {
+      status: 'error',
+      errorMessage: products.error.detail,
+      onRetry: () => void products.refetch(),
+    }
+  }
+  if (products.isPending || sentiments.some((query) => query.isPending)) {
+    return { status: 'pending' }
+  }
+
+  const results = new Map<number, SentimentResult>()
+  list.forEach((product, i) => {
+    // 다시 받다 실패해도 이미 받은 값이 있으면 그것을 쓴다
+    results.set(product.productId, sentiments[i]?.data ?? 'error')
+  })
+  const failing = sentiments.filter((query) => query.isError && query.data === undefined)
+  return {
+    status: 'success',
+    overview: summarizeSellerSentiments(list, results),
+    onRetryFailed: () => {
+      for (const query of failing) void query.refetch()
+    },
+    retryingFailed: failing.some((query) => query.isFetching),
+  }
+}
+
+/** S-11 리뷰 목록(최신순, 더 보기). 구매자 상품 상세와 같은 공개 API·캐시 */
+export function useSellerProductReviews(productId: number, keyword: string | undefined) {
+  return useInfiniteQuery(productReviewsQueryOptions(productId, keyword))
+}
+
+/** S-11 리뷰 키워드. 숨긴 상품은 공개 API가 404라 부르지 않는다 */
+export function useSellerProductReviewKeywords(productId: number, enabled: boolean) {
+  return useQuery({ ...productReviewKeywordsQueryOptions(productId), enabled })
 }
 
 /** 상품이 바뀌면 목록 · 상세(서버 version이 오른다) · 구매자 화면 캐시를 모두 다시 받는다 */
@@ -248,6 +422,30 @@ export function useMyProfile(enabled = true) {
     retry: false,
     staleTime: 60_000,
   })
+}
+
+/**
+ * 승인된 신청 당시의 출고지 우편번호. 프로필에 출고지 우편번호가 없을 때(미등록·이 칸이 생기기 전 프로필) 폼 기본값으로 쓴다.
+ * 내역에서 가장 최근 승인 신청을 골라 상세를 받는다. 못 받거나 없으면 null(빈 칸으로 둔다).
+ */
+export function useApprovedApplicationPostalCode(enabled: boolean) {
+  const history = useQuery<SellerApplicationHistoryResponse, ApiError>({
+    queryKey: myApplicationsQueryKey(),
+    queryFn: fetchMyApplications,
+    enabled,
+  })
+  const approved = history.data?.applications
+    .filter((application) => application.status === SellerApplicationStatus.APPROVED)
+    .sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))[0]
+  const detail = useQuery<SellerApplicationResponse, ApiError>({
+    queryKey: myApplicationQueryKey(approved?.applicationId ?? -1),
+    queryFn: () => fetchMyApplication(approved?.applicationId ?? -1),
+    enabled: enabled && approved !== undefined,
+  })
+  return {
+    pending: enabled && (history.isPending || (approved !== undefined && detail.isPending)),
+    postalCode: detail.data?.originPostalCode ?? null,
+  }
 }
 
 /** 등록(POST)과 수정(PUT)을 캐시 값으로 가른다: 아직 없으면(null) 등록 */

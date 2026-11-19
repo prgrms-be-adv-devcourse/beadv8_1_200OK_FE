@@ -1,4 +1,5 @@
 import { apiClient } from '@/shared/api/client'
+import type { Refund, RefundDecisionRequest, RefundPage, RefundStatus } from '@/shared/api/refund'
 import type {
   AddressChangeDecision,
   AddressChangeRequestResult,
@@ -12,6 +13,7 @@ import type {
   ProductStatusRequest,
   ProductUpdateRequest,
   ProductVisibilityRequest,
+  ReviewSentimentSummary,
   SellerBalanceResponse,
   SellerPayoutCandidateParams,
   SellerPayoutListParams,
@@ -81,6 +83,17 @@ export async function fetchMyProductDetail(productId: number): Promise<SellerPro
   return data
 }
 
+// ✅ GET /api/v1/sellers/me/products/{id}/review-sentiments → 분석 완료 리뷰의 전체 · 항목별 감성 집계.
+// 401 로그인 필요, 403 SELLER가 아님, 404 없거나 삭제됐거나 내 상품이 아님
+export async function fetchMyProductReviewSentiments(
+  productId: number,
+): Promise<ReviewSentimentSummary> {
+  const { data } = await apiClient.get<ReviewSentimentSummary>(
+    `/api/v1/sellers/me/products/${productId}/review-sentiments`,
+  )
+  return data
+}
+
 // ─── 출고 ────────────────────────────────────────────────
 // 403 판매자가 아님, 404 없거나 다른 판매자의 shipment(SHIPMENT_NOT_FOUND). 오류는 서버 detail을 그대로 보여 준다.
 
@@ -123,6 +136,25 @@ export async function decideAddressChange(
     `/api/v1/seller/shipments/${shipmentId}/address-change-requests/${requestId}`,
     { decision },
   )
+  return data
+}
+
+// ─── 취소 요청(환불) ─────────────────────────────────────
+// 출고 전 취소 요청. 승인해야 주문이 취소되고 돈이 돌아간다. 오류는 서버 detail을 그대로 보여 준다.
+
+// ✅ GET /api/v1/seller/refunds?page&status → 내 상품에 온 요청, 최신순 25건 고정. status를 빼면 전체. 422 page 음수·없는 상태
+export async function fetchSellerRefunds(page: number, status?: RefundStatus): Promise<RefundPage> {
+  const { data } = await apiClient.get<RefundPage>('/api/v1/seller/refunds', {
+    params: { page, status },
+  })
+  return data
+}
+
+// ✅ PATCH /api/v1/seller/refunds/{refundId} {decision, rejectReason?} → 200.
+// 승인: 돌려줄 돈이 있으면 PROCESSING, 0원이면 COMPLETED. 그사이 출고됐거나 배송비가 모자라면 자동 거절(REJECTED + 사유).
+// 404 없거나 남의 요청, 409 요청됨이 아님(INVALID_REFUND_STATE), 422 거절 사유 없음, 503 주문 확인 실패(요청됨 그대로)
+export async function decideRefund(refundId: number, body: RefundDecisionRequest): Promise<Refund> {
+  const { data } = await apiClient.patch<Refund>(`/api/v1/seller/refunds/${refundId}`, body)
   return data
 }
 

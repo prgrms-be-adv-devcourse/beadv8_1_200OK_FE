@@ -1,5 +1,7 @@
 import { HttpResponse, http } from 'msw'
 import {
+  appleReviewKeywordIds,
+  appleReviewKeywords,
   appleReviews,
   MY_MEMBER_ID,
   productDetailOf,
@@ -74,10 +76,36 @@ export const productHandlers = [
     ),
   ),
 
+  http.get('*/api/v1/products/:productId/review-keywords', ({ params, request }) => {
+    const productId = Number(params.productId)
+    if (!productDetailOf(productId)) return notFound(new URL(request.url).pathname)
+    return HttpResponse.json(
+      productId === 101 ? appleReviewKeywords : { analyzedReviewCount: 0, keywords: [] },
+    )
+  }),
+
   http.get('*/api/v1/products/:productId/reviews', ({ params, request }) => {
     const url = new URL(request.url)
     if (!productDetailOf(Number(params.productId))) return notFound(url.pathname)
-    const reviews = appleReviews.filter((review) => review.productId === Number(params.productId))
+    const keyword = url.searchParams.get('keyword')
+    if (keyword && !appleReviewKeywords.keywords.some((k) => k.keywordId === keyword)) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Bad Request',
+          status: 400,
+          detail: '리뷰 키워드를 찾을 수 없습니다.',
+          instance: url.pathname,
+          code: 'REVIEW_KEYWORD_NOT_FOUND',
+        },
+        { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+      )
+    }
+    const reviews = appleReviews.filter(
+      (review) =>
+        review.productId === Number(params.productId) &&
+        (!keyword || appleReviewKeywordIds[review.reviewId]?.includes(keyword)),
+    )
     return HttpResponse.json(pageOf(reviews, url.searchParams))
   }),
 ]

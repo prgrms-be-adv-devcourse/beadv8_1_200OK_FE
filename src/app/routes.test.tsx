@@ -35,6 +35,7 @@ const screens: [path: string, title: string][] = [
   ['/wallet/charge/fail', '충전하지 못했어요'],
   ['/wallet/charge', '예치금 충전'],
   ['/orders', '주문 내역'],
+  ['/orders/refunds', '취소 요청 내역'],
   ['/orders/184', '주문 상세'],
   ['/orders/151/shipments/3', '배송 조회'],
   ['/orders/1/inquiry', '고객센터 문의'],
@@ -60,6 +61,7 @@ const screens: [path: string, title: string][] = [
   ['/admin/sellers?status=PENDING', '판매자 심사'],
   ['/admin/sellers/4', '판매자 심사 상세'],
   ['/admin/payouts', '정산 관리'],
+  ['/admin/review-analysis-test', '리뷰 분석 테스트'],
 ]
 
 describe('라우트 뼈대', () => {

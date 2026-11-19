@@ -4,8 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { ShipmentCarrier } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { InvoiceModal } from '../components/OrderModals'
-import { cancelClaims, sellerShipments } from '../fixtures'
-import { SellerClaimsView } from './SellerClaimsView'
+import { sellerShipments } from '../fixtures'
 import { SellerOrdersView, type SellerOrdersViewProps } from './SellerOrdersView'
 
 function renderOrders(props: Partial<SellerOrdersViewProps> = {}) {
@@ -85,35 +84,5 @@ describe('SellerOrdersView', () => {
       <InvoiceModal shipment={sellerShipments[1] ?? null} onClose={() => {}} onSubmit={() => {}} />,
     )
     expect(await screen.findByText(/자동으로 거절돼요/)).toBeInTheDocument()
-  })
-})
-
-describe('SellerClaimsView', () => {
-  const pending = cancelClaims.filter((c) => c.reason && c.rejectReason === null).slice(0, 2)
-
-  it('거절은 사유가 있어야 한다', async () => {
-    const onReject = vi.fn()
-    const user = userEvent.setup()
-    render(
-      <MemoryRouter>
-        <SellerClaimsView
-          status="success"
-          claims={pending}
-          tab="PENDING"
-          onTabChange={() => {}}
-          counts={{ PENDING: 2, DONE: 2 }}
-          onApprove={() => {}}
-          onReject={onReject}
-          defaultModal={{ type: 'reject', claimId: 31 }}
-        />
-      </MemoryRouter>,
-    )
-    const dialog = await screen.findByRole('dialog', { name: '취소 요청 거절' })
-    await user.click(within(dialog).getByRole('button', { name: '거절하기' }))
-    expect(within(dialog).getByText('거절 사유를 입력해 주세요')).toBeInTheDocument()
-
-    await user.type(within(dialog).getByLabelText(/거절 사유/), '이미 출고 준비를 마쳤어요')
-    await user.click(within(dialog).getByRole('button', { name: '거절하기' }))
-    expect(onReject).toHaveBeenCalledWith(31, '이미 출고 준비를 마쳤어요')
   })
 })
