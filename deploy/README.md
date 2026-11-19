@@ -40,6 +40,8 @@ cd /opt/paldo-gotgan-bff && ./deploy.sh
 
 `deploy/compose.prod.yml`이나 `deploy.sh`가 바뀌었으면 그 파일을 먼저 `scp`로 `/opt/paldo-gotgan-bff/`에 덮어써요. 이 파일들만 바뀐 push는 이미지를 새로 빌드하지 않아요.
 
+`.env.prod.example`에 새 항목이 생기면 서버 `.env`에도 직접 더해요. 처음 설정 뒤로는 `.env`를 다시 복사하지 않아서 저절로 들어가지 않아요(예: Sentry를 켜려면 `SENTRY_DSN=`, #33).
+
 ## 롤백
 
 ```bash

@@ -14,6 +14,8 @@ services:
       # 백엔드 compose의 app 서비스 이름이에요. paldo-edge에서 이 이름으로 닿아요
       BACKEND_URL: http://app:8080
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS가 필요해요}
+      # Sentry paldo-bff 프로젝트 DSN(.env). 비우면 Sentry로 보내지 않아요
+      SENTRY_DSN: ${SENTRY_DSN:-}
       # 힙을 mem_limit보다 작게 묶어 힙 밖(버퍼·스택) 몫을 남겨요
       NODE_OPTIONS: --max-old-space-size=192
     mem_limit: 256m

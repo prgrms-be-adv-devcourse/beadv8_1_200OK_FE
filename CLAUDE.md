@@ -52,6 +52,13 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - **업로드**: `useMediaUploads(MediaPurpose.X)`(`shared/ui`)와 `PhotoUploader`를 같이 써요. 제출할 때는 `urls`(다 올린 서버 주소)만 보내고, `uploading`이면 제출을 막아요.
 - 실서버 확인은 연결한 백엔드에 curl로 해요. 계정은 `POST /api/v1/members/signup`으로 새로 만들어요(가입하면 BUYER). 남의 데이터는 건드리지 않고, 확인용으로 만든 상품은 지워요.
 
+## Sentry
+
+- 오류·트레이스·로그를 Sentry로 보내요(이슈 #33). 프로젝트는 프론트 `paldo-frontend`, BFF `paldo-bff` 두 개예요. DSN이 비어 있으면 아무것도 보내지 않아요(테스트도 그래서 조용해요).
+- 프론트: `src/app/instrument.ts`에서 init하고 `main.tsx`가 맨 먼저 읽어요(`router.tsx`의 `wrapCreateBrowserRouter`보다 먼저 떠야 라우트 패턴으로 트레이스가 남아요). 라우트 오류는 `RootErrorBoundary`가 `captureException`으로 보내요. DSN은 `VITE_SENTRY_DSN`(빌드 때 들어가요).
+- BFF: `bff/src/instrument.ts`를 `node --import`로 앱보다 먼저 읽어요(`package.json` scripts·Dockerfile CMD). `createApp`은 Sentry가 켜졌을 때만 `sentry()` 미들웨어를 달아요. DSN은 `SENTRY_DSN`(운영은 서버 `/opt/paldo-gotgan-bff/.env` → `deploy/compose.prod.yml`). 500과 백엔드 연결 실패(`UpstreamError`)가 이슈로 올라가요.
+- 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 샘플링은 개발 1.0, 운영 0.1이에요.
+
 ## BFF
 
 - 결정 근거는 ADR-0006(`docs/private/architecture/decisions/0006-bff-session.md`). 토큰을 브라우저에서 걷어내고, 백엔드가 서비스로 나뉘었을 때 화면용 응답을 합치려고 둬요.
