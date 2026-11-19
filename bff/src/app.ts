@@ -2,6 +2,7 @@ import { getClient, sentry } from '@sentry/hono/node'
 import { Hono } from 'hono'
 import { type AppEnv, authMiddleware } from './auth.ts'
 import type { Config } from './config.ts'
+import { devRoutes } from './devRoutes.ts'
 import { originGuard } from './originGuard.ts'
 import { problem, problemDetail } from './problem.ts'
 import { proxyRoutes } from './proxy.ts'
@@ -21,6 +22,8 @@ export function createApp(options: { config: Config; now?: () => number }) {
   const base = new Hono<AppEnv>()
   // instrument.ts가 Sentry를 켰을 때만 단다. 테스트처럼 켜지 않은 곳에서는 경고만 남기므로 건너뛴다
   if (getClient()) base.use(sentry(base))
+  // 개발 환경 전용 테스트 경로. AppType에 넣지 않으려고 체인 밖에서 단다
+  if (config.devRoutes) base.route('/', devRoutes())
 
   const app = base
     .get('/health', (c) => c.json({ status: 'UP' }))
