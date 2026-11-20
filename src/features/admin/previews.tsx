@@ -1,10 +1,13 @@
+import { ApiError } from '@/shared/api/ApiError'
 import type { SellerApplicationAdminDetail } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import {
   NOTHING_TO_RESOLVE_MESSAGE,
   PAYOUT_RUNNING_MESSAGE,
+  SEARCH_PERIOD_ORDER_MESSAGE,
   SKIP_WAIT_DISABLED_MESSAGE,
+  searchInsightsErrorMessage,
   UNSUPPORTED_MESSAGE,
 } from './errors'
 import {
@@ -30,8 +33,11 @@ import {
   sellerApplications,
   sentimentAnalysis,
   sentimentNotAnalyzed,
+  untaggedProducts,
+  zeroResultKeywords,
 } from './fixtures'
-import { type AdjustLookup, SellerReviewAction } from './types'
+import { defaultSearchInsightsFilter } from './searchInsightsFilter'
+import { type AdjustLookup, SearchInsightsTab, SellerReviewAction } from './types'
 import { AdminPayoutsView, type AdminPayoutsViewProps, payeeNameOf } from './views/AdminPayoutsView'
 import {
   AdminSellerDetailView,
@@ -44,6 +50,7 @@ import {
   ReviewAnalysisTestView,
   type ReviewAnalysisTestViewProps,
 } from './views/ReviewAnalysisTestView'
+import { SearchInsightsView, type SearchInsightsViewProps } from './views/SearchInsightsView'
 
 // /__design 화면 상태 갤러리 (개발 전용, app/dev만 import한다). 관리자 레이아웃 안에서 그린다.
 
@@ -240,6 +247,29 @@ const depositView = (props: Partial<DepositChecksViewProps> = {}) => (
     totalElements={depositChecks.length}
     {...props}
   />
+)
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+const searchView = (tab: SearchInsightsTab, props: Partial<SearchInsightsViewProps> = {}) => (
+  <SearchInsightsView
+    tab={tab}
+    onTabChange={noop}
+    filter={defaultSearchInsightsFilter()}
+    onFilterChange={noop}
+    status="success"
+    keywords={zeroResultKeywords}
+    products={untaggedProducts}
+    {...props}
+  />
+)
+
+const ZERO = SearchInsightsTab.ZERO_RESULT
+const UNTAGGED = SearchInsightsTab.UNTAGGED
+
+/** 서버 400 detail → 화면 문구 (detail이 합니다체라 errors.ts가 해요체로 바꾼다) */
+const retentionMessage = searchInsightsErrorMessage(
+  new ApiError({ status: 400, detail: '시작일은 2026-08-22 이후여야 합니다.' }),
 )
 
 export const adminPreviews: ScreenPreview[] = [
@@ -689,6 +719,64 @@ export const adminPreviews: ScreenPreview[] = [
         render: () =>
           analysisView({
             products: { status: 'success', items: analysisProductSummaries, truncated: true },
+          }),
+      },
+    ],
+  },
+  {
+    id: 'admin-search-insights',
+    title: 'M-05 검색 점검',
+    pageTitle: '검색 점검',
+    layout: 'admin',
+    path: '/admin/search-insights',
+    states: [
+      { id: 'zero-result', label: '0건 검색어', render: () => searchView(ZERO) },
+      {
+        id: 'zero-result-full',
+        label: '0건 검색어 · 개수만큼 꽉 참',
+        render: () => searchView(ZERO, { filter: { ...defaultSearchInsightsFilter(), limit: 4 } }),
+      },
+      {
+        id: 'zero-result-empty',
+        label: '0건 검색어 · 빈 목록',
+        render: () => searchView(ZERO, { keywords: [] }),
+      },
+      {
+        id: 'zero-result-retention',
+        label: '0건 검색어 · 보존 기간 밖 (400)',
+        render: () => searchView(ZERO, { status: 'error', errorMessage: retentionMessage }),
+      },
+      {
+        id: 'untagged',
+        label: '태그 없는 상품',
+        render: () => searchView(UNTAGGED),
+      },
+      {
+        id: 'untagged-empty',
+        label: '태그 없는 상품 · 빈 목록',
+        render: () => searchView(UNTAGGED, { products: [] }),
+      },
+      {
+        id: 'untagged-period-error',
+        label: '태그 없는 상품 · 기간 순서 (400)',
+        render: () =>
+          searchView(UNTAGGED, { status: 'error', errorMessage: SEARCH_PERIOD_ORDER_MESSAGE }),
+      },
+      {
+        id: 'range-error',
+        label: '시작일이 종료일보다 늦음 (보내기 전)',
+        render: () =>
+          searchView(ZERO, { filter: { from: '2026-11-20', to: '2026-11-13', limit: 20 } }),
+      },
+      { id: 'loading', label: '로딩', render: () => searchView(ZERO, { status: 'pending' }) },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        render: () =>
+          searchView(ZERO, {
+            status: 'error',
+            errorMessage: '서버에 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요',
+            onRetry: noop,
           }),
       },
     ],

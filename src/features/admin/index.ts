@@ -8,4 +8,5 @@ export {
   AdminSellerDetailPage,
   AdminSellersPage,
 } from './pages/AdminPages'
+export { AdminSearchInsightsPage } from './pages/AdminSearchInsightsPage'
 export { usePendingSellerApplicationCount } from './queries'
