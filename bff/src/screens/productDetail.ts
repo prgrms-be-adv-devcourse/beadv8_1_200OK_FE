@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../auth.ts'
 import { problem, problemDetail } from '../problem.ts'
 import { cachedResponse, type ProductDetailCache, productJson } from '../productCache.ts'
+import { tagCache } from '../sentry.ts'
 import type { JsonResult, Upstream } from '../upstream.ts'
 
 // 상품 상세 화면 한 번에: 상품 + 리뷰 첫 페이지 + 내 리뷰.
@@ -42,6 +43,7 @@ export function productDetailRoutes(deps: {
     ])
 
     if (product.status === 'rejected') throw product.reason
+    tagCache(product.value.cache)
     const data = productJson(product.value)
     if (data === null) return cachedResponse(product.value)
     c.header('X-Cache', product.value.cache)

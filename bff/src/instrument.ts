@@ -9,8 +9,7 @@ const dsn = process.env.SENTRY_DSN
 if (dsn) {
   Sentry.init({
     dsn,
-    // environment·release·샘플링(/health 제외, SENTRY_TRACES_SAMPLE_RATE)
+    // environment·release·샘플링(/health 제외, SENTRY_TRACES_SAMPLE_RATE)·통합(Dedupe 뺌, console 로그)
     ...sentryInitOptions(process.env),
-    integrations: [Sentry.consoleLoggingIntegration({ levels: ['warn', 'error'] })],
   })
 }

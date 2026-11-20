@@ -63,6 +63,7 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
   - 샘플링은 `SENTRY_TRACES_SAMPLE_RATE`(기본 1.0, 잘못된 값은 경고하고 1.0). 브라우저가 보낸 트레이스는 프론트의 결정을 따라요. release는 `SENTRY_RELEASE`로, 이미지는 `bff-image.yml`이 커밋 SHA를 build-arg로 넣어요(compose에서 넘기지 않아요).
   - 백엔드에는 Sentry가 없어서 BFF가 백엔드 5xx를 대신 올려요(#49). `Upstream.fetch`가 응답을 받을 때마다 보고해요: 5xx면 모듈·정규화한 경로(`routeName.ts`)·상태·`X-Trace-Id`·problem `detail`을 이슈로(fingerprint `[모듈, 경로, 상태]`), `X-Trace-Id`가 있으면 요청 트랜잭션의 `backend.trace_id` 속성으로 남겨요. 상세 라우트의 부가 호출(리뷰) 5xx도 올라가요. 브라우저 응답은 바꾸지 않고(본문은 clone으로 읽음), Authorization·쿠키·요청 본문은 넣지 않아요.
   - 보고 함수는 `createApp({ backendReport })`로 주입받아요(기본 `sentryBackendReport`, `backendReport.ts`). 테스트는 `setup()`의 `reported`로 무엇을 보고했는지 봐요.
+  - 5xx는 `BackendServerError` 예외로 올려서 이슈 제목이 `Backend 500 GET /api/v1/...`로 보여요. 기본 `Dedupe` 통합은 뺐어요(`sentryInitOptions`): 장애가 이어지면 같은 5xx가 연달아 나는데, Dedupe가 traceId가 다른 이벤트까지 버려요.
 - 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 프론트 샘플링은 개발 1.0, 운영 0.1이에요.
 
 ## BFF
@@ -83,6 +84,7 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
   - 200만 담아요. 키는 상품 번호이고, 캐시를 채울 때 토큰 없이 불러요(상세에 사용자별 필드가 없고, 숨김·삭제 상품은 주인 토큰으로도 404). 상세에 사용자별 필드가 생기면 이 캐시부터 다시 봐요.
   - BFF를 지나는 판매자 수정·상태·노출 변경·삭제가 성공하면 그 상품을 지워요. BFF가 모르는 변경(주문 품절·리뷰 수·관리자·배치)은 TTL이 끝나면 반영돼요.
   - `/bff/products/:id/detail`의 상품 부분도 같은 캐시를 써요. 응답에 `X-Cache: HIT|MISS`가 붙고, 그 밖의 헤더(`Cache-Control: no-store` 등)는 백엔드 그대로예요.
+  - 같은 값을 요청 트랜잭션 속성 `bff.cache`로도 남겨요(`sentry.ts`의 `tagCache`). Sentry에서 HIT·MISS별 지연과 비율을 봐요.
   - TTL·상한은 `PRODUCT_CACHE_TTL_MS`(0이면 합치기만)·`PRODUCT_CACHE_MAX_ENTRIES`·`PRODUCT_CACHE_MAX_BYTES`(본문 합계, 기본 16MB — 운영 mem_limit 256MB)예요. 넘으면 LRU로 버려요. 길게 두는 캐시는 무효화를 아는 백엔드 몫이라 BFF에 더하지 않아요.
 - BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
 - 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절, 경로·만료를 지키는 쿠키 저장소 `CookieJar`). 쓰지 않는 Redis 저장소 테스트는 기본 실행에서 빠져 있고 `pnpm --filter @paldo/bff test:redis`로 돌려요(Testcontainers, Docker 필요).
