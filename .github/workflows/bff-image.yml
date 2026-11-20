@@ -63,5 +63,7 @@ jobs:
             ${{ env.IMAGE }}:${{ steps.sha.outputs.short }}
           # deploy.sh가 배포 성공 때 어느 커밋인지 출력해요
           labels: org.opencontainers.image.revision=${{ github.sha }}
+          # Sentry release로 쓰여 "이번 배포부터 생긴 오류"를 나눠 봐요(이미지 env SENTRY_RELEASE)
+          build-args: SENTRY_RELEASE=${{ github.sha }}
           cache-from: type=gha,scope=bff
           cache-to: type=gha,mode=max,scope=bff

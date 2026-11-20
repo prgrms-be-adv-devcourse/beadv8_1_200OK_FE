@@ -19,6 +19,10 @@ WORKDIR /app
 COPY --from=build --chown=node:node /out .
 USER node
 EXPOSE 8787
+# Sentry release. bff-image.yml이 커밋 SHA를 build-arg로 넘긴다(로컬 빌드는 비어 release 없이 뜬다).
+# 값이 커밋마다 바뀌므로 캐시가 덜 깨지게 마지막 층 근처에 둔다
+ARG SENTRY_RELEASE=
+ENV SENTRY_RELEASE=${SENTRY_RELEASE}
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:8787/health | grep -q UP || exit 1
 # instrument.ts(Sentry)를 앱보다 먼저 읽는다. SENTRY_DSN이 없으면 아무것도 보내지 않는다

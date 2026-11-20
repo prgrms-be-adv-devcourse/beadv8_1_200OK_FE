@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from './auth.ts'
 import type { Config } from './config.ts'
 import { readProblemDetail } from './problem.ts'
+import { nameTransaction } from './sentry.ts'
 import { HOP_BY_HOP, moduleForPath, relay, type Upstream } from './upstream.ts'
 
 // /api/v1/*을 경로 그대로 백엔드 모듈로 넘긴다. 프론트 feature의 요청 경로는 바뀌지 않는다 (ADR-0006).
@@ -32,6 +33,7 @@ export function proxyRoutes(deps: { upstream: Upstream; config: Config }) {
     const auth = c.var.auth
     const request = c.req.raw
     const url = new URL(request.url)
+    nameTransaction(request.method, url.pathname)
     const pathAndQuery = `${url.pathname}${url.search}`
     const module = moduleForPath(url.pathname)
     const multipart = request.headers.get('content-type')?.startsWith('multipart/') ?? false
