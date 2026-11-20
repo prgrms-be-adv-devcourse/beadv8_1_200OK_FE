@@ -1,6 +1,8 @@
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
+import { createApp } from './app.ts'
 import { backendIssue } from './backendReport.ts'
+import { loadConfig } from './config.ts'
 import { BACKEND, problemJson, setup } from './test/fakeBackend.ts'
 import { server } from './test/server.ts'
 
@@ -238,6 +240,43 @@ describe('백엔드 5xx 보고', () => {
     for (const secret of ['token-secret', 'cookie-secret', 'body-secret', 'Bearer', 'paldo_at']) {
       expect(sent).not.toContain(secret)
     }
+  })
+
+  it('보고가 throw해도 응답은 그대로 돌려준다(관측 때문에 API가 500이 되지 않는다)', async () => {
+    const app = createApp({
+      config: loadConfig({ NODE_ENV: 'test', BACKEND_URL: BACKEND }),
+      backendReport: {
+        traceId: () => {
+          throw new Error('report down')
+        },
+        serverError: () => {
+          throw new Error('report down')
+        },
+      },
+    })
+    server.use(
+      http.get(`${BACKEND}/api/v1/products/1`, () => traced(problemJson(503, '점검 중'), 't9')),
+      http.get(`${BACKEND}/api/v1/products/2`, () =>
+        traced(HttpResponse.json({ productId: 2 }), 't10'),
+      ),
+    )
+
+    const failed = await app.request('/api/v1/products/1')
+    expect(failed.status).toBe(503)
+    expect(await failed.json()).toMatchObject({ detail: '점검 중' })
+
+    const ok = await app.request('/api/v1/products/2')
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toEqual({ productId: 2 })
+  })
+
+  it('detail은 500자까지만 보고한다', async () => {
+    const { request, reported } = setup()
+    server.use(http.get(`${BACKEND}/api/v1/products/1`, () => problemJson(500, '가'.repeat(2000))))
+
+    await request('/api/v1/products/1')
+
+    expect(reported.serverErrors[0]?.detail).toHaveLength(500)
   })
 })
 

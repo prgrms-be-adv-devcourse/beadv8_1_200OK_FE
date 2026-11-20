@@ -56,6 +56,9 @@ export function moduleForPath(path: string): UpstreamModule | null {
   return routes.find(([prefix]) => matches(path, prefix))?.[1] ?? null
 }
 
+// Sentry 이슈에 남길 백엔드 detail 길이. 오류 문구는 짧고, 긴 본문을 통째로 보내지 않는다
+const DETAIL_MAX_LENGTH = 500
+
 export class UpstreamError extends Error {
   readonly kind: 'timeout' | 'unreachable'
   constructor(kind: 'timeout' | 'unreachable', cause: unknown) {
@@ -113,18 +116,24 @@ export class Upstream {
     pathAndQuery: string,
     response: Response,
   ): Promise<void> {
-    const traceId = response.headers.get(TRACE_ID_HEADER)
-    if (traceId) this.#report.traceId(traceId)
-    if (response.status < 500) return
-    // JSON이 아닌 본문(HTML 오류 페이지 등)은 읽지 않는다
-    const json = /[/+]json\b/.test(response.headers.get('content-type') ?? '')
-    this.#report.serverError({
-      module: module ?? 'backend',
-      route: routeName(method, pathAndQuery),
-      status: response.status,
-      traceId,
-      detail: json ? await readProblemDetail(response.clone()) : null,
-    })
+    // 보고가 실패해도 응답은 그대로 돌려준다. 관측 때문에 API가 500이 되면 안 된다
+    try {
+      const traceId = response.headers.get(TRACE_ID_HEADER)
+      if (traceId) this.#report.traceId(traceId)
+      if (response.status < 500) return
+      // JSON이 아닌 본문(HTML 오류 페이지 등)은 읽지 않는다
+      const json = /[/+]json\b/.test(response.headers.get('content-type') ?? '')
+      const detail = json ? await readProblemDetail(response.clone()) : null
+      this.#report.serverError({
+        module: module ?? 'backend',
+        route: routeName(method, pathAndQuery),
+        status: response.status,
+        traceId,
+        detail: detail?.slice(0, DETAIL_MAX_LENGTH) ?? null,
+      })
+    } catch (error) {
+      console.warn('백엔드 응답 보고에 실패했어요', error)
+    }
   }
 
   async getJson<T>(
