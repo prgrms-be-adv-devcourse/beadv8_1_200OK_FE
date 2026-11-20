@@ -596,6 +596,33 @@ describe('관심 상품(찜)', () => {
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
 
+  it('하트를 연달아 누르면 요청마다 결과를 알린다(앞 요청의 실패도 되돌리고 알린다)', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () =>
+        HttpResponse.json({ content: [], page: 0, size: 50, totalElements: 0, totalPages: 0 }),
+      ),
+      http.put('*/api/v1/members/me/wishes/:productId', async ({ params }) => {
+        await delay(30)
+        return params.productId === '101'
+          ? problem(500, '서버 오류')
+          : new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/')
+    const appleHeart = await heart(apple)
+    const gyulHeart = await heart(gyul)
+
+    await user.click(appleHeart)
+    await user.click(gyulHeart)
+    expect(
+      await screen.findByText('관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요'),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('관심 상품에 담았어요')).toBeInTheDocument()
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'false')
+    expect(gyulHeart).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('찜 ID를 여러 페이지(size 50)로 끝까지 모아 하트를 그린다', async () => {
     setAccessToken(fakeToken({ role: MemberRole.BUYER }))
     // 120건: 앞 119건은 목록에 없는 상품, 마지막(세 번째 페이지)에 감귤(103)

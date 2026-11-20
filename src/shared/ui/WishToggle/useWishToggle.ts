@@ -22,33 +22,32 @@ export function useWishToggle(onLoginRequired: () => void): WishToggle {
   const navigate = useNavigate()
   const isWished = (productId: number) => wishedIds?.has(productId) ?? false
 
+  // mutate의 호출별 콜백은 마지막 호출에만 불려서, 하트를 연달아 누르면 앞 요청의 결과를 못 알린다.
+  // 그래서 요청마다 mutateAsync의 결과로 알린다(화면을 떠난 뒤 끝나도 알린다)
   const send = (productId: number, wish: boolean) =>
-    mutation.mutate(
-      { productId, wish },
-      {
-        onSuccess: () =>
-          showToast(
-            wish
-              ? {
-                  message: '관심 상품에 담았어요',
-                  action: { label: '관심 상품 보기', onClick: () => navigate('/me/likes') },
-                }
-              : { message: '관심 상품에서 뺐어요' },
-          ),
-        onError: () =>
-          showToast({
-            message: wish
-              ? '관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요'
-              : '관심 상품에서 빼지 못했어요. 잠시 뒤 다시 시도해 주세요',
-            action: { label: '다시 시도', onClick: () => send(productId, wish) },
-          }),
-      },
+    mutation.mutateAsync({ productId, wish }).then(
+      () =>
+        showToast(
+          wish
+            ? {
+                message: '관심 상품에 담았어요',
+                action: { label: '관심 상품 보기', onClick: () => navigate('/me/likes') },
+              }
+            : { message: '관심 상품에서 뺐어요' },
+        ),
+      () =>
+        showToast({
+          message: wish
+            ? '관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요'
+            : '관심 상품에서 빼지 못했어요. 잠시 뒤 다시 시도해 주세요',
+          action: { label: '다시 시도', onClick: () => void send(productId, wish) },
+        }),
     )
 
   const toggle = (productId: number, wished = isWished(productId)) => {
     if (access === 'guest') return onLoginRequired()
     if (access !== 'buyer') return
-    send(productId, !wished)
+    void send(productId, !wished)
   }
 
   return { access, isWished, known: wishedIds !== undefined, toggle }
