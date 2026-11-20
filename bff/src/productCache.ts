@@ -1,3 +1,4 @@
+import { TRACE_ID_HEADER } from './backendReport.ts'
 import { relay, type Upstream } from './upstream.ts'
 
 // 상품 상세(GET /api/v1/products/{id}) 응답을 BFF 메모리에 짧게(기본 5초) 둔다 (ADR-0011).
@@ -16,7 +17,10 @@ export type CacheStatus = 'HIT' | 'MISS'
 
 type Snapshot = { status: number; headers: [string, string][]; body: ArrayBuffer }
 type Entry = { snapshot: Snapshot; expiresAt: number; bytes: number }
-export type CachedProduct = { snapshot: Snapshot; cache: CacheStatus }
+/** 백엔드를 한 번 부른 결과. X-Trace-Id는 그 한 요청의 번호라 나눠 주는 snapshot과 따로 둔다 */
+type Loaded = { snapshot: Snapshot; traceId: string | null }
+/** traceId는 백엔드를 직접 부른 MISS에만 있다 (#82) */
+export type CachedProduct = { snapshot: Snapshot; cache: CacheStatus; traceId?: string | null }
 
 // 쿼리가 붙은 상세나 0으로 시작하는 번호는 캐시하지 않고 프록시가 그대로 넘긴다
 const DETAIL_PATH = /^\/api\/v1\/products\/([1-9]\d{0,15})$/
@@ -48,7 +52,7 @@ export class ProductDetailCache {
   readonly #now: () => number
   // Map은 넣은 순서를 지킨다. 읽을 때 뒤로 옮겨 맨 앞이 가장 오래 안 쓴 항목(LRU)이 되게 한다
   readonly #entries = new Map<number, Entry>()
-  readonly #inflight = new Map<number, Promise<Snapshot>>()
+  readonly #inflight = new Map<number, Promise<Loaded>>()
   #bytes = 0
 
   constructor(deps: {
@@ -80,17 +84,17 @@ export class ProductDetailCache {
     }
 
     const pending = this.#inflight.get(productId)
-    if (pending) return { snapshot: await pending, cache: 'HIT' }
+    if (pending) return { snapshot: (await pending).snapshot, cache: 'HIT' }
 
     const flight = this.#load(productId)
     this.#inflight.set(productId, flight)
     try {
-      const snapshot = await flight
+      const { snapshot, traceId } = await flight
       // 부르는 사이 판매자가 바꿨으면(invalidate) 바뀌기 전 값일 수 있어 담지 않는다
       if (this.#inflight.get(productId) === flight && snapshot.status === 200) {
         this.#store(productId, snapshot)
       }
-      return { snapshot, cache: 'MISS' }
+      return { snapshot, cache: 'MISS', traceId }
     } finally {
       if (this.#inflight.get(productId) === flight) this.#inflight.delete(productId)
     }
@@ -128,7 +132,7 @@ export class ProductDetailCache {
   }
 
   // 여러 요청이 나눠 받으므로 먼저 온 브라우저의 signal을 넘기지 않는다. 그 브라우저가 끊어도 나머지는 받는다
-  async #load(productId: number): Promise<Snapshot> {
+  async #load(productId: number): Promise<Loaded> {
     const response = relay(
       await this.#upstream.fetch('product', `/api/v1/products/${productId}`, {
         headers: { Accept: 'application/json, application/problem+json' },
@@ -137,17 +141,28 @@ export class ProductDetailCache {
     )
     const headers: [string, string][] = []
     response.headers.forEach((value, key) => {
-      // 여러 사람에게 나눠 주는 응답이라 쿠키는 싣지 않는다
-      if (key !== 'set-cookie') headers.push([key, value])
+      // 여러 사람에게 나눠 주는 응답이라 쿠키와 이 요청의 X-Trace-Id는 싣지 않는다.
+      // X-Trace-Id를 실으면 HIT 응답이 다른 요청의 번호를 달고 나가 백엔드 로그를 잘못 찾는다 (#82)
+      if (key !== 'set-cookie' && key !== TRACE_ID_HEADER.toLowerCase()) headers.push([key, value])
     })
-    return { status: response.status, headers, body: await response.arrayBuffer() }
+    return {
+      snapshot: { status: response.status, headers, body: await response.arrayBuffer() },
+      traceId: response.headers.get(TRACE_ID_HEADER),
+    }
   }
 }
 
-/** 백엔드 응답의 상태·헤더·본문 그대로에 X-Cache만 더한다. Cache-Control 등 헤더는 바꾸지 않는다 */
-export function cachedResponse({ snapshot, cache }: CachedProduct): Response {
-  const headers = new Headers(snapshot.headers)
+/**
+ * 백엔드 응답의 상태·헤더·본문 그대로에 X-Cache를 더한다. Cache-Control 등 헤더는 바꾸지 않는다.
+ * X-Trace-Id는 백엔드를 직접 부른 MISS에만 그 요청의 값으로 붙인다
+ */
+export function cachedResponse({ snapshot, cache, traceId }: CachedProduct): Response {
+  // 담아 둔 배열을 Headers에 넘기지 않고 하나씩 옮긴다. 테스트의 MSW가 바꿔 끼운 Headers는 넘겨받은
+  // 배열에 set한 값을 써 넣어서, 한 응답에 붙인 X-Cache·X-Trace-Id가 다음 HIT까지 남는다
+  const headers = new Headers()
+  for (const [key, value] of snapshot.headers) headers.append(key, value)
   headers.set('X-Cache', cache)
+  if (traceId) headers.set(TRACE_ID_HEADER, traceId)
   return new Response(snapshot.body.byteLength ? snapshot.body : null, {
     status: snapshot.status,
     headers,

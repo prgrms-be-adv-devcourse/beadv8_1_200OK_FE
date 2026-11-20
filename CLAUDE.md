@@ -83,7 +83,7 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - **상품 상세 캐시**(ADR-0011, `bff/src/productCache.ts`): `GET /api/v1/products/{id}`(쿼리 없이) 응답을 메모리에 5초 두고, 같은 상품 동시 요청은 백엔드 1번으로 합쳐요(single-flight). 한 상품에 몰릴 때 백엔드 DB 커넥션을 덜 쓰려는 예방책이에요.
   - 200만 담아요. 키는 상품 번호이고, 캐시를 채울 때 토큰 없이 불러요(상세에 사용자별 필드가 없고, 숨김·삭제 상품은 주인 토큰으로도 404). 상세에 사용자별 필드가 생기면 이 캐시부터 다시 봐요.
   - BFF를 지나는 판매자 수정·상태·노출 변경·삭제가 성공하면 그 상품을 지워요. BFF가 모르는 변경(주문 품절·리뷰 수·관리자·배치)은 TTL이 끝나면 반영돼요.
-  - `/bff/products/:id/detail`의 상품 부분도 같은 캐시를 써요. 응답에 `X-Cache: HIT|MISS`가 붙고, 그 밖의 헤더(`Cache-Control: no-store` 등)는 백엔드 그대로예요.
+  - `/bff/products/:id/detail`의 상품 부분도 같은 캐시를 써요. 응답에 `X-Cache: HIT|MISS`가 붙고, 그 밖의 헤더(`Cache-Control: no-store` 등)는 백엔드 그대로예요. 단 `X-Trace-Id`는 백엔드를 직접 부른 MISS에만 붙어요(HIT에 남의 번호가 붙지 않게, #82).
   - 같은 값을 요청 트랜잭션 속성 `bff.cache`로도 남겨요(`sentry.ts`의 `tagCache`). Sentry에서 HIT·MISS별 지연과 비율을 봐요.
   - TTL·상한은 `PRODUCT_CACHE_TTL_MS`(0이면 합치기만)·`PRODUCT_CACHE_MAX_ENTRIES`·`PRODUCT_CACHE_MAX_BYTES`(본문 합계, 기본 16MB — 운영 mem_limit 256MB)예요. 넘으면 LRU로 버려요. 길게 두는 캐시는 무효화를 아는 백엔드 몫이라 BFF에 더하지 않아요.
 - BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
