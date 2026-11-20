@@ -9,11 +9,14 @@ export function isMultipart(request: Request): boolean {
 
 // proxy.ts는 multipart가 아닌 본문을 메모리에 통째로 담는다. nginx 상한(32m)까지 받지 않도록 여기서 끊는다.
 // Content-Length가 있으면 본문을 읽지 않고 거절하고, chunked는 상한까지만 읽고 거절한다.
-// 업로드(최대 30MB)는 담지 않고 흘려보내므로 대상이 아니다
+// 업로드(최대 30MB)는 프록시가 담지 않고 흘려보내므로 대상이 아니다. 그 예외는 /api 프록시에만 둔다.
+// /bff 라우트(세션 로그인 등)는 본문을 직접 읽어서, multipart 헤더만 붙이면 상한을 비껴갈 수 있다
 export function requestBodyLimit(maxBytes: number) {
   const limit = bodyLimit({
     maxSize: maxBytes,
     onError: (c) => problem(413, problemDetail.payloadTooLarge, c.req.path),
   })
-  return createMiddleware((c, next) => (isMultipart(c.req.raw) ? next() : limit(c, next)))
+  return createMiddleware((c, next) =>
+    isMultipart(c.req.raw) && c.req.path.startsWith('/api/') ? next() : limit(c, next),
+  )
 }

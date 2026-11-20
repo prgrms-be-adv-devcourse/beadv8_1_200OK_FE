@@ -87,6 +87,19 @@ describe('요청 본문 상한', () => {
     expect(size).toBeGreaterThan(30 * 1024 * 1024)
   })
 
+  it('/bff 라우트는 multipart 헤더를 붙여도 상한을 적용한다(세션 라우트는 본문을 직접 읽는다)', async () => {
+    const { request } = setup()
+    const body = new Uint8Array(LIMIT + 1).fill(97)
+
+    const response = await request('/bff/session/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/form-data; boundary=x' },
+      body,
+    })
+
+    expect(response.status).toBe(413)
+  })
+
   it('C5: Content-Length 없는 chunked 본문은 상한에서 끊고 나머지는 읽지 않는다', async () => {
     const { request } = setup()
     const seen = captureBody('post', '/api/v1/sellers/me/products')
