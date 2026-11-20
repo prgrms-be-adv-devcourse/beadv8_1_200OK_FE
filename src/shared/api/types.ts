@@ -263,6 +263,9 @@ export type ProductOption = {
   salePrice: number
   discountRate: number
   soldOut: boolean // 재고 수량은 내려주지 않음
+  // TODO(api): 백엔드 공개 옵션 응답에 lowStock이 생기면(BE #814) optional을 걷어낸다
+  /** 곧 품절될 옵션(서버가 기준을 정해 판단). 수량은 내려주지 않는다. 없으면 표시하지 않는다(A-7) */
+  lowStock?: boolean
 }
 
 export type ProductDetail = {

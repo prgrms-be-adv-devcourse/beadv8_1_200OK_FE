@@ -132,6 +132,21 @@ export const appleOptions: ProductOption[] = [
   option(1013, '3kg (16~18과)', 33900, 38000),
 ]
 
+// 품절 임박(lowStock) 미리보기·테스트용. 1kg는 품절이 우선이라 ‘품절’만, 2kg는 ‘품절 임박’, 3kg는 표시 없음.
+export const appleLowStockOptions: ProductOption[] = appleOptions.map((o) => {
+  if (o.optionId === 1011) return { ...o, soldOut: true, lowStock: true }
+  if (o.optionId === 1012) return { ...o, lowStock: true }
+  return { ...o, lowStock: false }
+})
+
+// 옵션 6개 이상(Select)일 때의 품절 임박. 2kg·4kg는 ‘(품절 임박)’, 1kg·5kg는 품절이 우선이라 ‘(품절)’만.
+export const appleManyLowStockOptions: ProductOption[] = [
+  ...appleLowStockOptions,
+  { ...option(1014, '4kg (21~24과)', 43900, 49000), lowStock: true },
+  { ...option(1015, '5kg (26~30과)', 52900, 59000, true), lowStock: true },
+  option(1016, '10kg (52~60과)', 99000, 110000),
+]
+
 type Entry = { summary: ProductSummary; options: ProductOption[]; seller: SellerProfile }
 
 const entry = (

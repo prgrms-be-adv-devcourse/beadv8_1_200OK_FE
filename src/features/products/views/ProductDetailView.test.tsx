@@ -3,7 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { ProductStatus, ReviewMediaType } from '@/shared/api/types'
 import { render } from '@/test/render'
-import { appleReviews, MY_MEMBER_ID, productDetailOf, sellers } from '../fixtures'
+import {
+  appleLowStockOptions,
+  appleManyLowStockOptions,
+  appleReviews,
+  MY_MEMBER_ID,
+  productDetailOf,
+  sellers,
+} from '../fixtures'
 import { ProductDetailView, type ProductDetailViewProps } from './ProductDetailView'
 
 const apple = productDetailOf(101)
@@ -137,5 +144,77 @@ describe('ProductDetailView', () => {
     renderDetail({ status: 'notFound', product: undefined })
 
     expect(screen.getByText('상품을 찾을 수 없어요')).toBeInTheDocument()
+  })
+
+  describe('품절 임박', () => {
+    const lowStockApple = apple && { ...apple, options: appleLowStockOptions }
+
+    function firstRadio(name: RegExp) {
+      const [radio] = screen.getAllByRole('radio', { name })
+      if (!radio) throw new Error('옵션 없음')
+      return radio
+    }
+
+    it('옵션 카드: lowStock이면 품절 임박을 보이고, 품절이면 품절만 보인다', () => {
+      renderDetail({ product: lowStockApple })
+
+      expect(within(firstRadio(/2kg/)).getByText('품절 임박')).toBeInTheDocument()
+      expect(within(firstRadio(/3kg/)).queryByText('품절 임박')).not.toBeInTheDocument()
+      const soldOut = firstRadio(/1kg/)
+      expect(within(soldOut).getByText('품절')).toBeInTheDocument()
+      expect(within(soldOut).queryByText('품절 임박')).not.toBeInTheDocument()
+      expect(soldOut).toBeDisabled()
+    })
+
+    it('lowStock 필드가 없으면 지금과 같이 아무것도 보이지 않는다', () => {
+      renderDetail()
+
+      expect(screen.queryByText('품절 임박')).not.toBeInTheDocument()
+    })
+
+    it('품절 임박 옵션도 고르고 담을 수 있다', async () => {
+      const user = userEvent.setup()
+      const { onAddToCart } = renderDetail({ product: lowStockApple })
+
+      const lowStock = firstRadio(/2kg/)
+      expect(lowStock).toBeEnabled()
+      await user.click(lowStock)
+      const [add] = screen.getAllByRole('button', { name: '장바구니 담기' })
+      if (!add) throw new Error('담기 버튼 없음')
+      await user.click(add)
+
+      expect(onAddToCart).toHaveBeenCalledWith({ optionId: 1012, quantity: 1 })
+    })
+
+    it('살 수 없는 상품(판매 예정)이면 품절 임박을 보이지 않는다', () => {
+      renderDetail({ product: lowStockApple && { ...lowStockApple, status: ProductStatus.READY } })
+
+      expect(screen.queryByText('품절 임박')).not.toBeInTheDocument()
+    })
+
+    it('옵션 6개 이상(Select): 라벨에 (품절 임박)을 붙이고 고를 수 있으며, 품절이면 (품절)만 붙인다', async () => {
+      const user = userEvent.setup()
+      const { onAddToCart } = renderDetail({
+        product: apple && { ...apple, options: appleManyLowStockOptions },
+      })
+
+      const [select] = screen.getAllByRole('combobox', { name: '옵션 선택' })
+      if (!select) throw new Error('옵션 Select 없음')
+      await user.click(select)
+
+      expect(await screen.findByRole('option', { name: /^2kg .*\(품절 임박\)$/ })).toBeEnabled()
+      expect(screen.getByRole('option', { name: /^3kg .*원$/ })).toBeInTheDocument()
+      const soldOut = screen.getByRole('option', { name: /^5kg / })
+      expect(soldOut).toHaveTextContent(/\(품절\)$/)
+      expect(soldOut).not.toHaveTextContent('품절 임박')
+      expect(screen.getByRole('option', { name: /^1kg / })).not.toHaveTextContent('품절 임박')
+
+      await user.click(screen.getByRole('option', { name: /^4kg .*\(품절 임박\)$/ }))
+      const [add] = screen.getAllByRole('button', { name: '장바구니 담기' })
+      if (!add) throw new Error('담기 버튼 없음')
+      await user.click(add)
+
+      expect(onAddToCart).toHaveBeenCalledWith({ optionId: 1014, quantity: 1 })
+    })
   })
 })

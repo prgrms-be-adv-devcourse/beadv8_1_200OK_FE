@@ -18,7 +18,12 @@ import { RefundStatus } from '@/shared/api/refund'
 import { OrderItemStatus, OrderStatus, ProductStatus } from '@/shared/api/types'
 import { orderItemStatusLabels, orderStatusLabels, productStatusLabels } from '@/shared/lib/labels'
 import { PayoutBlockStatus, payoutBlockStatusLabels } from '@/shared/lib/payoutBlockState'
-import { ProductSaleState, productSaleStateLabels } from '@/shared/lib/productState'
+import {
+  OptionStockState,
+  optionStockStateLabels,
+  ProductSaleState,
+  productSaleStateLabels,
+} from '@/shared/lib/productState'
 import { refundStatusLabels } from '@/shared/lib/refundState'
 import {
   SellerApplicationStatus,
@@ -38,6 +43,7 @@ export type BadgeStatus =
   | WithdrawalState
   | SellerApplicationStatus
   | PayoutBlockStatus
+  | OptionStockState
 
 type BadgeSpec = { tone: StatusTone; icon: LucideIcon | null; label: string }
 
@@ -48,6 +54,7 @@ const labels: Record<BadgeStatus, string> = {
   ...withdrawalStateLabels,
   ...sellerApplicationStatusLabels,
   ...payoutBlockStatusLabels,
+  ...optionStockStateLabels,
 }
 
 const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
@@ -85,6 +92,8 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [PayoutBlockStatus.LOCKED]: { tone: 'error', icon: Lock },
   [PayoutBlockStatus.STOPPED]: { tone: 'warning', icon: CirclePause },
   [PayoutBlockStatus.RESOLVED]: { tone: 'success', icon: CircleCheck },
+  // 상품 상세 옵션 재고 (품절 임박, 수량 없음)
+  [OptionStockState.LOW_STOCK]: { tone: 'warning', icon: TriangleAlert },
 }
 
 export function getStatusBadgeSpec(status: BadgeStatus): BadgeSpec {
@@ -93,12 +102,19 @@ export function getStatusBadgeSpec(status: BadgeStatus): BadgeSpec {
 
 export type StatusBadgeProps = Omit<BadgeProps, 'color' | 'leftSection' | 'children'> & {
   status: BadgeStatus
+  /** span으로 그린다. 버튼(옵션 카드)처럼 div를 둘 수 없는 곳 안에 둘 때 */
+  inline?: boolean
 }
 
-export function StatusBadge({ status, ...props }: StatusBadgeProps) {
+export function StatusBadge({ status, inline = false, ...props }: StatusBadgeProps) {
   const { tone, icon: Icon, label } = getStatusBadgeSpec(status)
   return (
-    <Badge color={tone} leftSection={Icon ? <Icon aria-hidden="true" /> : undefined} {...props}>
+    <Badge
+      component={inline ? 'span' : 'div'}
+      color={tone}
+      leftSection={Icon ? <Icon aria-hidden="true" /> : undefined}
+      {...props}
+    >
       {label}
     </Badge>
   )
