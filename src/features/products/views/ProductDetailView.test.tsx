@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { ProductStatus, ReviewMediaType } from '@/shared/api/types'
+import { SITE_INFO } from '@/shared/lib/constants'
 import { render } from '@/test/render'
 import { appleReviews, MY_MEMBER_ID, productDetailOf, sellers } from '../fixtures'
 import { ProductDetailView, type ProductDetailViewProps } from './ProductDetailView'
@@ -131,6 +132,36 @@ describe('ProductDetailView', () => {
     renderDetail({ product: apple && { ...apple, reviewCount: 0, averageRating: 0 }, reviews: [] })
 
     expect(screen.getAllByText('아직 리뷰가 없어요').length).toBeGreaterThan(0)
+  })
+
+  it("'상품 정보' 제목 다음, 판매자 본문보다 앞에 직접 입금 경고를 보여 준다", () => {
+    renderDetail({
+      product: apple && { ...apple, descriptionHtml: '<p>판매자가 쓴 상품 설명</p>' },
+    })
+
+    const section = screen.getByRole('region', { name: '상품 정보' })
+    const heading = within(section).getByRole('heading', { name: '상품 정보' })
+    const warning = within(section).getByRole('note')
+    const body = within(section).getByText('판매자가 쓴 상품 설명')
+
+    expect(warning).toHaveTextContent('계좌로 직접 입금하라는 안내는 따르지 마세요')
+    expect(warning).toHaveTextContent('직접 입금한 금액은 보호받을 수 없어요.')
+    expect(heading.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(warning.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // 정적 안내라 열 때마다 읽히지 않게 한다
+    expect(within(section).queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      within(warning).getByRole('link', { name: `고객센터 ${SITE_INFO.csPhone}` }),
+    ).toHaveAttribute('href', `tel:${SITE_INFO.csPhone}`)
+  })
+
+  it('상품 설명이 비어 있어도 직접 입금 경고를 보여 준다', () => {
+    renderDetail({ product: apple && { ...apple, descriptionHtml: '' } })
+
+    const section = screen.getByRole('region', { name: '상품 정보' })
+    expect(within(section).getByRole('note')).toHaveTextContent(
+      '계좌로 직접 입금하라는 안내는 따르지 마세요',
+    )
   })
 
   it('없는 상품이면 404 안내', () => {
