@@ -169,6 +169,8 @@ const refundStatusLooks: Record<RefundStatus, Omit<BadgeSpec, 'label'>> = {
   [RefundStatus.COMPLETED]: { tone: 'success', icon: CircleCheck },
   [RefundStatus.REJECTED]: { tone: 'error', icon: CircleX },
   [RefundStatus.WITHDRAWN]: { tone: 'neutral', icon: RotateCcw },
+  // 거절(CircleX)과 같은 빨강이라 아이콘으로 구분한다
+  [RefundStatus.FAILED]: { tone: 'error', icon: TriangleAlert },
 }
 
 export type RefundStatusBadgeProps = Omit<BadgeProps, 'color' | 'leftSection' | 'children'> & {
