@@ -73,6 +73,14 @@ export const productHandlers = [
     })
   }),
 
+  // 상품 카드 여러 개(찜 목록용). 요청 순서, 중복 한 번, 없는 ID는 빠진다. :productId보다 앞에 둔다
+  http.get('*/api/v1/products/summaries', ({ request }) => {
+    const ids = (new URL(request.url).searchParams.get('ids') ?? '').split(',').map(Number)
+    return HttpResponse.json(
+      [...new Set(ids)].flatMap((id) => productSummaries.filter((p) => p.productId === id)),
+    )
+  }),
+
   http.get('*/api/v1/products/:productId', ({ params, request }) => {
     const detail = productDetailOf(Number(params.productId))
     return detail ? HttpResponse.json(detail) : notFound(new URL(request.url).pathname)

@@ -18,15 +18,16 @@ import classes from './HomeView.module.css'
 
 // B-01 홈. 시안: b2c/Home, HomeMobile
 // 이번 주 상품(GET /products 첫 페이지) + 단골이 많은 농가. 검색은 헤더 검색창 → 상품 목록(/products?q=)에서 하고, 홈은 정렬 없이 최신순이다.
-// TODO(api): ❌ 인기 농가 API, 📝 관심·팔로우 API. farms가 없으면 농가 섹션에 ‘연결 전’ 안내,
-//   onToggleLike·onToggleFollow가 없으면 카드의 하트·팔로우 버튼을 그리지 않는다.
+// 관심 하트는 onToggleLike가 있을 때만 그린다(관리자는 넘기지 않는다).
+// TODO(api): ❌ 인기 농가 API, 📝 팔로우 API. farms가 없으면 농가 섹션에 ‘연결 전’ 안내,
+//   onToggleFollow가 없으면 농가 카드의 팔로우 버튼을 그리지 않는다.
 
 export type HomeViewProps = {
   status: ListStatus
   items: ProductCardItem[]
   /** TODO(api): ❌ 인기 농가 API 없음. undefined면 ‘연결 전’ 안내, 빈 배열이면 섹션을 그리지 않는다 */
   farms?: FarmItem[]
-  /** TODO(api): 📝 관심 상품. 없으면 카드에 하트를 그리지 않는다 */
+  /** 관심 하트. 없으면 카드에 하트를 그리지 않는다(관리자) */
   onToggleLike?: (productId: number) => void
   /** TODO(api): 📝 팔로우. 없으면 농가 카드에 팔로우 버튼을 그리지 않는다 */
   onToggleFollow?: (sellerId: number) => void

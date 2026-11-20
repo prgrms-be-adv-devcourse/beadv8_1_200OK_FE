@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ApiError } from '@/shared/api/ApiError'
 import { clearAccessToken } from '@/shared/api/authToken'
 import { defaultAddressQueryOptions, saveDefaultAddress } from '@/shared/api/defaultAddress'
 import { myInfoQueryOptions, updateMyInfo } from '@/shared/api/memberInfo'
+import { queryKeyPrefix } from '@/shared/api/queryKeys'
 import type {
   MemberInfo,
   MemberInfoUpdateRequest,
@@ -10,7 +11,18 @@ import type {
   ShipmentAddress,
   ShipmentAddressRequest,
 } from '@/shared/api/types'
-import { changePassword } from './api'
+import { changePassword, fetchProductSummaries } from './api'
+
+/** 관심 상품 화면 한 페이지의 찜 수. 마이페이지 관심 수도 같은 첫 페이지(totalElements)를 써서 캐시를 나눈다 */
+export const LIKES_PAGE_SIZE = 20
+
+// 관심 상품 카드. 상품 데이터라 첫 칸은 products 접두어다(판매자가 상품을 바꾸면 접두어 무효화로 같이 비워진다)
+export const productSummariesQueryOptions = (ids: number[]) =>
+  queryOptions({
+    queryKey: [queryKeyPrefix.products, 'summaries', ids] as const,
+    queryFn: () => fetchProductSummaries(ids),
+    staleTime: 30_000,
+  })
 
 // 내 정보·기본 배송지 수정. 성공하면 서버가 돌려준 값을 내 정보 캐시에 넣어 마이페이지·상단 이름이 바로 바뀐다.
 

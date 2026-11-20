@@ -1059,3 +1059,14 @@ export type PasswordChangeRequest = {
   currentPassword: string // 20자 이하. 형식은 보지 않는다(규칙 전에 만든 계정도 바꿀 수 있게)
   newPassword: string // 영문·숫자·특수문자 포함 8~20자(가입과 같은 규칙), 현재 비밀번호와 달라야 함
 }
+
+// ─── 관심 상품(찜) (Bearer BUYER) ───────────────────────
+
+/** GET /members/me/wishes의 한 건. 상품 카드는 GET /products/summaries로 따로 받는다 */
+export type Wish = {
+  productId: number
+  wishedAt: string // 해제 후 다시 찜했으면 다시 찜한 시각
+}
+
+/** GET /members/me/wishes. 최근 찜 순. totalElements는 숨김·삭제된 상품의 찜도 센다 */
+export type WishPage = PageResponse<Wish>
