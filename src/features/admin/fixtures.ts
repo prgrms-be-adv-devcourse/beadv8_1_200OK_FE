@@ -19,6 +19,7 @@ import {
   type SellerApplicationAdminSummary,
 } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
+import { PayoutAdjustmentCheckStatus } from '@/shared/lib/payoutAdjustmentCheck'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { type AdminCharge, type AdminChargeDetail, TossLookup, TossPaymentStatus } from './charges'
@@ -505,6 +506,7 @@ export const adminPayoutCandidates: PayoutCandidate[] = [
     settled: false,
     payoutId: null,
     adjustment: null,
+    adjustmentCheckStatus: null,
   },
   {
     candidateId: 40012,
@@ -517,6 +519,7 @@ export const adminPayoutCandidates: PayoutCandidate[] = [
     settled: false,
     payoutId: null,
     adjustment: null,
+    adjustmentCheckStatus: null,
   },
   {
     candidateId: 40013,
@@ -529,6 +532,7 @@ export const adminPayoutCandidates: PayoutCandidate[] = [
     settled: false,
     payoutId: null,
     adjustment: null,
+    adjustmentCheckStatus: null,
   },
 ]
 
@@ -569,7 +573,7 @@ export const sampleAdjustment = {
   reason: '구매확정 후 환불 회수',
 }
 
-/** 방금 저장한 조정 (POST /admin/payouts/adjustments 201) */
+/** 방금 저장한 조정 (POST /admin/payouts/adjustments 201). 멈춘 주문 2001에 넣어 해결하면 금액 검사에 들어간다 */
 export const sampleAdjustmentResult: PayoutAdjustmentCreateResponse = {
   candidateId: 40031,
   adjustmentId: 1,
@@ -581,6 +585,19 @@ export const sampleAdjustmentResult: PayoutAdjustmentCreateResponse = {
   reason: '판매 금액 오입력 정정 (20,000 → 15,000)',
   adminId: ADMIN_MEMBER_ID,
   createdAt: '2026-11-16T10:00:00',
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
+}
+
+/** 해결한 뒤 같은 조정을 또 넣음 (201 · 검사 밖). 금액 검사 없이 지급에만 들어가 경고한다 */
+export const sampleUncheckedAdjustmentResult: PayoutAdjustmentCreateResponse = {
+  ...sampleAdjustmentResult,
+  candidateId: 44005,
+  adjustmentId: 2,
+  orderId: 2004,
+  orderItemId: 1601,
+  reason: '판매 금액 오입력 정정 (해결 뒤 다시 입력)',
+  createdAt: '2026-11-17T09:00:00',
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus.UNCHECKED,
 }
 
 // ─── 리뷰 분석 테스트 ────────────────────────────────────
@@ -860,12 +877,15 @@ const candidate = (
   settled: false,
   payoutId: null,
   adjustment: null,
+  adjustmentCheckStatus: null,
   ...extra,
 })
 
 /**
  * 주문별 정산후보 (GET /admin/payouts/candidates?orderId). 기간 없이 대기 중 · 정산됨 · 조정이 함께 나온다.
  * 2001: 1300은 정산됨, 1301·1302는 대기(1302 판매 금액이 15,000이어야 하는데 20,000으로 들어옴). 2002: 수수료 500 → 조정 2건
+ * 조정 줄의 adjustmentCheckStatus: 2002는 잠긴 뒤 넣어 해결 대기. 2004는 막힌 목록에서 빠진 주문으로,
+ * 해결 전에 넣은 조정 2건은 확인됨(정산됨), 해결 뒤 같은 조정을 또 넣은 1건은 검사 밖(대기)이다.
  */
 export const orderCandidates: PayoutCandidate[] = [
   candidate(41001, 2001, 1300, PayoutEventType.SALE_AMOUNT, 9700, {
@@ -887,10 +907,44 @@ export const orderCandidates: PayoutCandidate[] = [
       adminId: ADMIN_MEMBER_ID,
       reason: '수수료 3% 재계산 <i>원문</i>',
     },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
   }),
   candidate(42004, 2002, 1401, PayoutEventType.SALE_FEE, -200, {
     candidateCreatedAt: '2026-11-15T09:01:00',
     adjustment: { adjustmentId: 1, adminId: ADMIN_MEMBER_ID, reason: '수수료 3% 재계산' },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
+  }),
+  candidate(44001, 2004, 1601, PayoutEventType.SALE_AMOUNT, 19400, {
+    settled: true,
+    payoutId: 1021,
+  }),
+  candidate(44002, 2004, 1601, PayoutEventType.SALE_FEE, 600, { settled: true, payoutId: 1022 }),
+  candidate(44003, 2004, 1601, PayoutEventType.SALE_AMOUNT, -4850, {
+    candidateCreatedAt: '2026-11-12T10:00:00',
+    settled: true,
+    payoutId: 1021,
+    adjustment: {
+      adjustmentId: 1,
+      adminId: ADMIN_MEMBER_ID,
+      reason: '판매 금액 오입력 정정 (20,000 → 15,000)',
+    },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.CONFIRMED,
+  }),
+  candidate(44004, 2004, 1601, PayoutEventType.SALE_FEE, -150, {
+    candidateCreatedAt: '2026-11-12T10:01:00',
+    settled: true,
+    payoutId: 1022,
+    adjustment: { adjustmentId: 1, adminId: ADMIN_MEMBER_ID, reason: '수수료 재계산 (600 → 450)' },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.CONFIRMED,
+  }),
+  candidate(44005, 2004, 1601, PayoutEventType.SALE_AMOUNT, -4850, {
+    candidateCreatedAt: '2026-11-17T09:00:00',
+    adjustment: {
+      adjustmentId: 2,
+      adminId: ADMIN_MEMBER_ID,
+      reason: '판매 금액 오입력 정정 (해결 뒤 다시 입력)',
+    },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.UNCHECKED,
   }),
 ]
 

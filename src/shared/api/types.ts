@@ -2,6 +2,8 @@
 // 서버 enum은 TS enum으로 둔다(값 = 서버 문자열). const enum은 쓰지 않는다(파일 단위 변환에서 깨짐).
 // 화면 표시명은 shared/lib/labels.ts.
 
+import type { PayoutAdjustmentCheckStatus } from '@/shared/lib/payoutAdjustmentCheck'
+
 // ─── Enum ────────────────────────────────────────────────
 
 export enum ProductCategoryGroup {
@@ -983,6 +985,11 @@ type PayoutCandidateCommon = {
 export type PayoutCandidate = PayoutCandidateCommon & {
   eventType: PayoutEventType
   adjustment: PayoutAdjustment | null
+  /**
+   * 조정이 금액 검사에 들어가는지. orderId로 조회한 조정 줄에만 값이 있고, 원래 후보와 기간만 준 조회는 null.
+   * Swagger에는 값 목록 없이 설명에만 적힌 문자열 칸이라(null과 enum을 같이 적지 않으려고) 화면은 아는 값만 배지로 그린다
+   */
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus | null
 }
 
 /** 판매자 GET /payouts/me/candidates. 수수료(SALE_FEE) 후보는 안 나온다 */
@@ -1017,6 +1024,8 @@ export type PayoutAdjustmentCreateResponse = {
   reason: string // 입력 원문 → 출력 시 이스케이프
   adminId: number
   createdAt: string
+  /** 방금 넣은 조정이 금액 검사에 들어가는지(넣은 순간의 값, 늘 있음). 해결 뒤 상태는 정산후보 조회(orderId)로 본다 */
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus
 }
 
 // from(포함)·to(미포함) 필수, "yyyy-MM-ddTHH:mm:ss", 최대 1년. size 1~100

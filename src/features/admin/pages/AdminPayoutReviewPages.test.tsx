@@ -324,6 +324,7 @@ describe('막힌 주문 조건 · 주문 하나 처리', () => {
             reason: '정정',
             adminId: 1,
             createdAt: '2026-11-16T10:00:00',
+            adjustmentCheckStatus: 'AWAITING_RESOLUTION',
           },
           { status: 201 },
         )
@@ -352,11 +353,32 @@ describe('막힌 주문 조건 · 주문 하나 처리', () => {
     expect(
       await within(form).findByText(/대기 조정 합계에 들어갔는지 확인한 뒤 해결해 주세요/),
     ).toBeInTheDocument()
+    expect(within(form).getByText('해결 대기')).toBeInTheDocument()
     expect(bodies).toEqual([
       { orderItemId: 1302, eventType: 'SALE_FEE', amount: -150, reason: '정정' },
     ])
     await waitFor(() => expect(urls.length).toBeGreaterThan(listBefore))
     await waitFor(() => expect(candidateUrls.length).toBeGreaterThan(candidatesBefore))
+  })
+
+  it('주문별 정산후보의 조정 줄에만 금액 검사 상태 배지를 붙이고 상태 안내를 보여 준다', async () => {
+    renderAt('/admin/payouts/blocked-orders?orderId=2004')
+    const table = await screen.findByRole('table', { name: '주문 2004 정산후보' })
+    // 원래 후보 2줄(null)에는 없고, 조정 3줄에만 있다
+    expect(within(table).getAllByText('금액 검사')).toHaveLength(3)
+    expect(within(table).getAllByText('확인됨')).toHaveLength(2)
+    expect(within(table).getAllByText('검사 밖')).toHaveLength(1)
+    const guides = screen.getByRole('list', { name: '조정의 금액 검사 상태' })
+    expect(guides).toHaveTextContent(/반대 금액으로 상쇄하지 마세요/)
+    expect(guides).toHaveTextContent(/의도한 조정이 아니면 다음 정산 실행 전에/)
+    expect(guides).not.toHaveTextContent('해결 대기')
+  })
+
+  it('조정이 없는 주문은 금액 검사 배지와 안내가 없다', async () => {
+    renderAt('/admin/payouts/blocked-orders?orderId=2001')
+    const table = await screen.findByRole('table', { name: '주문 2001 정산후보' })
+    expect(within(table).queryByText('금액 검사')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '조정의 금액 검사 상태' })).not.toBeInTheDocument()
   })
 
   it('막힌 주문이 아닌 번호는 빈 상태와 정산후보를 보여 주고 조정은 열지 않는다', async () => {

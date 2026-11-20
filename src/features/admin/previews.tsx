@@ -1,5 +1,6 @@
 import { ApiError } from '@/shared/api/ApiError'
 import type { SellerApplicationAdminDetail } from '@/shared/api/types'
+import { PayoutAdjustmentCheckStatus } from '@/shared/lib/payoutAdjustmentCheck'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
@@ -36,6 +37,7 @@ import {
   runResults,
   sampleAdjustment,
   sampleAdjustmentResult,
+  sampleUncheckedAdjustmentResult,
   sellerApplicationSummaries,
   sellerApplications,
   sentimentAnalysis,
@@ -507,7 +509,7 @@ export const adminPreviews: ScreenPreview[] = [
       },
       {
         id: 'adjust-saved',
-        label: '조정 · 저장함 (201, 조정 내역에 쌓임)',
+        label: '조정 · 저장함 (201 해결 대기, 조정 내역에 쌓임)',
         render: () =>
           payoutsView({
             adjustment: {
@@ -516,6 +518,31 @@ export const adminPreviews: ScreenPreview[] = [
               logs: [sampleAdjustmentResult],
             },
           }),
+      },
+      {
+        id: 'adjust-saved-unchecked',
+        label: '조정 · 저장함 · 검사 밖 경고 (상쇄 안내)',
+        render: () =>
+          payoutsView({
+            adjustment: {
+              onSubmit: noop,
+              result: sampleUncheckedAdjustmentResult,
+              logs: [sampleUncheckedAdjustmentResult, sampleAdjustmentResult],
+            },
+          }),
+      },
+      {
+        id: 'adjust-saved-confirmed',
+        label: '조정 · 저장함 · 확인됨 (상쇄 금지 안내)',
+        render: () => {
+          const confirmed = {
+            ...sampleAdjustmentResult,
+            adjustmentCheckStatus: PayoutAdjustmentCheckStatus.CONFIRMED,
+          }
+          return payoutsView({
+            adjustment: { onSubmit: noop, result: confirmed, logs: [confirmed] },
+          })
+        },
       },
       {
         id: 'adjust-duplicate',
@@ -651,13 +678,18 @@ export const adminPreviews: ScreenPreview[] = [
       },
       {
         id: 'focus-fee',
-        label: '주문 찾기 · 수수료 불일치 (대기 조정 있음)',
+        label: '주문 찾기 · 수수료 불일치 (대기 조정 · 해결 대기)',
         render: () => focusView(blockedOrders[1] as BlockedOrder, 2002),
       },
       {
         id: 'focus-resolved',
         label: '주문 찾기 · 해결됨 (조정 안 함)',
         render: () => focusView(blockedOrders[2] as BlockedOrder, 2003),
+      },
+      {
+        id: 'focus-check-status',
+        label: '주문 찾기 · 목록에서 빠진 주문 (조정 확인됨 · 검사 밖)',
+        render: () => focusView(null, 2004),
       },
       {
         id: 'focus-not-blocked',

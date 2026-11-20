@@ -200,6 +200,7 @@ describe('AdminPayoutsPage', () => {
             reason: '판매 금액 오입력 정정',
             adminId: 1,
             createdAt: '2026-11-16T10:00:00',
+            adjustmentCheckStatus: 'AWAITING_RESOLUTION',
           },
           { status: 201 },
         )
@@ -229,11 +230,38 @@ describe('AdminPayoutsPage', () => {
         reason: '판매 금액 오입력 정정',
       },
     ])
+    // 해결 대기: 해결하면 금액 검사에 들어간다고 알린다 (경고 아님)
+    expect(within(form).getByText('해결 대기')).toBeInTheDocument()
+    expect(within(form).getByText(/막힌 주문을 해결하면 금액 검사에 들어가요/)).toBeInTheDocument()
+    expect(within(form).queryByText('금액 검사 없이 지급되는 조정이에요')).not.toBeInTheDocument()
     const logs = screen.getByRole('list', { name: '이 화면에서 저장한 조정' })
     expect(within(logs).getByText('주문 상품 1302 · 상품판매 대금')).toBeInTheDocument()
     expect(within(logs).getByText('사유 · 판매 금액 오입력 정정')).toBeInTheDocument()
+    expect(within(logs).getByText('해결 대기')).toBeInTheDocument()
     // 저장했으니 입력은 비운다
     expect(within(form).getByLabelText('주문 상품 번호')).toHaveValue('')
+  })
+
+  it('조정 201이 검사 밖(UNCHECKED)이면 경고하고 반대 금액 상쇄를 안내한다', async () => {
+    // 기본 MSW: 주문 2004는 막힌 주문이 아니라 검사 밖으로 저장된다
+    const user = renderAt()
+    await screen.findByRole('table', { name: '정산 목록' })
+    const form = screen.getByRole('heading', { name: '정산 조정' }).closest('form') as HTMLElement
+    await user.type(within(form).getByLabelText('주문 상품 번호'), '1601')
+    await user.type(within(form).getByLabelText('조정 금액'), '-4850')
+    await user.type(within(form).getByLabelText('사유'), '판매 금액 오입력 정정')
+    await user.click(within(form).getByRole('button', { name: '조정하기' }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '조정 저장' }),
+    )
+
+    const alert = await within(form).findByRole('alert')
+    expect(alert).toHaveTextContent('금액 검사 없이 지급되는 조정이에요')
+    expect(within(alert).getByText('검사 밖')).toBeInTheDocument()
+    expect(alert).toHaveTextContent(/의도한 조정이 아니면 다음 정산 실행 전에/)
+    expect(within(alert).getByText('+4,850원')).toBeInTheDocument()
+    const logs = screen.getByRole('list', { name: '이 화면에서 저장한 조정' })
+    expect(within(logs).getByText('검사 밖')).toBeInTheDocument()
   })
 
   it('조정 409(같은 조정)는 해요체 안내로 바꾸고 입력을 남긴다', async () => {

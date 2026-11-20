@@ -11,6 +11,8 @@ import {
   type LucideIcon,
   Package,
   RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
   TriangleAlert,
   Truck,
 } from 'lucide-react'
@@ -18,6 +20,10 @@ import { RefundStatus } from '@/shared/api/refund'
 import { OrderItemStatus, OrderStatus, ProductStatus } from '@/shared/api/types'
 import { ChargeReviewState, chargeReviewStateLabels } from '@/shared/lib/chargeReviewState'
 import { orderItemStatusLabels, orderStatusLabels, productStatusLabels } from '@/shared/lib/labels'
+import {
+  PayoutAdjustmentCheckStatus,
+  payoutAdjustmentCheckStatusLabels,
+} from '@/shared/lib/payoutAdjustmentCheck'
 import { PayoutBlockStatus, payoutBlockStatusLabels } from '@/shared/lib/payoutBlockState'
 import {
   OptionStockState,
@@ -46,6 +52,7 @@ export type BadgeStatus =
   | PayoutBlockStatus
   | OptionStockState
   | ChargeReviewState
+  | PayoutAdjustmentCheckStatus
 
 type BadgeSpec = { tone: StatusTone; icon: LucideIcon | null; label: string }
 
@@ -58,6 +65,7 @@ const labels: Record<BadgeStatus, string> = {
   ...payoutBlockStatusLabels,
   ...optionStockStateLabels,
   ...chargeReviewStateLabels,
+  ...payoutAdjustmentCheckStatusLabels,
 }
 
 const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
@@ -106,6 +114,10 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [ChargeReviewState.COMPLETED]: { tone: 'success', icon: CircleCheck },
   [ChargeReviewState.FAILED]: { tone: 'neutral', icon: CircleX },
   [ChargeReviewState.PAYMENT_CANCELED]: { tone: 'neutral', icon: RotateCcw },
+  // 관리자 정산 조정의 금액 검사 상태 (주문별 정산후보 · 조정 저장 결과)
+  [PayoutAdjustmentCheckStatus.CONFIRMED]: { tone: 'success', icon: ShieldCheck },
+  [PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION]: { tone: 'info', icon: Hourglass },
+  [PayoutAdjustmentCheckStatus.UNCHECKED]: { tone: 'warning', icon: ShieldAlert },
 }
 
 export function getStatusBadgeSpec(status: BadgeStatus): BadgeSpec {

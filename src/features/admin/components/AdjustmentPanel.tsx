@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Alert, Button, Group, Modal, NativeSelect, Stack, Text, TextInput } from '@mantine/core'
-import { CircleCheck, CircleX } from 'lucide-react'
+import { CircleCheck, CircleX, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Controller, type FieldPath, useForm } from 'react-hook-form'
 import {
@@ -10,8 +10,12 @@ import {
 } from '@/shared/api/types'
 import { formatAmount, formatDate, formatPrice, formatSignedAmount } from '@/shared/lib/format'
 import { payoutEventTypeLabels } from '@/shared/lib/labels'
+import {
+  isPayoutAdjustmentCheckStatus,
+  PayoutAdjustmentCheckStatus,
+} from '@/shared/lib/payoutAdjustmentCheck'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
-import { DisabledReason, PriceText } from '@/shared/ui'
+import { DisabledReason, PriceText, StatusBadge } from '@/shared/ui'
 import {
   ADJUST_REASON_MAX,
   type AdjustmentFormValues,
@@ -28,6 +32,8 @@ import classes from './AdjustmentPanel.module.css'
 // 주문 상품 번호만으로 금액을 찾는 API는 없다. 막힌 주문 탭에서 한 주문을 열면 그 주문의 정산후보(candidates)를 받아
 // 고른 주문 상품·종류의 지금 금액(원래 + 조정)을 미리 보여 준다. 정산 탭에서는 금액 미리보기 없이 서버 검증에 맡긴다.
 // 조정 내역 목록 API도 없어서, ‘조정 내역’은 이 화면을 연 동안 저장한 조정(201 응답)만 쌓는다.
+// 201의 adjustmentCheckStatus(넣은 순간의 금액 검사 상태)를 결과와 내역에 보여 준다. 서버는 조정을 막지 않으니
+// 검사 밖(UNCHECKED)이면 경고하고 반대 금액 상쇄를 안내한다. 확인됨 조정은 상쇄하면 돈이 더 나가 상쇄하지 말라고 한다.
 
 type MaybeAsync = unknown
 
@@ -250,6 +256,65 @@ function ConfirmRows({
   )
 }
 
+/** 금액 검사 상태 한 줄: ‘금액 검사’ + 배지. 모르는 값이면 그리지 않는다 */
+function CheckStatus({ status }: { status: string | null }) {
+  if (!isPayoutAdjustmentCheckStatus(status)) return null
+  return (
+    <span className={classes.checkStatus}>
+      <span className={classes.help}>금액 검사</span>
+      <StatusBadge status={status} size="sm" inline />
+    </span>
+  )
+}
+
+/** 방금 저장한 조정. 금액 검사 상태에 따라 할 일을 알려 준다 */
+function SavedResult({ result, inOrder }: { result: AdjustmentResult; inOrder: boolean }) {
+  const status = isPayoutAdjustmentCheckStatus(result.adjustmentCheckStatus)
+    ? result.adjustmentCheckStatus
+    : null
+  const unchecked = status === PayoutAdjustmentCheckStatus.UNCHECKED
+  const saved = (
+    <p className={`pd-num ${classes.resultText}`}>
+      주문 {result.orderId} · 주문 상품 {result.orderItemId}{' '}
+      {payoutEventTypeLabels[result.eventType]} {formatSignedAmount(result.amount)}원 조정을
+      저장했어요(조정 번호 {result.adjustmentId}).
+    </p>
+  )
+
+  if (unchecked) {
+    return (
+      <Alert color="warning" icon={<TriangleAlert />} title="금액 검사 없이 지급되는 조정이에요">
+        {saved}
+        <CheckStatus status={status} />
+        <p className={classes.resultText}>
+          막힘과 상관없는 보상이면 그대로 둬요. 막힌 주문을 고치려던 조정이면 순서가 어긋났어요(실패
+          전이거나 이미 해결함). 같은 조정이 이미 있는지 정산후보에서 확인하고, 의도한 조정이 아니면
+          다음 정산 실행 전에 사유를 다르게 적어{' '}
+          <strong className="pd-num">{formatSignedAmount(-result.amount)}원</strong>으로 상쇄해요.
+        </p>
+      </Alert>
+    )
+  }
+
+  const guide =
+    status === PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION
+      ? inOrder
+        ? '막힌 주문을 해결하면 금액 검사에 들어가요. 위 주문 줄의 대기 조정 합계에 들어갔는지 확인한 뒤 해결해 주세요.'
+        : '막힌 주문을 해결하면 금액 검사에 들어가요. 막힌 주문 탭에서 이 주문을 찾아 해결해 주세요.'
+      : status === PayoutAdjustmentCheckStatus.CONFIRMED
+        ? '금액 검사에 들어가요. 이 조정은 반대 금액으로 상쇄하지 마세요. 지급이 결제 금액보다 많아질 수 있어요.'
+        : inOrder
+          ? '대기 조정 합계에 들어갔는지 확인한 뒤 해결해 주세요.'
+          : '원래 정산후보를 따라 정산돼요.'
+  return (
+    <Alert color="success" icon={<CircleCheck />}>
+      {saved}
+      <CheckStatus status={status} />
+      <p className={classes.resultText}>{guide}</p>
+    </Alert>
+  )
+}
+
 function Logs({ logs }: { logs: AdjustmentLog[] }) {
   const recent = logs.slice(0, LOG_LIMIT)
   return (
@@ -284,12 +349,15 @@ function Logs({ logs }: { logs: AdjustmentLog[] }) {
               <span className={`pd-num ${classes.help}`}>
                 {formatDate(log.createdAt, 'dateTime')} · 관리자 {log.adminId}
               </span>
+              <CheckStatus status={log.adjustmentCheckStatus} />
             </li>
           ))}
         </ul>
       )}
       <p className={`${classes.help} ${classes.logsFoot}`}>
         조정은 지울 수 없어요. 잘못 조정했다면 사유를 다르게 적어 반대 금액으로 한 번 더 조정해요.
+        금액 검사 상태는 저장한 때 값이에요. 해결 대기 조정은 해결하면 확인됨이 되니 지금 상태는
+        막힌 주문 탭에서 주문 번호로 찾아 정산후보에서 봐요.
       </p>
     </section>
   )
@@ -407,18 +475,7 @@ export function AdjustmentPanel({
           <Text className={classes.desc}>{description}</Text>
         </div>
 
-        {result && (
-          <Alert color="success" icon={<CircleCheck />}>
-            <span className="pd-num">
-              주문 {result.orderId} · 주문 상품 {result.orderItemId}{' '}
-              {payoutEventTypeLabels[result.eventType]} {formatSignedAmount(result.amount)}원 조정을
-              저장했어요(조정 번호 {result.adjustmentId}).{' '}
-              {candidates
-                ? '대기 조정 합계에 들어갔는지 확인한 뒤 해결해 주세요.'
-                : '원래 정산후보를 따라 정산돼요.'}
-            </span>
-          </Alert>
-        )}
+        {result && <SavedResult result={result} inOrder={candidates !== undefined} />}
         {errorMessage && !result && (
           <Alert color="error" icon={<CircleX />}>
             {errorMessage}
