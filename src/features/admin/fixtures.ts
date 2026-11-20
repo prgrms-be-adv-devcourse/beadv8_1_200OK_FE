@@ -30,6 +30,8 @@ import {
   type Resolution,
   type ResolutionRequest,
   type SentimentAnalysis,
+  type UntaggedProduct,
+  type ZeroResultKeyword,
 } from './types'
 
 // 서버 응답 모양 그대로 둔 샘플 데이터 (previews · 테스트 · MSW 기본 응답).
@@ -810,5 +812,67 @@ export const depositChecks: DepositCheckReview[] = [
     attemptCount: 3,
     notFoundCount: 0,
     lastAskedAt: '2026-11-13T02:00:00',
+  },
+]
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+/** 0건 많은 순 (같으면 마지막 검색이 늦은 순) */
+export const zeroResultKeywords: ZeroResultKeyword[] = [
+  {
+    normalizedKeyword: '샤인머스켓',
+    zeroResultCount: 12,
+    lastSearchedAt: '2026-11-18T14:05:31',
+    sampleKeyword: '샤인 머스켓',
+  },
+  {
+    normalizedKeyword: '김장배추20kg',
+    zeroResultCount: 7,
+    lastSearchedAt: '2026-11-17T09:41:02',
+    sampleKeyword: '김장배추 20kg',
+  },
+  {
+    normalizedKeyword: '무농약블루베리',
+    zeroResultCount: 4,
+    lastSearchedAt: '2026-11-16T21:13:45',
+    sampleKeyword: '무농약블루베리',
+  },
+  {
+    normalizedKeyword: '제주한라봉선물세트',
+    zeroResultCount: 1,
+    lastSearchedAt: '2026-11-14T08:02:10',
+    sampleKeyword: '제주 한라봉 선물세트',
+  },
+]
+
+/** 최근 판정 순. 가장 높았던 태그가 목록에서 빠진 경우 · 확률 기록이 없는 경우를 같이 둔다 */
+export const untaggedProducts: UntaggedProduct[] = [
+  {
+    productId: 128,
+    productName: '국산 생강 1kg',
+    judgedAt: '2026-11-18T14:05:31',
+    topTagLabel: '김장·김치용',
+    topScore: 0.83,
+  },
+  {
+    productId: 131,
+    productName: '햇 들기름 350ml (저온 압착, 국산 들깨 100%)',
+    judgedAt: '2026-11-17T11:20:00',
+    topTagLabel: '선물용',
+    topScore: 0.8999,
+  },
+  {
+    productId: 117,
+    productName: '말린 표고버섯 슬라이스 200g',
+    judgedAt: '2026-11-15T16:48:12',
+    topTagLabel: null,
+    topScore: 0.42,
+  },
+  {
+    productId: 109,
+    productName: '수제 도토리묵 2모',
+    judgedAt: '2026-11-13T10:00:00',
+    topTagLabel: null,
+    topScore: null,
   },
 ]

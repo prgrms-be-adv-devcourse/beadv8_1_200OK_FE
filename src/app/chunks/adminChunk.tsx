@@ -4,6 +4,7 @@ export {
   AdminDepositChecksPage,
   AdminPayoutsPage,
   AdminReviewAnalysisTestPage,
+  AdminSearchInsightsPage,
   AdminSellerDetailPage,
   AdminSellersPage,
 } from '@/features/admin'

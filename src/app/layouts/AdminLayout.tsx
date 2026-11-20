@@ -1,6 +1,6 @@
 import { Group } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
-import { BadgeCheck, FlaskConical, User, Wallet } from 'lucide-react'
+import { BadgeCheck, FlaskConical, SearchCheck, User, Wallet } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Outlet } from 'react-router'
 import { usePendingSellerApplicationCount } from '@/features/admin'
@@ -38,6 +38,7 @@ export function AdminLayoutView({
     },
     { label: '정산 관리', to: '/admin/payouts', icon: Wallet },
     { label: '리뷰 분석 테스트', to: '/admin/review-analysis-test', icon: FlaskConical },
+    { label: '검색 점검', to: '/admin/search-insights', icon: SearchCheck },
   ]
 
   return (

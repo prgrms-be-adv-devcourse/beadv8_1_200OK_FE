@@ -278,3 +278,37 @@ export type AnalysisPanel<T> =
   | { status: 'pending' }
   | { status: 'error'; message: string }
   | { status: 'success'; data: T }
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+/** ✅ GET /admin/product-search/zero-result-keywords 한 항목 */
+export type ZeroResultKeyword = {
+  /** 공백을 없앤 검색어. 띄어쓰기만 다른 검색어를 이 값으로 묶는다 */
+  normalizedKeyword: string
+  /** 기간 안에 결과가 0건이었던 횟수 */
+  zeroResultCount: number
+  /** 기간 안의 마지막 0건 검색 시각 (KST, zone 없음) */
+  lastSearchedAt: string
+  /** 묶음에서 가장 최근에 들어온 검색어 원문 */
+  sampleKeyword: string
+}
+
+/** ✅ GET /admin/product-search/untagged-products 한 항목 */
+export type UntaggedProduct = {
+  productId: number
+  productName: string
+  /** 마지막 판정 시각 (KST, zone 없음) */
+  judgedAt: string
+  /** 확률이 가장 높았던 태그 이름. 판정 뒤 태그 목록에서 빠진 태그면 null */
+  topTagLabel: string | null
+  /** 그 태그의 "해당" 확률(0~1). 기준값 0.9에 얼마나 못 미쳤는지 본다 */
+  topScore: number | null
+}
+
+/** 두 API가 같이 받는 조건. from·to는 yyyy-MM-dd(둘 다 포함, KST), limit 1~100 */
+export type SearchInsightsParams = { from: string; to: string; limit: number }
+
+export enum SearchInsightsTab {
+  ZERO_RESULT = 'zero-result',
+  UNTAGGED = 'untagged',
+}

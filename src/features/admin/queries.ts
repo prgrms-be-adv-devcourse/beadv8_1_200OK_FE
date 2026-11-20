@@ -39,6 +39,8 @@ import {
   getResolutions,
   getSellerApplication,
   getSellerApplications,
+  getUntaggedProducts,
+  getZeroResultKeywords,
   rejectSellerApplication,
   resolveBlockedOrder,
   runPayoutForOrderItem,
@@ -56,7 +58,10 @@ import type {
   ResolutionRequest,
   ResolutionView,
   ReviewAnalysisRequest,
+  SearchInsightsParams,
   SentimentAnalysis,
+  UntaggedProduct,
+  ZeroResultKeyword,
 } from './types'
 
 // 관리자 콘솔 쿼리 키 · 훅. 심사 처리 뒤에는 상세를 응답으로 바로 바꾸고 목록·개수는 접두어로 비운다.
@@ -84,6 +89,10 @@ export const adminKeys = {
       : ([queryKeyPrefix.admin, 'resolutions', orderId] as const),
   depositChecks: (page: number) => [queryKeyPrefix.admin, 'depositChecks', page] as const,
   productChoices: [queryKeyPrefix.admin, 'productChoices'] as const,
+  zeroResultKeywords: (params: SearchInsightsParams) =>
+    [queryKeyPrefix.admin, 'zeroResultKeywords', params] as const,
+  untaggedProducts: (params: SearchInsightsParams) =>
+    [queryKeyPrefix.admin, 'untaggedProducts', params] as const,
 }
 
 export const APPLICATION_PAGE_SIZE = 20
@@ -347,5 +356,26 @@ export function useAnalyzeReviewKeywords() {
 export function useAnalyzeReviewSentiment() {
   return useMutation<SentimentAnalysis, ApiError, ReviewAnalysisRequest>({
     mutationFn: analyzeReviewSentiment,
+  })
+}
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+/** 지금 보는 탭만 부른다(enabled). 조건을 바꾸는 동안 이전 목록을 남긴다 */
+export function useZeroResultKeywords(params: SearchInsightsParams, enabled: boolean) {
+  return useQuery<ZeroResultKeyword[], ApiError>({
+    queryKey: adminKeys.zeroResultKeywords(params),
+    queryFn: () => getZeroResultKeywords(params),
+    enabled,
+    placeholderData: (previous) => previous,
+  })
+}
+
+export function useUntaggedProducts(params: SearchInsightsParams, enabled: boolean) {
+  return useQuery<UntaggedProduct[], ApiError>({
+    queryKey: adminKeys.untaggedProducts(params),
+    queryFn: () => getUntaggedProducts(params),
+    enabled,
+    placeholderData: (previous) => previous,
   })
 }
