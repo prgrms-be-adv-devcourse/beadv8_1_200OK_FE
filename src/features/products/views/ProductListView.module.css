@@ -8,6 +8,13 @@
   }
 }
 
+/* 모바일만: 검색창 (데스크톱은 헤더 검색창) */
+.mobileSearch {
+  @media (min-width: 64em) {
+    display: none;
+  }
+}
+
 /* 모바일만: 가로로 넘기는 카테고리 */
 .categories {
   display: flex;
@@ -61,12 +68,26 @@
   gap: var(--mantine-spacing-sm) var(--mantine-spacing-lg);
 }
 
-.region {
+.select {
   width: 10rem;
 
   @media (min-width: 64em) {
     width: 12.5rem;
   }
+}
+
+.suggestion {
+  margin: 0;
+  color: var(--pd-color-text-secondary);
+  font-size: var(--mantine-font-size-md);
+}
+
+/* 문장 안 링크도 터치 영역 44 */
+.suggestionLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--pd-touch-min);
+  font-weight: 600;
 }
 
 .more {

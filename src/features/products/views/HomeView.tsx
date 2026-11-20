@@ -17,7 +17,7 @@ import type { FarmItem, ListStatus } from '../types'
 import classes from './HomeView.module.css'
 
 // B-01 홈. 시안: b2c/Home, HomeMobile
-// 이번 주 상품(GET /products 첫 페이지) + 단골이 많은 농가. 헤더 검색·정렬은 API가 없어 두지 않는다(A-9).
+// 이번 주 상품(GET /products 첫 페이지) + 단골이 많은 농가. 검색은 헤더 검색창 → 상품 목록(/products?q=)에서 하고, 홈은 정렬 없이 최신순이다.
 // TODO(api): ❌ 인기 농가 API, 📝 관심·팔로우 API. farms가 없으면 농가 섹션에 ‘연결 전’ 안내,
 //   onToggleLike·onToggleFollow가 없으면 카드의 하트·팔로우 버튼을 그리지 않는다.
 

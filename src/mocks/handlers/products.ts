@@ -6,8 +6,10 @@ import {
   MY_MEMBER_ID,
   productDetailOf,
   productSummaries,
+  searchProducts,
+  searchSuggestions,
 } from '@/features/products/fixtures'
-import { ProductCategory, ProductCategoryGroup } from '@/shared/api/types'
+import { ProductCategory, ProductCategoryGroup, ProductSort } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
 
 // 상품 조회 기본 응답 (products fixtures). 실패 시나리오는 테스트에서 server.use(...)로 덮는다.
@@ -50,15 +52,25 @@ export const productHandlers = [
     ]),
   ),
 
+  // 검색어는 상품명·카테고리 이름에서 찾고, 가격 정렬만 흉내 낸다(그 밖의 정렬은 fixtures 순서)
   http.get('*/api/v1/products', ({ request }) => {
     const params = new URL(request.url).searchParams
+    const keyword = params.get('keyword')?.trim() ?? ''
     const category = params.get('category')
     const region = params.get('region')
-    const matched = productSummaries.filter(
+    const sort = params.get('sort')
+    const matched = (keyword ? searchProducts(keyword) : productSummaries).filter(
       (product) =>
         (!category || product.category === category) && (!region || product.region === region),
     )
-    return HttpResponse.json(pageOf(matched, params))
+    if (sort === ProductSort.PRICE_ASC || sort === ProductSort.PRICE_DESC) {
+      const direction = sort === ProductSort.PRICE_ASC ? 1 : -1
+      matched.sort((a, b) => (a.minSalePrice - b.minSalePrice) * direction)
+    }
+    return HttpResponse.json({
+      ...pageOf(matched, params),
+      suggestion: searchSuggestions[keyword] ?? null,
+    })
   }),
 
   http.get('*/api/v1/products/:productId', ({ params, request }) => {

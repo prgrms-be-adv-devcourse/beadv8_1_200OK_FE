@@ -1,8 +1,8 @@
-import { Button, Checkbox, NativeSelect, Skeleton } from '@mantine/core'
+import { Anchor, Button, Checkbox, NativeSelect, Skeleton } from '@mantine/core'
 import { PackageOpen, Search, X } from 'lucide-react'
 import { Link } from 'react-router'
-import { type ProductCategory, ProductRegion } from '@/shared/api/types'
-import { regionLabels } from '@/shared/lib/labels'
+import { type ProductCategory, ProductRegion, type ProductSort } from '@/shared/api/types'
+import { productSortLabels, regionLabels } from '@/shared/lib/labels'
 import {
   type EmptyViewProps,
   type LoginReason,
@@ -14,11 +14,14 @@ import {
   ProductGridSkeleton,
   QueryState,
 } from '@/shared/ui'
+import { ProductSearchForm } from '../components/ProductSearchForm'
+import { defaultSortOf, productListPath, sortOptionsOf } from '../listUrl'
 import type { CategoryOption, ListStatus } from '../types'
 import classes from './ProductListView.module.css'
 
 // 상품 목록 · 검색. 시안: b2c/Category, CategoryMobile
-// 필터는 API가 받는 category·region만(URL searchParams). 정렬은 API가 없어 두지 않는다(A-9).
+// 검색어·필터·정렬은 URL searchParams(listUrl.ts). 검색 중에 카테고리 칩을 누르면 검색어 안에서 거른다.
+// 모바일은 헤더에 검색창이 없어 목록 위에 둔다(데스크톱은 PublicLayout 헤더).
 // 품절 제외는 서버 파라미터가 없어 불러온 목록에서 거른다 — 거르는 일은 컨테이너가 하고 View는 결과만 받는다.
 
 export type ProductListViewProps = {
@@ -31,9 +34,17 @@ export type ProductListViewProps = {
   category?: ProductCategory | null
   region?: ProductRegion | null
   onRegionChange: (region: ProductRegion | null) => void
-  /** TODO(api): 검색어 파라미터가 없다(A-9). 검색이 생기면 쓴다 */
-  query?: string
+  /** 검색어 (앞뒤 공백 없음) */
+  query?: string | null
   onClearQuery?: () => void
+  /** 모바일 검색창 제출. 없으면 모바일 검색창을 그리지 않는다 */
+  onSearch?: (keyword: string) => void
+  /** 주소에 남은 정렬. 없으면 기본(검색어가 있으면 관련도순, 없으면 최신순) */
+  sort?: ProductSort | null
+  /** 없으면 정렬을 그리지 않는다 */
+  onSortChange?: (sort: ProductSort) => void
+  /** 서버가 준 오타 교정 제안(바른 품목). 있으면 ‘혹시 …를 찾으셨나요?’ 링크 */
+  suggestion?: string | null
   hideSoldOut: boolean
   onHideSoldOutChange: (hide: boolean) => void
   /** 품절 제외로 숨긴 상품 수 */
@@ -54,11 +65,11 @@ const regionOptions = [
   ...Object.values(ProductRegion).map((code) => ({ value: code, label: regionLabels[code] })),
 ]
 
-/** 받침 있는 말 뒤에는 ‘과’, 없으면 ‘와’ */
-function withWa(word: string) {
+/** 받침 있는 말 뒤에는 withFinal(과·을), 없으면 withoutFinal(와·를) */
+function particle(word: string, withFinal: string, withoutFinal: string) {
   const code = word.charCodeAt(word.length - 1)
   const hasFinal = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
-  return `${word}${hasFinal ? '과' : '와'}`
+  return hasFinal ? withFinal : withoutFinal
 }
 
 export function ProductListView({
@@ -71,6 +82,10 @@ export function ProductListView({
   onRegionChange,
   query,
   onClearQuery,
+  onSearch,
+  sort,
+  onSortChange,
+  suggestion,
   hideSoldOut,
   onHideSoldOutChange,
   hiddenSoldOutCount = 0,
@@ -84,10 +99,16 @@ export function ProductListView({
   onLoginPromptClose = () => {},
 }: ProductListViewProps) {
   const categoryLabel = categories.find((c) => c.code === category)?.label
-  const title = query ? `“${query}” 검색 결과` : (categoryLabel ?? '전체 상품')
+  const title = query ? `‘${query}’ 검색 결과` : (categoryLabel ?? '전체 상품')
   const scopeLabel = [region ? regionLabels[region] : null, categoryLabel].filter(Boolean).join(' ')
   const loaded = status === 'success'
   const count = totalCount ?? items.length
+  // 검색 머리말은 개수까지: ‘사과’ 검색 결과 12개
+  const heading = query && loaded ? `${title} ${count}개` : title
+  const sortOptions = sortOptionsOf(query).map((code) => ({
+    value: code,
+    label: productSortLabels[code],
+  }))
   const allSoldOutHidden = loaded && items.length === 0 && hiddenSoldOutCount > 0
   const showTools = status === 'pending' || (loaded && (items.length > 0 || allSoldOutHidden))
 
@@ -100,10 +121,13 @@ export function ProductListView({
     : query
       ? {
           icon: <Search />,
-          title: `“${withWa(query)}” 맞는 상품이 없어요`,
-          description:
-            '검색어의 철자가 맞는지 확인해 주세요. 품목 이름(예: 사과, 고구마)으로 찾아도 돼요.',
-          action: { label: '전체 상품 보기', to: '/products' },
+          title: `‘${query}’${particle(query, '과', '와')} 맞는 상품이 없어요`,
+          description: scopeLabel
+            ? `${scopeLabel} 안에서는 찾지 못했어요. 조건을 풀거나 철자를 확인해 주세요.`
+            : '검색어의 철자가 맞는지 확인해 주세요. 품목 이름(예: 사과, 고구마)으로 찾아도 돼요.',
+          action: scopeLabel
+            ? { label: '조건 없이 다시 찾기', to: productListPath({ q: query, sort }) }
+            : { label: '전체 상품 보기', to: '/products' },
         }
       : {
           icon: <PackageOpen />,
@@ -115,30 +139,41 @@ export function ProductListView({
   return (
     <div className={classes.root}>
       <PageHeader
-        title={title}
+        title={heading}
         backTo="/"
         breadcrumbs={[{ label: '홈', to: '/' }, { label: title }]}
       />
 
-      {/* 모바일 카테고리 (데스크톱은 헤더의 카테고리 탭) */}
+      {/* 모바일 검색창 (데스크톱은 헤더 검색창) */}
+      {onSearch && (
+        <ProductSearchForm
+          key={query ?? ''}
+          className={classes.mobileSearch}
+          defaultValue={query ?? ''}
+          placeholder="사과, 고구마"
+          onSearch={onSearch}
+        />
+      )}
+
+      {/* 모바일 카테고리 (데스크톱은 헤더의 카테고리 탭). 검색 중이면 검색어를 두고 카테고리만 바꾼다 */}
       <nav aria-label="카테고리" className={classes.categories}>
         <Button
           component={Link}
-          to="/products"
+          to={productListPath({ q: query, sort })}
           size="sm"
           radius="xl"
-          variant={!category && !query ? 'filled' : 'outline'}
-          aria-current={!category && !query ? 'page' : undefined}
+          variant={!category ? 'filled' : 'outline'}
+          aria-current={!category ? 'page' : undefined}
         >
           전체
         </Button>
         {categories.map((c) => {
-          const active = c.code === category && !query
+          const active = c.code === category
           return (
             <Button
               key={c.code}
               component={Link}
-              to={`/products?category=${c.code}`}
+              to={productListPath({ q: query, category: c.code, sort })}
               size="sm"
               radius="xl"
               variant={active ? 'filled' : 'outline'}
@@ -180,16 +215,40 @@ export function ProductListView({
               />
               <NativeSelect
                 aria-label="산지"
-                className={classes.region}
+                className={classes.select}
                 data={regionOptions}
                 value={region ?? ''}
                 onChange={(event) =>
                   onRegionChange((event.currentTarget.value || null) as ProductRegion | null)
                 }
               />
+              {onSortChange && (
+                <NativeSelect
+                  aria-label="정렬"
+                  className={classes.select}
+                  data={sortOptions}
+                  value={sort ?? defaultSortOf(query)}
+                  onChange={(event) => onSortChange(event.currentTarget.value as ProductSort)}
+                />
+              )}
             </div>
           )}
         </div>
+
+        {loaded && query && suggestion && (
+          <p className={classes.suggestion}>
+            혹시{' '}
+            <Anchor
+              component={Link}
+              to={productListPath({ q: suggestion, category, region, sort })}
+              className={classes.suggestionLink}
+              aria-label={`‘${suggestion}’ 검색 결과 보기`}
+            >
+              ‘{suggestion}’
+            </Anchor>
+            {particle(suggestion, '을', '를')} 찾으셨나요?
+          </p>
+        )}
 
         <QueryState
           status={loaded && items.length === 0 ? 'empty' : status}

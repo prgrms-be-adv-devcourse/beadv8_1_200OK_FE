@@ -51,6 +51,14 @@ export enum ProductVisibility {
   HIDDEN = 'HIDDEN',
 }
 
+/** 구매자 상품 목록 정렬. 보내지 않으면 검색어가 있을 때 RELEVANCE, 없을 때 LATEST. 검색어 없이 RELEVANCE면 LATEST */
+export enum ProductSort {
+  RELEVANCE = 'RELEVANCE',
+  PRICE_ASC = 'PRICE_ASC', // minSalePrice 기준
+  PRICE_DESC = 'PRICE_DESC',
+  LATEST = 'LATEST',
+}
+
 export enum MediaPurpose {
   PRODUCT = 'PRODUCT',
   PRODUCT_REVIEW = 'PRODUCT_REVIEW',
@@ -198,6 +206,12 @@ export type PageResponse<T> = {
 }
 
 export type ProductPage<T> = PageResponse<T>
+
+/** 구매자 상품 목록(GET /products) 응답. 페이지 5칸 + 오타 교정 제안 */
+export type ProductSearchPage = ProductPage<ProductSummary> & {
+  // 검색어가 품목 이름의 오타로 보일 때 바른 품목(예: "고춧가루"). 결과는 원래 검색어 그대로. 없으면 null
+  suggestion: string | null
+}
 export type PayoutPage<T> = PageResponse<T>
 
 // ─── 회원·인증 ───────────────────────────────────────────
@@ -290,9 +304,11 @@ export type ProductDetail = {
 }
 
 export type ProductListParams = {
+  keyword?: string // 50자 이하. 상품명·옵션명·카테고리 이름. 비우거나 공백·기호만이면 검색어 없이 조회
   categoryGroup?: ProductCategoryGroup
   category?: ProductCategory
   region?: ProductRegion
+  sort?: ProductSort
   page?: number
   size?: number
 }

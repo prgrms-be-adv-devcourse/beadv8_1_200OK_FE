@@ -283,6 +283,24 @@ export const productCardItems: ProductCardItem[] = entries.map((e) => ({
 }))
 
 /** 상품 상세 경로 → 판매자 (TODO(api): 상세 API에 판매자가 없다) */
+// ─── 검색 ────────────────────────────────────────────────
+
+/** 오타 → 바른 품목 (서버 suggestion 흉내: 품목 이름과 자모 하나만 다르다) */
+export const searchSuggestions: Record<string, string> = {
+  고구미: '고구마',
+  고추가루: '고춧가루',
+}
+
+/** 상품명·카테고리 이름에 검색어(공백 무시)가 들어 있는 상품. 서버 검색을 흉내 낸 것이다 */
+export function searchProducts(keyword: string): ProductSummary[] {
+  const compact = (text: string) => text.replace(/\s+/g, '')
+  const word = compact(keyword)
+  return productSummaries.filter(
+    (product) =>
+      compact(product.name).includes(word) || categoryLabels[product.category].includes(word),
+  )
+}
+
 export function sellerOfProduct(productId: number): SellerProfile | undefined {
   return entries.find((e) => e.summary.productId === productId)?.seller
 }
