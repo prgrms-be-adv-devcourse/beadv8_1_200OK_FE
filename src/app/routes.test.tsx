@@ -27,7 +27,7 @@ const screens: [path: string, title: string][] = [
   ['/find-account/reset?token=abc', '새 비밀번호 정하기'],
   ['/cart', '장바구니'],
   ['/checkout', '주문서'],
-  ['/checkout/complete?orderId=1', '주문이 완료됐어요'],
+  ['/checkout/complete?orderId=184', '주문이 완료됐어요'],
   [
     '/wallet/charge/success?orderId=CHG-TEST-1&paymentKey=pk_1&amount=20000',
     '20,000원을 충전했어요',

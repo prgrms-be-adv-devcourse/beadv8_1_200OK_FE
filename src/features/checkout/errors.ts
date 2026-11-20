@@ -37,3 +37,7 @@ export function isOrderInProgress(error: unknown): boolean {
     error.detail.includes('같은 주문 요청을 처리하고 있')
   )
 }
+
+/** 주문은 만들었지만 결제가 실패·취소됐을 때(PAYMENT_FAILED·CANCELED). 서버가 재고를 풀고 장바구니는 그대로다 */
+export const PAYMENT_FAILED_MESSAGE =
+  '예치금은 빠져나가지 않았어요. 잔액을 확인하고 다시 결제해 주세요.'

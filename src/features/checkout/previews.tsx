@@ -4,7 +4,9 @@ import {
   BALANCE_SHORT,
   checkoutSample,
   completedOrderSample,
+  failedOrderSample,
   feeQuoteSample,
+  pendingOrderSample,
   remoteQuoteSample,
   SAMPLE_ORDER_ID,
   savedAddress,
@@ -113,10 +115,11 @@ export const checkoutPreviews: ScreenPreview[] = [
     states: [
       {
         id: 'done',
-        label: '주문 완료',
+        label: '주문 완료 (결제 완료)',
         render: () => (
           <CheckoutCompleteView
             orderId={SAMPLE_ORDER_ID}
+            payment="paid"
             order={completedOrderSample}
             sellerNames={sellerNames}
             balance={BALANCE_ENOUGH - completedOrderSample.totalAmount}
@@ -124,9 +127,44 @@ export const checkoutPreviews: ScreenPreview[] = [
         ),
       },
       {
+        id: 'waiting',
+        label: '결제 확인 중 (결제 대기)',
+        render: () => (
+          <CheckoutCompleteView
+            orderId={SAMPLE_ORDER_ID}
+            payment="waiting"
+            order={pendingOrderSample}
+            sellerNames={sellerNames}
+          />
+        ),
+      },
+      {
+        id: 'timed-out',
+        label: '30초 넘게 결제 대기',
+        render: () => (
+          <CheckoutCompleteView
+            orderId={SAMPLE_ORDER_ID}
+            payment="timedOut"
+            order={pendingOrderSample}
+            sellerNames={sellerNames}
+          />
+        ),
+      },
+      {
+        id: 'failed',
+        label: '결제 실패·취소',
+        render: () => (
+          <CheckoutCompleteView
+            orderId={SAMPLE_ORDER_ID}
+            payment="failed"
+            order={failedOrderSample}
+          />
+        ),
+      },
+      {
         id: 'id-only',
         label: '주문번호만 (주문 상세를 못 받음)',
-        render: () => <CheckoutCompleteView orderId={SAMPLE_ORDER_ID} />,
+        render: () => <CheckoutCompleteView orderId={SAMPLE_ORDER_ID} payment="waiting" />,
       },
     ],
   },
