@@ -10,9 +10,9 @@ import { queryKeyPrefix } from '@/shared/api/queryKeys'
 import type {
   CategoryGroup,
   ProductCategory,
-  ProductPage,
   ProductRegion,
-  ProductSummary,
+  ProductSearchPage,
+  ProductSort,
 } from '@/shared/api/types'
 import { fetchCategories, fetchMyProductReviews, fetchProducts } from './api'
 import type { CategoryOption, ListStatus } from './types'
@@ -25,7 +25,13 @@ const CATEGORY_STALE_TIME = 60 * 60_000
 
 export const PRODUCT_PAGE_SIZE = 20
 
-export type ProductFilters = { category?: ProductCategory; region?: ProductRegion }
+/** 목록 조건. 값이 없는 칸은 요청에 넣지 않는다(정렬이 없으면 서버 기본) */
+export type ProductFilters = {
+  keyword?: string
+  category?: ProductCategory
+  region?: ProductRegion
+  sort?: ProductSort
+}
 
 export const productKeys = {
   all: [queryKeyPrefix.products] as const,
@@ -116,7 +122,7 @@ export function useProductPages(filters: ProductFilters, lastPage: number) {
   const status: ListStatus =
     failed.length > 0 ? 'error' : pages.length < all.length ? 'pending' : 'success'
 
-  const last: ProductPage<ProductSummary> | undefined = pages.at(-1)
+  const last: ProductSearchPage | undefined = pages.at(-1)
   // 사이에 새 상품이 등록되면 페이지 경계가 밀려 같은 상품이 두 번 올 수 있다
   const seen = new Set<number>()
   const items = pages
@@ -127,6 +133,8 @@ export function useProductPages(filters: ProductFilters, lastPage: number) {
     status,
     items,
     totalCount: last?.totalElements ?? 0,
+    // 결과는 원래 검색어로 찾은 것이라 어느 페이지든 제안이 같다. 첫 페이지 것을 쓴다
+    suggestion: first.data?.suggestion ?? null,
     hasMore: last ? last.page + 1 < last.totalPages : false,
     nextPage: loadedLast + 1,
     nextPageOptions: pageOptions(loadedLast + 1),

@@ -1,4 +1,4 @@
-import { ProductCategory, ProductRegion, ProductStatus } from '@/shared/api/types'
+import { ProductCategory, ProductRegion, ProductSort, ProductStatus } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
   appleLowStockOptions,
@@ -44,6 +44,8 @@ const list = (props: Partial<ProductListViewProps> = {}) => (
     totalCount={productCardItems.length}
     categories={categoryOptions}
     onRegionChange={noop}
+    onSearch={noop}
+    onSortChange={noop}
     hideSoldOut={false}
     onHideSoldOutChange={noop}
     onToggleLike={noop}
@@ -53,6 +55,10 @@ const list = (props: Partial<ProductListViewProps> = {}) => (
 )
 
 const fruits = productCardItems.filter(({ product }) => product.category === ProductCategory.FRUIT)
+const apples = productCardItems.filter(({ product }) => product.name.includes('사과'))
+const byPriceAsc = [...productCardItems].sort(
+  (a, b) => a.product.minSalePrice - b.product.minSalePrice,
+)
 
 // ─── 상세 ────────────────────────────────────────────────
 
@@ -151,9 +157,62 @@ export const productPreviews: ScreenPreview[] = [
           }),
       },
       {
+        id: 'search',
+        label: '검색 결과 (사과, 관련도순)',
+        path: '/products?q=사과',
+        render: () =>
+          list({ query: '사과', onClearQuery: noop, items: apples, totalCount: apples.length }),
+      },
+      {
+        id: 'sort-price',
+        label: '정렬: 낮은 가격순',
+        path: '/products?sort=PRICE_ASC',
+        render: () => list({ sort: ProductSort.PRICE_ASC, items: byPriceAsc }),
+      },
+      {
         id: 'no-result',
         label: '검색 결과 없음',
+        path: '/products?q=샤인머스캣',
         render: () => list({ query: '샤인머스캣', onClearQuery: noop, items: [], totalCount: 0 }),
+      },
+      {
+        id: 'no-result-filtered',
+        label: '검색 결과 없음 (산지 조건)',
+        path: '/products?q=사과&region=JEJU',
+        render: () =>
+          list({
+            query: '사과',
+            region: ProductRegion.JEJU,
+            onClearQuery: noop,
+            items: [],
+            totalCount: 0,
+          }),
+      },
+      {
+        id: 'suggestion',
+        label: '오타 제안 (고추가루 → 고춧가루)',
+        path: '/products?q=고추가루',
+        render: () =>
+          list({
+            query: '고추가루',
+            suggestion: '고춧가루',
+            onClearQuery: noop,
+            items: [],
+            totalCount: 0,
+          }),
+      },
+      {
+        id: 'suggestion-with-results',
+        label: '오타 제안 + 결과 있음',
+        path: '/products?q=사가',
+        render: () =>
+          list({
+            query: '사가',
+            suggestion: '사과',
+            onClearQuery: noop,
+            items: apples,
+            totalCount: apples.length,
+          }),
       },
       {
         id: 'sold-out-hidden',

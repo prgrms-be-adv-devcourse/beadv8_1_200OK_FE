@@ -5,7 +5,12 @@ import { HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
-import { MemberRole, type ProductPage, type ProductSummary } from '@/shared/api/types'
+import {
+  MemberRole,
+  type ProductPage,
+  type ProductSearchPage,
+  type ProductSummary,
+} from '@/shared/api/types'
 import { MAX_CART_QUANTITY } from '@/shared/lib/constants'
 import { NOT_CONNECTED_REASON } from '@/shared/ui'
 import { render } from '@/test/render'
@@ -34,6 +39,24 @@ const pageOf = <T,>(content: T[], page: number, totalPages: number): ProductPage
   totalElements: totalPages * 20,
   totalPages,
 })
+
+const searchPageOf = (
+  content: ProductSummary[],
+  suggestion: string | null = null,
+): ProductSearchPage => ({ ...pageOf(content, 0, 1), totalElements: content.length, suggestion })
+
+/** 목록 요청의 검색 파라미터를 모은다. respond로 응답을 정한다 */
+function recordProducts(respond: (params: URLSearchParams) => ProductSearchPage) {
+  const requests: URLSearchParams[] = []
+  server.use(
+    http.get('*/api/v1/products', ({ request }) => {
+      const params = new URL(request.url).searchParams
+      requests.push(params)
+      return HttpResponse.json(respond(params))
+    }),
+  )
+  return requests
+}
 
 const categoriesHandler = http.get('*/api/v1/products/categories', () =>
   HttpResponse.json([
@@ -112,6 +135,119 @@ describe('ProductListPage', () => {
     fail = false
     await user.click(screen.getByRole('button', { name: '다시 시도' }))
     expect(await screen.findByText(productSummaries[0]?.name ?? '')).toBeInTheDocument()
+  })
+})
+
+describe('ProductListPage 검색·정렬', () => {
+  beforeEach(() => server.use(categoriesHandler))
+
+  it('검색어·정렬을 요청 파라미터로 보내고, 기본 정렬(관련도순)로 돌리면 sort를 빼고 첫 페이지부터 부른다', async () => {
+    const apples = productSummaries.slice(0, 2)
+    const requests = recordProducts(() => searchPageOf(apples))
+    const { router, user } = renderAt('/products?q=사과&sort=PRICE_ASC&page=0')
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '‘사과’ 검색 결과 2개' }),
+    ).toBeInTheDocument()
+    expect(Object.fromEntries(requests[0] ?? [])).toEqual({
+      keyword: '사과',
+      sort: 'PRICE_ASC',
+      page: '0',
+      size: '20',
+    })
+
+    const sort = screen.getByRole('combobox', { name: '정렬' })
+    expect(
+      within(sort)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['관련도순', '최신순', '낮은 가격순', '높은 가격순'])
+    await user.selectOptions(sort, '관련도순')
+    expect(router.state.location.search).toBe('?q=%EC%82%AC%EA%B3%BC')
+    await vi.waitFor(() => expect(requests.at(-1)?.has('sort')).toBe(false))
+    expect(requests.at(-1)?.get('keyword')).toBe('사과')
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '정렬' }), '높은 가격순')
+    expect(router.state.location.search).toBe('?q=%EC%82%AC%EA%B3%BC&sort=PRICE_DESC')
+    await vi.waitFor(() => expect(requests.at(-1)?.get('sort')).toBe('PRICE_DESC'))
+  })
+
+  it('검색어가 없으면 관련도순 없이 최신순이 기본이고, 정렬을 고르지 않으면 sort를 보내지 않는다', async () => {
+    const requests = recordProducts(() => searchPageOf(productSummaries.slice(0, 1)))
+    renderAt('/products?sort=RELEVANCE')
+
+    await screen.findByText(productSummaries[0]?.name ?? '')
+    expect(requests[0]?.has('sort')).toBe(false)
+    expect(requests[0]?.has('keyword')).toBe(false)
+    const sort = screen.getByRole('combobox', { name: '정렬' })
+    expect(sort).toHaveValue('LATEST')
+    expect(within(sort).queryByRole('option', { name: '관련도순' })).not.toBeInTheDocument()
+  })
+
+  it('검색 중에 산지를 바꾸면 검색어는 두고 첫 페이지부터 다시 부른다', async () => {
+    const requests = recordProducts(() => searchPageOf(productSummaries.slice(0, 1)))
+    const { router, user } = renderAt('/products?q=사과&page=2')
+
+    await screen.findByText(productSummaries[0]?.name ?? '')
+    await user.selectOptions(screen.getByRole('combobox', { name: '산지' }), 'JEJU')
+    expect(router.state.location.search).toBe('?q=%EC%82%AC%EA%B3%BC&region=JEJU')
+    await vi.waitFor(() =>
+      expect(Object.fromEntries(requests.at(-1) ?? [])).toMatchObject({
+        keyword: '사과',
+        region: 'JEJU',
+        page: '0',
+      }),
+    )
+  })
+
+  it('제안 링크를 누르면 제안어로 다시 검색하고, 제안이 없으면(null) 안내하지 않는다', async () => {
+    const requests = recordProducts((params) =>
+      params.get('keyword') === '고추가루'
+        ? searchPageOf([], '고춧가루')
+        : searchPageOf(productSummaries.slice(0, 1)),
+    )
+    const { router, user } = renderAt('/products?q=고추가루')
+
+    expect(await screen.findByText(/찾으셨나요/)).toHaveTextContent('혹시 ‘고춧가루’를 찾으셨나요?')
+    await user.click(screen.getByRole('link', { name: '‘고춧가루’ 검색 결과 보기' }))
+
+    expect(new URLSearchParams(router.state.location.search).get('q')).toBe('고춧가루')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '‘고춧가루’ 검색 결과 1개' }),
+    ).toBeInTheDocument()
+    expect(requests.at(-1)?.get('keyword')).toBe('고춧가루')
+    expect(screen.queryByText(/찾으셨나요/)).not.toBeInTheDocument()
+  })
+
+  it('검색 결과가 0개면 철자를 확인하라고 안내하고 전체 상품으로 이끈다', async () => {
+    recordProducts(() => searchPageOf([]))
+    renderAt('/products?q=샤인머스캣')
+
+    expect(await screen.findByText('‘샤인머스캣’과 맞는 상품이 없어요')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '‘샤인머스캣’ 검색 결과 0개' }))
+    expect(screen.getByRole('link', { name: '전체 상품 보기' })).toHaveAttribute(
+      'href',
+      '/products',
+    )
+  })
+
+  it('목록 위 검색창은 빈 검색어를 막고, 제출하면 필터 없이 새로 검색한다', async () => {
+    recordProducts(() => searchPageOf(productSummaries.slice(0, 1)))
+    const { router, user } = renderAt('/products?q=사과&category=FRUIT&sort=PRICE_ASC')
+
+    const input = await screen.findByRole('searchbox', { name: '상품 검색어' })
+    expect(input).toHaveValue('사과')
+    await user.clear(input)
+    await user.type(input, '   ')
+    await user.click(screen.getByRole('button', { name: '검색' }))
+    expect(screen.getByText('찾을 상품 이름을 입력해 주세요')).toBeInTheDocument()
+    expect(input).toHaveFocus()
+    const searchOf = () => Object.fromEntries(new URLSearchParams(router.state.location.search))
+    expect(searchOf()).toEqual({ q: '사과', category: 'FRUIT', sort: 'PRICE_ASC' })
+
+    await user.clear(input)
+    await user.type(input, ' 고구마 {Enter}')
+    expect(searchOf()).toEqual({ q: '고구마' })
   })
 })
 
