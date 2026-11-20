@@ -7,6 +7,7 @@ import {
   completedShipment,
   delayedShipment,
   deliveredShipment,
+  failedRefund,
   inquiries,
   inquiryTargets,
   myRefunds,
@@ -139,6 +140,11 @@ export const orderPreviews: ScreenPreview[] = [
                 : r,
             ),
           }),
+      },
+      {
+        id: 'cancel-failed',
+        label: '취소 실패 · 다시 요청 가능',
+        render: () => cancel({ refunds: [failedRefund] }),
       },
       {
         id: 'cancel-requested',

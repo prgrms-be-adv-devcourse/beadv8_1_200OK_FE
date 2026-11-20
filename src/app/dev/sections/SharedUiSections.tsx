@@ -332,6 +332,7 @@ const options: ProductOption[] = [
     salePrice: 12900,
     discountRate: 0,
     soldOut: false,
+    lowStock: false,
   },
   {
     optionId: 12,
@@ -340,8 +341,17 @@ const options: ProductOption[] = [
     salePrice: 23900,
     discountRate: 0,
     soldOut: false,
+    lowStock: false,
   },
-  { optionId: 13, name: '4입', listPrice: 17900, salePrice: 17900, discountRate: 0, soldOut: true },
+  {
+    optionId: 13,
+    name: '4입',
+    listPrice: 17900,
+    salePrice: 17900,
+    discountRate: 0,
+    soldOut: true,
+    lowStock: false,
+  },
   {
     optionId: 15,
     name: '3kg (16~18과)',

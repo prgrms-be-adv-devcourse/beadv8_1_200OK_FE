@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { RefundStatus } from '@/shared/api/refund'
 import { OrderItemStatus, OrderStatus, ProductStatus } from '@/shared/api/types'
+import { ChargeReviewState, chargeReviewStateLabels } from '@/shared/lib/chargeReviewState'
 import { orderItemStatusLabels, orderStatusLabels, productStatusLabels } from '@/shared/lib/labels'
 import { PayoutBlockStatus, payoutBlockStatusLabels } from '@/shared/lib/payoutBlockState'
 import {
@@ -44,6 +45,7 @@ export type BadgeStatus =
   | SellerApplicationStatus
   | PayoutBlockStatus
   | OptionStockState
+  | ChargeReviewState
 
 type BadgeSpec = { tone: StatusTone; icon: LucideIcon | null; label: string }
 
@@ -55,6 +57,7 @@ const labels: Record<BadgeStatus, string> = {
   ...sellerApplicationStatusLabels,
   ...payoutBlockStatusLabels,
   ...optionStockStateLabels,
+  ...chargeReviewStateLabels,
 }
 
 const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
@@ -94,6 +97,15 @@ const looks: Record<BadgeStatus, Omit<BadgeSpec, 'label'>> = {
   [PayoutBlockStatus.RESOLVED]: { tone: 'success', icon: CircleCheck },
   // 상품 상세 옵션 재고 (품절 임박, 수량 없음)
   [OptionStockState.LOW_STOCK]: { tone: 'warning', icon: TriangleAlert },
+  // 관리자 충전 건 처리 (멈춘 충전 건 목록 · 상세)
+  [ChargeReviewState.HELD]: { tone: 'warning', icon: CirclePause },
+  [ChargeReviewState.CANCEL_UNCONFIRMED]: { tone: 'error', icon: TriangleAlert },
+  [ChargeReviewState.AWAITING_CANCEL]: { tone: 'error', icon: TriangleAlert },
+  [ChargeReviewState.CHECKING]: { tone: 'info', icon: Loader },
+  [ChargeReviewState.PENDING]: { tone: 'neutral', icon: Clock },
+  [ChargeReviewState.COMPLETED]: { tone: 'success', icon: CircleCheck },
+  [ChargeReviewState.FAILED]: { tone: 'neutral', icon: CircleX },
+  [ChargeReviewState.PAYMENT_CANCELED]: { tone: 'neutral', icon: RotateCcw },
 }
 
 export function getStatusBadgeSpec(status: BadgeStatus): BadgeSpec {
@@ -169,6 +181,8 @@ const refundStatusLooks: Record<RefundStatus, Omit<BadgeSpec, 'label'>> = {
   [RefundStatus.COMPLETED]: { tone: 'success', icon: CircleCheck },
   [RefundStatus.REJECTED]: { tone: 'error', icon: CircleX },
   [RefundStatus.WITHDRAWN]: { tone: 'neutral', icon: RotateCcw },
+  // 거절(CircleX)과 같은 빨강이라 아이콘으로 구분한다
+  [RefundStatus.FAILED]: { tone: 'error', icon: TriangleAlert },
 }
 
 export type RefundStatusBadgeProps = Omit<BadgeProps, 'color' | 'leftSection' | 'children'> & {

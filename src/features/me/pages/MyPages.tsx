@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useSellerMenuStatus } from '@/features/sellerApply'
 import { toAddressRequest, toShippingAddress, useDefaultAddress } from '@/shared/api/defaultAddress'
 import { myInfoQueryOptions } from '@/shared/api/memberInfo'
 import { walletBalanceQueryOptions } from '@/shared/api/walletBalance'
+import { showToast } from '@/shared/ui'
 import {
   addressErrorMessage,
   infoErrorMessage,
   toAddressSubmitErrors,
   toInfoSubmitErrors,
+  toPasswordSubmitErrors,
 } from '../errors'
-import { useSaveDefaultAddress, useUpdateMyInfo } from '../queries'
+import { useChangePassword, useSaveDefaultAddress, useUpdateMyInfo } from '../queries'
 import { AccountNotConnectedView, type AccountTab } from '../views/AccountView'
 import { type LikesTab, LikesView } from '../views/LikesView'
 import { MyPageView } from '../views/MyPageView'
@@ -21,7 +23,8 @@ import { MyPageView } from '../views/MyPageView'
 // API가 없는 곳은 가짜 데이터를 그리지 않고 ‘연결 전’으로 보여 준다(값은 넘기지 않는다).
 // 프로필은 ✅ GET /members/me(못 받으면 프로필 자리만 안내, 나머지 화면은 그대로).
 // 배송지는 ✅ GET·PUT /shipments/addresses/default (BUYER만. 판매자·관리자는 부르지 않고 ‘–’).
-// TODO(api): 주문 상태별 집계, 📝 관심 상품·팔로우 농가, ❌ 비밀번호·탈퇴·배송지 삭제 API 없음.
+// 비밀번호 변경은 ✅ PATCH /members/me/password. 성공하면 서버가 모든 토큰을 무효로 만들어 세션을 끝내고 /login으로 보낸다.
+// TODO(api): 주문 상태별 집계, 📝 관심 상품·팔로우 농가, ❌ 탈퇴·배송지 삭제 API 없음.
 //   상점 이름은 판매자 프로필(판매자 센터 청크)에 있어 여기선 보이지 않는다.
 
 export function MyPage() {
@@ -75,6 +78,15 @@ export function AccountPage() {
   const address = useDefaultAddress()
   const saveAddress = useSaveDefaultAddress()
   const addressErrors = useMemo(() => toAddressSubmitErrors(saveAddress.error), [saveAddress.error])
+  const navigate = useNavigate()
+  const changePassword = useChangePassword(() => {
+    showToast({ message: '비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요' })
+    void navigate('/login', { replace: true })
+  })
+  const passwordErrors = useMemo(
+    () => toPasswordSubmitErrors(changePassword.error),
+    [changePassword.error],
+  )
   return (
     <AccountNotConnectedView
       tab={tab}
@@ -89,6 +101,12 @@ export function AccountPage() {
         serverErrors: errors.fields,
         errorMessage: errors.message,
         saved: update.isSuccess,
+      }}
+      password={{
+        onSave: (values) => changePassword.mutate(values),
+        submitting: changePassword.isPending,
+        serverErrors: passwordErrors.fields,
+        errorMessage: passwordErrors.message,
       }}
       address={{
         // BUYER가 아니면(판매자·관리자) 부르지 않는다 → 등록 전으로 보이게 하지 않고 안내만

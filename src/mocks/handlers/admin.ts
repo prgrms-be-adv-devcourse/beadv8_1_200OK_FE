@@ -14,6 +14,8 @@ import {
   resolutions,
   sellerApplicationSummaries,
   sentimentAnalysis,
+  untaggedProducts,
+  zeroResultKeywords,
 } from '@/features/admin/fixtures'
 import { SellerApplicationStatus } from '@/shared/api/types'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
@@ -30,6 +32,7 @@ const notFoundApplication = problem(404, '판매자 신청을 찾을 수 없습�
 const unsupported = () => problem(501, '아직 지원하지 않는 기능입니다.')
 
 const detailOf = (id: string) => findApplication(Number(id))
+const limitOf = (request: Request) => Number(new URL(request.url).searchParams.get('limit') ?? 20)
 
 export const adminHandlers = [
   // ─── 판매자 신청 심사 ──────────────────────────────────
@@ -231,4 +234,13 @@ export const adminHandlers = [
   // ─── 리뷰 분석 테스트 ──────────────────────────────────
   http.post('*/api/v1/admin/review-analysis/keywords', () => HttpResponse.json(keywordAnalysis)),
   http.post('*/api/v1/admin/review-analysis/sentiment', () => HttpResponse.json(sentimentAnalysis)),
+
+  // ─── 검색 점검 ─────────────────────────────────────────
+  // 기간은 보지 않고 limit만큼 자른다. 기간 오류(400)는 테스트에서 덮는다
+  http.get('*/api/v1/admin/product-search/zero-result-keywords', ({ request }) =>
+    HttpResponse.json(zeroResultKeywords.slice(0, limitOf(request))),
+  ),
+  http.get('*/api/v1/admin/product-search/untagged-products', ({ request }) =>
+    HttpResponse.json(untaggedProducts.slice(0, limitOf(request))),
+  ),
 ]

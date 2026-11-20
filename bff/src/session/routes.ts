@@ -41,9 +41,10 @@ export function sessionRoutes(deps: { upstream: Upstream; timeoutMs: number }) {
         if (!view) return problem(401, problemDetail.loginRequired, c.req.path)
         return c.json(view)
       })
-      // 백엔드에 로그아웃 API가 없어 refresh를 서버에서 끊지 못한다. 쿠키만 지운다 (ADR-0009)
-      .post('/bff/session/logout', (c) => {
-        c.var.auth.end()
+      // refresh 쿠키로 백엔드 세션을 끊고 두 쿠키를 지운다. 백엔드가 실패해도 쿠키는 지우고 204다.
+      // 이미 받은 access는 만료(30분)까지 백엔드에서 유효하다(백엔드가 끊지 못함)
+      .post('/bff/session/logout', async (c) => {
+        await c.var.auth.logout()
         return c.body(null, 204)
       })
   )

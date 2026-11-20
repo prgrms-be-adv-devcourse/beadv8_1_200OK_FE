@@ -163,6 +163,9 @@ export const remoteAreaOrder: OrderDetail = detail(185, OrderStatus.PAID, '2026-
 // ─── 취소 요청 (✅ GET /refunds) — 테스트(MSW)·/__design 전용 ───────────
 // 주문 184: 고구마(1842)는 승인 대기, 사과(1841)는 철회해서 다시 요청할 수 있다.
 
+/** 서버가 FAILED에 적는 이유(Refund.FAILED_REASON) */
+const FAILED_REASON = '환불 처리에 실패해 취소를 되돌렸습니다. 상품은 원래대로 배송됩니다.'
+
 const refund = (patch: Partial<Refund> & Pick<Refund, 'refundId' | 'status'>): Refund => ({
   orderId: 184,
   orderItemId: 1842,
@@ -183,7 +186,7 @@ const refund = (patch: Partial<Refund> & Pick<Refund, 'refundId' | 'status'>): R
   ...patch,
 })
 
-/** 최신순: 승인 대기 · 철회 · 거절 · 환불 완료(배송비 환불) */
+/** 최신순: 승인 대기 · 철회 · 거절 · 환불 완료(배송비 환불) · 취소 실패 */
 export const myRefunds: Refund[] = [
   refund({ refundId: 41, status: RefundStatus.REQUESTED, cancelReason: '옵션을 잘못 골랐어요' }),
   refund({
@@ -228,7 +231,29 @@ export const myRefunds: Refund[] = [
     decidedAt: '2026-10-14T21:30:00',
     completedAt: '2026-10-14T21:31:00',
   }),
+  refund({
+    refundId: 37,
+    status: RefundStatus.FAILED,
+    orderId: 132,
+    orderItemId: 1321,
+    productName: '성주 참외 꿀참외',
+    optionName: '2kg (6~8과)',
+    unitPrice: 19900,
+    itemAmount: 19900,
+    refundAmount: 19900,
+    rejectReason: FAILED_REASON,
+    requestedAt: '2026-10-13T09:00:00',
+    decidedAt: '2026-10-13T09:20:00',
+  }),
 ]
+
+/** 주문 184 고구마: 승인 뒤 처리가 실패해 취소를 되돌림. 다시 요청할 수 있다(미리보기용) */
+export const failedRefund: Refund = refund({
+  refundId: 36,
+  status: RefundStatus.FAILED,
+  rejectReason: FAILED_REASON,
+  decidedAt: '2026-10-18T15:20:00',
+})
 
 /** 승인 뒤 처리 중(일부 취소로 배송비를 뺀 경우), 미리보기용 */
 export const processingRefund: Refund = refund({

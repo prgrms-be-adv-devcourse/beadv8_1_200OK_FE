@@ -28,12 +28,17 @@ import {
   analyzeReviewKeywords,
   analyzeReviewSentiment,
   approveSellerApplication,
+  cancelChargePayment,
+  completeCharge,
   createPayoutAdjustment,
+  failCharge,
   getAdminPayout,
   getAdminPayoutCandidates,
   getAdminPayoutItems,
   getAdminPayouts,
   getBlockedOrders,
+  getChargeDetail,
+  getChargeTargets,
   getDepositCheckReviews,
   getProductChoices,
   getResolutionRequests,
@@ -41,6 +46,8 @@ import {
   getResolutions,
   getSellerApplication,
   getSellerApplications,
+  getUntaggedProducts,
+  getZeroResultKeywords,
   rejectSellerApplication,
   resolveBlockedOrder,
   runPayoutForOrderItem,
@@ -53,6 +60,7 @@ import {
   toBlockedOrderParams,
   toResolutionRequestParams,
 } from './blockedOrderFilter'
+import type { AdminCharge, AdminChargeDetail, ChargeReasonRequest } from './charges'
 import { canQueryPayouts, toAdminPayoutParams } from './payoutFilter'
 import type {
   BlockedOrder,
@@ -67,7 +75,10 @@ import type {
   ResolutionRequestParams,
   ResolutionView,
   ReviewAnalysisRequest,
+  SearchInsightsParams,
   SentimentAnalysis,
+  UntaggedProduct,
+  ZeroResultKeyword,
 } from './types'
 
 // 관리자 콘솔 쿼리 키 · 훅. 심사 처리 뒤에는 상세를 응답으로 바로 바꾸고 목록·개수는 접두어로 비운다.
@@ -102,6 +113,10 @@ export const adminKeys = {
       : ([queryKeyPrefix.admin, 'resolutions', orderId] as const),
   depositChecks: (page: number) => [queryKeyPrefix.admin, 'depositChecks', page] as const,
   productChoices: [queryKeyPrefix.admin, 'productChoices'] as const,
+  zeroResultKeywords: (params: SearchInsightsParams) =>
+    [queryKeyPrefix.admin, 'zeroResultKeywords', params] as const,
+  untaggedProducts: (params: SearchInsightsParams) =>
+    [queryKeyPrefix.admin, 'untaggedProducts', params] as const,
 }
 
 export const APPLICATION_PAGE_SIZE = 20
@@ -382,6 +397,64 @@ export function useDepositCheckReviews(page: number) {
   })
 }
 
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+
+export const chargeKeys = {
+  all: [queryKeyPrefix.admin, 'charges'] as const,
+  targets: [queryKeyPrefix.admin, 'charges', 'targets'] as const,
+  detail: (chargeNo: string) => [queryKeyPrefix.admin, 'charges', 'detail', chargeNo] as const,
+}
+
+export function useChargeTargets() {
+  return useQuery<AdminCharge[], ApiError>({
+    queryKey: chargeKeys.targets,
+    queryFn: getChargeTargets,
+  })
+}
+
+/** 부를 때마다 토스에 묻는다. 404(없는 충전 건)는 다시 묻지 않는다 */
+export function useChargeDetail(chargeNo: string | null) {
+  return useQuery<AdminChargeDetail, ApiError>({
+    queryKey: chargeKeys.detail(chargeNo ?? ''),
+    queryFn: () => getChargeDetail(chargeNo as string),
+    enabled: chargeNo !== null,
+    retry: false,
+  })
+}
+
+/** 409(이미 끝났거나 먼저 처리됨 · 토스 상태와 맞지 않음)와 503(토스 답 없음)은 상세를 다시 받아 화면을 맞춘다 */
+export const shouldRefetchAfterChargeError = (error: ApiError) =>
+  error.status === 409 || error.status === 503
+
+/**
+ * 잔액 반영 · 실패 처리 · 결제 취소. 응답은 충전 건뿐이라, 끝나면 토스 상태까지 다시 받으려고 상세와 목록을 비운다.
+ * 409·503도 상세·목록을 다시 받는다.
+ */
+export function useChargeActions(chargeNo: string | null) {
+  const queryClient = useQueryClient()
+  const no = chargeNo ?? ''
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: chargeKeys.all })
+  const onError = (error: ApiError) => {
+    if (shouldRefetchAfterChargeError(error)) refresh()
+  }
+  const complete = useMutation<AdminCharge, ApiError, void>({
+    mutationFn: () => completeCharge(no),
+    onSuccess: refresh,
+    onError,
+  })
+  const fail = useMutation<AdminCharge, ApiError, ChargeReasonRequest>({
+    mutationFn: (body) => failCharge(no, body),
+    onSuccess: refresh,
+    onError,
+  })
+  const cancelPayment = useMutation<AdminCharge, ApiError, ChargeReasonRequest>({
+    mutationFn: (body) => cancelChargePayment(no, body),
+    onSuccess: refresh,
+    onError,
+  })
+  return { complete, fail, cancelPayment }
+}
+
 // ─── 리뷰 분석 테스트 ────────────────────────────────────
 
 export function useProductChoices() {
@@ -401,5 +474,26 @@ export function useAnalyzeReviewKeywords() {
 export function useAnalyzeReviewSentiment() {
   return useMutation<SentimentAnalysis, ApiError, ReviewAnalysisRequest>({
     mutationFn: analyzeReviewSentiment,
+  })
+}
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+/** 지금 보는 탭만 부른다(enabled). 조건을 바꾸는 동안 이전 목록을 남긴다 */
+export function useZeroResultKeywords(params: SearchInsightsParams, enabled: boolean) {
+  return useQuery<ZeroResultKeyword[], ApiError>({
+    queryKey: adminKeys.zeroResultKeywords(params),
+    queryFn: () => getZeroResultKeywords(params),
+    enabled,
+    placeholderData: (previous) => previous,
+  })
+}
+
+export function useUntaggedProducts(params: SearchInsightsParams, enabled: boolean) {
+  return useQuery<UntaggedProduct[], ApiError>({
+    queryKey: adminKeys.untaggedProducts(params),
+    queryFn: () => getUntaggedProducts(params),
+    enabled,
+    placeholderData: (previous) => previous,
   })
 }

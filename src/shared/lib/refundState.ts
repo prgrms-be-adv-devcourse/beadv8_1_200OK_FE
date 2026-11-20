@@ -8,4 +8,5 @@ export const refundStatusLabels: Record<RefundStatus, string> = {
   [RefundStatus.COMPLETED]: '환불 완료',
   [RefundStatus.REJECTED]: '거절됨',
   [RefundStatus.WITHDRAWN]: '철회함',
+  [RefundStatus.FAILED]: '취소 실패',
 }

@@ -238,4 +238,38 @@ describe('apiClient', () => {
     expect(reissues).toBe(0)
     expect(getAuthSession()).toBeNull()
   })
+
+  it('비밀번호를 바꿔 폐기된 토큰(401 invalid-token)은 재발급하지 않고 세션을 끝낸 뒤 로그인으로 보낸다', async () => {
+    let reissues = 0
+    server.use(
+      http.get('*/api/v1/members/me', ({ request }) =>
+        request.headers.has('Authorization')
+          ? problem(401, '유효하지 않은 토큰입니다.', {
+              type: 'https://api.example.com/problems/invalid-token',
+              title: 'Invalid token',
+            })
+          : problem(401, '로그인이 필요합니다.', {
+              type: 'https://api.example.com/problems/unauthorized',
+            }),
+      ),
+      http.post('*/api/v1/auth/reissue', () => {
+        reissues += 1
+        return HttpResponse.json({})
+      }),
+    )
+    const unauthorized = vi.fn()
+    const off = onUnauthorized(unauthorized)
+    const ends: string[] = []
+    const offEnd = onSessionEnd((reason) => ends.push(reason))
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }), 'still-has-refresh')
+
+    await expect(apiClient.get('/api/v1/members/me')).rejects.toMatchObject({ status: 401 })
+    off()
+    offEnd()
+    expect(reissues).toBe(0)
+    expect(getAuthSession()).toBeNull()
+    expect(getRefreshToken()).toBeNull()
+    expect(ends).toEqual(['expired'])
+    expect(unauthorized).toHaveBeenCalledTimes(1)
+  })
 })

@@ -637,9 +637,19 @@ export const sellerWorkPreviews: ScreenPreview[] = [
       },
       {
         id: 'all',
-        label: '전체 (처리 중 · 완료 · 거절 · 철회)',
+        label: '전체 (처리 중 · 완료 · 거절 · 철회 · 취소 실패)',
         session: 'seller',
         render: () => claims({ filter: 'ALL', refunds: sellerRefunds }),
+      },
+      {
+        id: 'failed',
+        label: '취소 실패',
+        session: 'seller',
+        render: () =>
+          claims({
+            filter: RefundStatus.FAILED,
+            refunds: sellerRefunds.filter((r) => r.status === RefundStatus.FAILED),
+          }),
       },
       {
         id: 'more',

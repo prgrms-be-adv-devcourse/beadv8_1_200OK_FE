@@ -16,6 +16,7 @@ import type {
   SellerApplicationListParams,
   SellerApplicationRejectRequest,
 } from '@/shared/api/types'
+import type { AdminCharge, AdminChargeDetail, ChargeReasonRequest } from './charges'
 import type {
   BlockedOrder,
   BlockedOrderParams,
@@ -26,7 +27,10 @@ import type {
   ResolutionRequest,
   ResolutionRequestParams,
   ReviewAnalysisRequest,
+  SearchInsightsParams,
   SentimentAnalysis,
+  UntaggedProduct,
+  ZeroResultKeyword,
 } from './types'
 
 // 관리자 콘솔 요청. 모두 Bearer(ADMIN 권한). 토큰 없으면 401, 관리자가 아니면 403.
@@ -241,6 +245,50 @@ export async function getDepositCheckReviews(
   return data
 }
 
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+
+const charges = '/api/v1/admin/wallets/charges'
+const chargePath = (chargeNo: string) => `${charges}/${encodeURIComponent(chargeNo)}`
+
+// ✅ GET /api/v1/admin/wallets/charges → 멈춘 처리 중 건 + 승인 뒤 실패한 건, 요청 시각 순 최대 100건(페이지 없음)
+export async function getChargeTargets(): Promise<AdminCharge[]> {
+  const { data } = await apiClient.get<AdminCharge[]>(charges)
+  return data
+}
+
+// ✅ GET /api/v1/admin/wallets/charges/{chargeNo} → 충전 건 + 토스 결제 상태. 부를 때마다 토스에 묻는다(상태는 안 바꿈). 404 없음
+export async function getChargeDetail(chargeNo: string): Promise<AdminChargeDetail> {
+  const { data } = await apiClient.get<AdminChargeDetail>(chargePath(chargeNo))
+  return data
+}
+
+// 처리 3개는 처리 뒤의 충전 건을 200으로 돌려준다. 404 없음 · 409 끝났거나 먼저 처리됨·토스 상태와 맞지 않음 · 503 토스 답 없음
+
+// ✅ POST …/{chargeNo}/complete (본문 없음) → COMPLETED
+export async function completeCharge(chargeNo: string): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/complete`)
+  return data
+}
+
+// ✅ POST …/{chargeNo}/fail { reason } → FAILED(ADMIN_FAILED). 422 사유 없음·200자 초과(errors[].path = reason)
+export async function failCharge(
+  chargeNo: string,
+  body: ChargeReasonRequest,
+): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/fail`, body)
+  return data
+}
+
+// ✅ POST …/{chargeNo}/cancel-payment { reason } → paymentCanceledAt. 사유는 토스에도 보낸다.
+// 409에 토스 취소 거절 포함, 503이면 다시 눌러도 두 번 취소되지 않는다
+export async function cancelChargePayment(
+  chargeNo: string,
+  body: ChargeReasonRequest,
+): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/cancel-payment`, body)
+  return data
+}
+
 // ─── 리뷰 분석 테스트 ────────────────────────────────────
 
 /** 상품 목록 API가 받는 가장 큰 size */
@@ -268,5 +316,33 @@ export async function analyzeReviewSentiment(
   body: ReviewAnalysisRequest,
 ): Promise<SentimentAnalysis> {
   const { data } = await apiClient.post<SentimentAnalysis>(`${reviewAnalysis}/sentiment`, body)
+  return data
+}
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+const productSearch = '/api/v1/admin/product-search'
+
+// ✅ GET /api/v1/admin/product-search/zero-result-keywords?from&to&limit → 0건 횟수 많은 순(같으면 마지막 검색이 늦은 순).
+// from·to는 yyyy-MM-dd(둘 다 포함, KST), limit 1~100(기본 20). 0건 검색이 없으면 빈 목록.
+// 400 시작일 > 종료일(product/invalid-search-log-period) · 시작일이 보존 기간(기본 90일) 밖(…/search-log-period-beyond-retention) · 형식 · limit 범위
+export async function getZeroResultKeywords(
+  params: SearchInsightsParams,
+): Promise<ZeroResultKeyword[]> {
+  const { data } = await apiClient.get<ZeroResultKeyword[]>(
+    `${productSearch}/zero-result-keywords`,
+    { params },
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/product-search/untagged-products?from&to&limit → 판정을 마쳤는데 태그가 0개인 상품, 최근 판정 순.
+// 기간은 판정 시각 기준. 판정 대기·최종 실패·삭제 상품은 빠진다. 400 시작일 > 종료일(product/invalid-tag-judgment-period) · 형식 · limit 범위
+export async function getUntaggedProducts(
+  params: SearchInsightsParams,
+): Promise<UntaggedProduct[]> {
+  const { data } = await apiClient.get<UntaggedProduct[]>(`${productSearch}/untagged-products`, {
+    params,
+  })
   return data
 }

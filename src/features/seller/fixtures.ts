@@ -532,7 +532,7 @@ const refund = (patch: Partial<Refund> & Pick<Refund, 'refundId' | 'status'>): R
   ...patch,
 })
 
-/** 승인 대기 2 · 처리 중(배송비 환불) · 완료(배송비 차감) · 거절 · 철회 */
+/** 승인 대기 2 · 처리 중(배송비 환불) · 완료(배송비 차감) · 거절 · 철회 · 취소 실패 */
 export const sellerRefunds: Refund[] = [
   refund({ refundId: 31, status: RefundStatus.REQUESTED }),
   refund({
@@ -592,6 +592,16 @@ export const sellerRefunds: Refund[] = [
     orderItemId: 701,
     requestedAt: '2026-10-09T08:00:00',
     decidedAt: '2026-10-09T08:20:00',
+  }),
+  refund({
+    refundId: 19,
+    status: RefundStatus.FAILED,
+    orderId: 66,
+    orderItemId: 661,
+    // 서버가 FAILED에 적는 이유(Refund.FAILED_REASON)
+    rejectReason: '환불 처리에 실패해 취소를 되돌렸습니다. 상품은 원래대로 배송됩니다.',
+    requestedAt: '2026-10-08T10:00:00',
+    decidedAt: '2026-10-08T10:10:00',
   }),
 ]
 

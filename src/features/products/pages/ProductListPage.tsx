@@ -1,15 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
-import { ProductCategory, ProductRegion } from '@/shared/api/types'
+import { useNavigate, useSearchParams } from 'react-router'
+import { ProductCategory, ProductRegion, ProductSort } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
 import { showToast } from '@/shared/ui'
+import { defaultSortOf, productListPath, sortOptionsOf } from '../listUrl'
 import { errorMessageOf, useCategories, useProductPages } from '../queries'
 import type { CategoryOption } from '../types'
 import { ProductListView } from '../views/ProductListView'
 
-// 상품 목록 라우트 /products?category&region&page. 필터·페이지는 URL searchParams가 기준이다.
-// page는 ‘더 보기’로 불러온 마지막 페이지(0부터)라 새로 고쳐도 본 데까지 다시 그린다. 검색어·정렬 API는 없다(A-9).
+// 상품 목록 라우트 /products?q&category&region&sort&page. 검색어·필터·정렬·페이지는 URL searchParams가 기준이다.
+// q는 요청의 keyword, sort는 고른 정렬(기본이면 주소·요청에 넣지 않아 서버 기본을 따른다).
+// 검색어·필터·정렬이 바뀌면 page를 지워 첫 페이지부터 다시 부른다.
+// page는 ‘더 보기’로 불러온 마지막 페이지(0부터)라 새로 고쳐도 본 데까지 다시 그린다.
 // TODO(api): 📝 관심 상품 API가 없어 onToggleLike를 넘기지 않는다(카드에 하트를 그리지 않는다).
 
 const asEnum = <T extends string>(values: Record<string, T>, value: string | null): T | null =>
@@ -31,13 +34,26 @@ export function ProductListPage() {
   const category = asEnum(ProductCategory, params.get('category'))
   const region = asEnum(ProductRegion, params.get('region'))
   const page = asPage(params.get('page'))
+  const query = params.get('q')?.trim() || null
+  const sortParam = asEnum(ProductSort, params.get('sort'))
+  // 기본 정렬과 고를 수 없는 정렬(검색어 없는 관련도순 = 최신순)은 보내지 않는다
+  const sort =
+    sortParam && sortParam !== defaultSortOf(query) && sortOptionsOf(query).includes(sortParam)
+      ? sortParam
+      : null
+  const navigate = useNavigate()
   const [hideSoldOut, setHideSoldOut] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const queryClient = useQueryClient()
   const categories = useCategories()
 
   const list = useProductPages(
-    { category: category ?? undefined, region: region ?? undefined },
+    {
+      keyword: query ?? undefined,
+      category: category ?? undefined,
+      region: region ?? undefined,
+      sort: sort ?? undefined,
+    },
     page,
   )
   // 품절 제외는 서버 파라미터가 없어 불러온 목록에서 거른다
@@ -51,6 +67,14 @@ export function ProductListPage() {
     nextParams.delete('page')
     setParams(nextParams)
   }
+
+  const changeSort = (next: ProductSort) =>
+    navigate(productListPath({ q: query, category, region, sort: next }))
+
+  const clearQuery = () => navigate(productListPath({ category, region }))
+
+  // 새 검색은 필터·정렬 없이 시작한다(헤더 검색창과 같다)
+  const search = (keyword: string) => navigate(productListPath({ q: keyword }))
 
   // 다음 페이지를 먼저 받아 두고 URL을 바꾼다. 실패하면 목록은 그대로 두고 알린다
   const loadMore = async () => {
@@ -79,6 +103,12 @@ export function ProductListPage() {
       category={category}
       region={region}
       onRegionChange={changeRegion}
+      query={query}
+      onClearQuery={clearQuery}
+      onSearch={search}
+      sort={sort}
+      onSortChange={changeSort}
+      suggestion={list.suggestion}
       hideSoldOut={hideSoldOut}
       onHideSoldOutChange={setHideSoldOut}
       hiddenSoldOutCount={hiddenSoldOutCount}

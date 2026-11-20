@@ -13,6 +13,17 @@ export const reviewReasonSchema = z
   .min(1, '사유를 입력해 주세요')
   .max(REVIEW_REASON_MAX, `사유는 ${REVIEW_REASON_MAX}자까지 쓸 수 있어요`)
 
+// ─── 충전 건 실패 처리 · 결제 취소 사유 ──────────────────
+
+/** 결제 취소 사유는 토스에도 보내서 토스 상한(200자)에 맞춘다 (ChargeAdminReasonRequest) */
+export const CHARGE_REASON_MAX = 200
+
+export const chargeReasonSchema = z
+  .string()
+  .trim()
+  .min(1, '사유를 입력해 주세요. 충전 건 기록에 남아요')
+  .max(CHARGE_REASON_MAX, `사유는 ${CHARGE_REASON_MAX}자까지 쓸 수 있어요`)
+
 // ─── 정산 조정 ───────────────────────────────────────────
 
 export const ADJUST_REASON_MAX = 255

@@ -18,6 +18,7 @@ export const refundFilters: RefundFilter[] = [
   RefundStatus.COMPLETED,
   RefundStatus.REJECTED,
   RefundStatus.WITHDRAWN,
+  RefundStatus.FAILED,
   'ALL',
 ]
 
@@ -27,6 +28,7 @@ const filterLabels: Record<RefundFilter, string> = {
   [RefundStatus.COMPLETED]: '환불 완료',
   [RefundStatus.REJECTED]: '거절',
   [RefundStatus.WITHDRAWN]: '철회',
+  [RefundStatus.FAILED]: '취소 실패',
   ALL: '전체',
 }
 
@@ -36,6 +38,7 @@ const emptyTitles: Record<RefundFilter, string> = {
   [RefundStatus.COMPLETED]: '환불을 마친 요청이 없어요',
   [RefundStatus.REJECTED]: '거절한 요청이 없어요',
   [RefundStatus.WITHDRAWN]: '구매자가 철회한 요청이 없어요',
+  [RefundStatus.FAILED]: '처리에 실패한 요청이 없어요',
   ALL: '받은 취소 요청이 없어요',
 }
 
@@ -170,7 +173,7 @@ export function SellerClaimsView({
                   </div>
                   {refund.rejectReason && (
                     <div>
-                      <dt>거절 사유</dt>
+                      <dt>{refund.status === RefundStatus.FAILED ? '실패 이유' : '거절 사유'}</dt>
                       <dd>{refund.rejectReason}</dd>
                     </div>
                   )}

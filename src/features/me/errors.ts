@@ -50,3 +50,40 @@ export function toAddressSubmitErrors(error: unknown): AddressSubmitErrors {
   if (paths.addressDetail) fields.addressDetail = paths.addressDetail
   return Object.keys(fields).length > 0 ? { fields } : { message: error.detail }
 }
+
+// 비밀번호 변경 실패. 400·409는 problem type의 마지막 조각(member/...)으로 나눈다.
+// - 400 invalid-current-password → 현재 비밀번호 칸, same-as-current-password → 새 비밀번호 칸
+// - 422 errors[].path currentPassword·newPassword → 그 칸
+// - 409 password-changed-concurrently → 폼 위 문구(다른 요청이 먼저 바꿔 이 세션의 토큰도 이미 무효)
+// - 404(탈퇴한 회원)·5xx·네트워크 → 폼 위 문구. 401은 apiClient가 세션을 끝내고 로그인으로 보낸다
+export type PasswordSubmitErrors = {
+  fields?: Partial<Record<'currentPassword' | 'newPassword', string>>
+  message?: string
+}
+
+export const PASSWORD_CHANGED_CONCURRENTLY_MESSAGE =
+  '다른 곳에서 비밀번호가 먼저 바뀌었어요. 바뀐 비밀번호로 다시 로그인한 뒤 시도해 주세요'
+
+const hasProblemType = (type: string | null, slug: string) => Boolean(type?.endsWith(`/${slug}`))
+
+export function toPasswordSubmitErrors(error: unknown): PasswordSubmitErrors {
+  if (!error) return {}
+  if (!isApiError(error)) return { message: infoErrorMessage(error) }
+  if (error.status === 400) {
+    if (hasProblemType(error.type, 'member/invalid-current-password')) {
+      return { fields: { currentPassword: '현재 비밀번호가 맞지 않아요' } }
+    }
+    if (hasProblemType(error.type, 'member/same-as-current-password')) {
+      return { fields: { newPassword: '지금 비밀번호와 다른 비밀번호로 정해 주세요' } }
+    }
+  }
+  if (error.status === 409) return { message: PASSWORD_CHANGED_CONCURRENTLY_MESSAGE }
+  if (error.status === 422) {
+    const paths = error.fieldErrors
+    const fields: NonNullable<PasswordSubmitErrors['fields']> = {}
+    if (paths.currentPassword) fields.currentPassword = paths.currentPassword
+    if (paths.newPassword) fields.newPassword = paths.newPassword
+    if (Object.keys(fields).length > 0) return { fields }
+  }
+  return { message: infoErrorMessage(error) }
+}
