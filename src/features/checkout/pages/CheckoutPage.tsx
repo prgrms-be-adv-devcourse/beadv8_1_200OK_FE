@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
 import { toShippingAddress, useDefaultAddress } from '@/shared/api/defaultAddress'
@@ -7,8 +7,16 @@ import type { CreateOrderRequest, ShippingAddress } from '@/shared/api/types'
 import { walletBalanceQueryOptions } from '@/shared/api/walletBalance'
 import { newIdempotencyKey } from '../api'
 import { clearCheckoutDraft, draftAddressOf, useCheckoutDraftStore } from '../draftStore'
-import { checkoutErrorMessage, isAmountChanged } from '../errors'
-import { useCheckout, useCreateOrder, useShippingFeeQuote } from '../queries'
+import { checkoutErrorMessage, isAmountChanged, PAYMENT_FAILED_MESSAGE } from '../errors'
+import {
+  CHECKOUT_PAYMENT_WAIT_MS,
+  useCheckout,
+  useCreateOrder,
+  useOrderPayment,
+  useSettlePaidOrder,
+  useShippingFeeQuote,
+} from '../queries'
+import type { PaymentResult } from '../types'
 import { CheckoutView } from '../views/CheckoutView'
 
 // B-04 주문서 라우트 /checkout. ✅ GET /orders/checkout(장바구니에서 고른 상품) + GET /wallets/me/balance → POST /orders(expectedTotalAmount).
@@ -17,7 +25,12 @@ import { CheckoutView } from '../views/CheckoutView'
 // 409 금액 변경이면 주문서를 다시 불러와 이전 금액과 함께 안내하고, 다른 실패는 ‘결제하지 못했어요’에 서버 문구를 보여 준다.
 // 주문 생성 멱등키(Idempotency-Key)는 화면에 들어올 때 하나 만들어 재시도·두 번 누르기에 같은 키를 보낸다(주문이 하나만 생긴다).
 //   서버는 실패한 요청(금액 변경·잔액 부족·재고 선점 실패)에는 키를 남기지 않아 같은 키로 다시 결제해도 된다.
-// 성공하면 주문 완료(/checkout/complete?orderId=)로 간다. 완료 화면은 주문 상세·잔액 API로 그린다.
+// 주문은 결제 대기(PAYMENT_PENDING)로 만들어지고 지갑 결제는 뒤에서 끝난다(#76). 그래서 주문을 만든 뒤 ‘결제 중’을 유지하고
+//   주문 상세를 1초마다 다시 받아 결과를 기다린다.
+//   - PAID: 장바구니·주문·예치금 캐시를 정리하고 주문 완료(/checkout/complete?orderId=)로 간다.
+//   - PAYMENT_FAILED·CANCELED: 주문서에 남아 실패를 알리고 주문서·잔액을 다시 받는다. 서버는 실패한 주문의 키를 남겨
+//     같은 키로 보내면 그 주문 번호를 돌려주므로 키를 새로 만든다.
+//   - 10초가 지나도 결제 대기: 완료 화면으로 넘기고 완료 화면이 이어서 확인한다.
 // 배송지는 이 탭에서 30분 안에 적어 둔 초안(draftStore, PLAN 결정 7)으로 채운다: 충전(PG)에 다녀와도 다시 입력하지 않게.
 // 처음 배송지 우선순위: ① 충전에 다녀오기 전 적어 둔 초안 ② ✅ 서버 기본 배송지(GET /shipments/addresses/default) ③ 빈 배송지.
 //   기본 배송지는 처음 값으로만 쓰므로 받을 때까지 주문서를 ‘불러오는 중’으로 두고, 못 받으면(오류) 빈 배송지로 진행한다.
@@ -28,7 +41,11 @@ export function CheckoutPage() {
   const checkout = useCheckout()
   const balance = useQuery(walletBalanceQueryOptions())
   const order = useCreateOrder()
-  const [idempotencyKey] = useState(newIdempotencyKey)
+  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey)
+  // 만들었지만 결제 결과를 아직 모르는 주문
+  const [placedOrderId, setPlacedOrderId] = useState<number | null>(null)
+  const payment = useOrderPayment(placedOrderId, CHECKOUT_PAYMENT_WAIT_MS)
+  const settlePaidOrder = useSettlePaidOrder()
   const [previousTotal, setPreviousTotal] = useState<number | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const memberId = useSyncExternalStore(subscribeAuth, getAuthSession, getAuthSession)?.memberId
@@ -50,10 +67,7 @@ export function CheckoutPage() {
     order.mutate(
       { request, idempotencyKey },
       {
-        onSuccess: ({ orderId }) => {
-          clearCheckoutDraft()
-          navigate(`/checkout/complete?orderId=${orderId}`, { replace: true })
-        },
+        onSuccess: ({ orderId }) => setPlacedOrderId(orderId),
         onError: async (error) => {
           if (!isAmountChanged(error)) {
             setFailure(checkoutErrorMessage(error, 'order'))
@@ -66,6 +80,28 @@ export function CheckoutPage() {
       },
     )
   }
+
+  const onPaymentResult = useEffectEvent((orderId: number, result: PaymentResult) => {
+    if (result === 'failed') {
+      setPlacedOrderId(null)
+      setIdempotencyKey(newIdempotencyKey())
+      setFailure(PAYMENT_FAILED_MESSAGE)
+      void checkout.refetch()
+      void balance.refetch()
+      return
+    }
+    if (result === 'paid') {
+      settlePaidOrder()
+      clearCheckoutDraft()
+    }
+    navigate(`/checkout/complete?orderId=${orderId}`, { replace: true })
+  })
+
+  useEffect(() => {
+    if (placedOrderId !== null && payment.result !== 'waiting') {
+      onPaymentResult(placedOrderId, payment.result)
+    }
+  }, [placedOrderId, payment.result])
 
   const loadError = checkout.error ?? balance.error
   return (
@@ -97,7 +133,9 @@ export function CheckoutPage() {
               : 'idle'
       }
       onFeeQuoteRetry={() => void feeQuote.refetch()}
-      paymentState={order.isPending ? 'processing' : failure ? 'failed' : 'idle'}
+      paymentState={
+        order.isPending || placedOrderId !== null ? 'processing' : failure ? 'failed' : 'idle'
+      }
       previousTotal={previousTotal}
       errorMessage={failure}
       loadErrorMessage={loadError ? checkoutErrorMessage(loadError, 'load') : undefined}
