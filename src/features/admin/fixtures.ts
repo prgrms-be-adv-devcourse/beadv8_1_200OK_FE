@@ -524,7 +524,13 @@ const analysisProduct = (
   reviewCount: 0,
   averageRating: 0,
   imageUrls: [],
-  options: options.map((o) => ({ ...o, listPrice: o.salePrice, discountRate: 0, soldOut: false })),
+  options: options.map((o) => ({
+    ...o,
+    listPrice: o.salePrice,
+    discountRate: 0,
+    soldOut: false,
+    lowStock: false,
+  })),
   createdAt: '2026-10-01T09:00:00',
   updatedAt: '2026-10-01T09:00:00',
 })

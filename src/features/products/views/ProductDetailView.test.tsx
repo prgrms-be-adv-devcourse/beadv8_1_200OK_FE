@@ -197,7 +197,7 @@ describe('ProductDetailView', () => {
       expect(soldOut).toBeDisabled()
     })
 
-    it('lowStock 필드가 없으면 지금과 같이 아무것도 보이지 않는다', () => {
+    it('lowStock이 모두 false면 아무것도 보이지 않는다', () => {
       renderDetail()
 
       expect(screen.queryByText('품절 임박')).not.toBeInTheDocument()
