@@ -57,7 +57,10 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - 오류·트레이스·로그를 Sentry로 보내요(이슈 #33). 프로젝트는 프론트 `paldo-frontend`, BFF `paldo-bff` 두 개예요. DSN이 비어 있으면 아무것도 보내지 않아요(테스트도 그래서 조용해요).
 - 프론트: `src/app/instrument.ts`에서 init하고 `main.tsx`가 맨 먼저 읽어요(`router.tsx`의 `wrapCreateBrowserRouter`보다 먼저 떠야 라우트 패턴으로 트레이스가 남아요). 라우트 오류는 `RootErrorBoundary`가 `captureException`으로 보내요. DSN은 `VITE_SENTRY_DSN`(빌드 때 들어가요).
 - BFF: `bff/src/instrument.ts`를 `node --import`로 앱보다 먼저 읽어요(`package.json` scripts·Dockerfile CMD). `createApp`은 Sentry가 켜졌을 때만 `sentry()` 미들웨어를 달아요. DSN은 `SENTRY_DSN`(운영은 서버 `/opt/paldo-gotgan-bff/.env` → `deploy/compose.prod.yml`). 500과 백엔드 연결 실패(`UpstreamError`)가 이슈로 올라가요.
-- 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 샘플링은 개발 1.0, 운영 0.1이에요.
+  - 설정은 `bff/src/sentry.ts`예요(이슈 #48). 프록시가 `/api/v1/*` 하나라 Sentry Hono가 이름을 `GET /api/v1/*`로 뭉쳐서, 프록시가 `nameTransaction`으로 `GET /api/v1/products/:id`처럼 바꿔요(정규화는 `bff/src/routeName.ts`).
+  - `/health`(Docker HEALTHCHECK, 10초마다)는 트레이스하지 않아요. v11 서버 span은 샘플링할 때 이름이 메서드뿐이라 `tracesSampler`가 `url.path` 속성으로 걸러요.
+  - 샘플링은 `SENTRY_TRACES_SAMPLE_RATE`(기본 1.0, 잘못된 값은 경고하고 1.0). 브라우저가 보낸 트레이스는 프론트의 결정을 따라요. release는 `SENTRY_RELEASE`로, 이미지는 `bff-image.yml`이 커밋 SHA를 build-arg로 넣어요(compose에서 넘기지 않아요).
+- 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 프론트 샘플링은 개발 1.0, 운영 0.1이에요.
 
 ## BFF
 
