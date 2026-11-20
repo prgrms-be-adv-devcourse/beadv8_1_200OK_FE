@@ -1,4 +1,4 @@
-import { ProductStatus, type ProductSummary } from '@/shared/api/types'
+import { type ProductOption, ProductStatus, type ProductSummary } from '@/shared/api/types'
 
 // 구매자 화면의 상품 판매 상태. 서버 값(status·soldOut)과 판매자 정지 여부를 합쳐 하나로 정한다.
 // 판매 중이고 재고가 있으면 null(배지 없음). DECISIONS.md A-11, C-9
@@ -34,4 +34,21 @@ export function getProductSaleState(
     case ProductStatus.ON_SALE:
       return product.soldOut ? ProductSaleState.SOLD_OUT : null
   }
+}
+
+// 상품 상세 옵션의 재고 표시. 서버가 판단한 lowStock만 보이고 수량은 내지 않는다(DECISIONS.md A-7).
+// 품절이 우선이라 품절 옵션에는 품절 임박을 보이지 않는다. 품절 임박 옵션도 고를 수 있다.
+
+export enum OptionStockState {
+  LOW_STOCK = 'LOW_STOCK',
+}
+
+export const optionStockStateLabels: Record<OptionStockState, string> = {
+  [OptionStockState.LOW_STOCK]: '품절 임박',
+}
+
+export function getOptionStockState(
+  option: Pick<ProductOption, 'soldOut' | 'lowStock'>,
+): OptionStockState | null {
+  return option.lowStock && !option.soldOut ? OptionStockState.LOW_STOCK : null
 }

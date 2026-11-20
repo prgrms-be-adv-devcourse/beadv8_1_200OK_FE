@@ -1,6 +1,8 @@
 import { ProductCategory, ProductRegion, ProductStatus } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
+  appleLowStockOptions,
+  appleManyLowStockOptions,
   appleReviewKeywordIds,
   appleReviewKeywords,
   appleReviews,
@@ -198,6 +200,16 @@ export const productPreviews: ScreenPreview[] = [
               options: apple?.options.map((o, i) => (i === 0 ? { ...o, soldOut: true } : o)),
             }),
           }),
+      },
+      {
+        id: 'option-low-stock',
+        label: '옵션 일부 품절 임박 (카드)',
+        render: () => detail({ product: appleWith({ options: appleLowStockOptions }) }),
+      },
+      {
+        id: 'option-low-stock-select',
+        label: '옵션 일부 품절 임박 (6개 이상 Select)',
+        render: () => detail({ product: appleWith({ options: appleManyLowStockOptions }) }),
       },
       {
         id: 'sold-out',

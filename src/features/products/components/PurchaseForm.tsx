@@ -2,11 +2,13 @@ import { Radio, Select, Stack } from '@mantine/core'
 import type { ProductOption } from '@/shared/api/types'
 import { MAX_CART_QUANTITY } from '@/shared/lib/constants'
 import { formatPrice, formatQuantity } from '@/shared/lib/format'
+import { getOptionStockState, optionStockStateLabels } from '@/shared/lib/productState'
 import { OptionCard, PriceText, QuantityStepper } from '@/shared/ui'
 import classes from './PurchaseForm.module.css'
 
 // 옵션 선택 → 수량 → 총 상품 금액. 상세 데스크톱 오른쪽과 모바일 옵션 시트가 같이 쓴다.
 // 옵션 5개 이하는 옵션 카드, 넘으면 Select(design/COMPONENTS.md). 품절 옵션은 고를 수 없다.
+// 품절 임박(lowStock)은 카드는 배지, Select는 라벨 끝 ‘ (품절 임박)’으로 보이고 고를 수 있다. 품절이 우선(A-7).
 // 수량 상한은 서버 담기 규칙과 같은 MAX_CART_QUANTITY로 막는다.
 
 export type PurchaseFormProps = {
@@ -61,7 +63,7 @@ export function PurchaseForm({
           onChange={(next) => next && onSelectOption(Number(next))}
           data={options.map((option) => ({
             value: String(option.optionId),
-            label: `${option.name} · ${formatPrice(option.salePrice)}${option.soldOut ? ' (품절)' : ''}`,
+            label: `${option.name} · ${formatPrice(option.salePrice)}${optionSuffix(option, disabled)}`,
             disabled: option.soldOut,
           }))}
         />
@@ -94,4 +96,10 @@ export function PurchaseForm({
       </div>
     </Stack>
   )
+}
+
+function optionSuffix(option: ProductOption, disabled: boolean): string {
+  if (option.soldOut) return ' (품절)'
+  const stockState = disabled ? null : getOptionStockState(option)
+  return stockState ? ` (${optionStockStateLabels[stockState]})` : ''
 }

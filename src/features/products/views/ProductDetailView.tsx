@@ -37,7 +37,8 @@ import classes from './ProductDetailView.module.css'
 
 // B-02 상품 상세. 시안: b2c/Main(데스크톱), b2c/ProductMobile
 // 데스크톱: 사진 | 정보 + 옵션 + 수량 + 담기. 모바일: 하단 CTA 바(관심 + 담기) → 옵션 시트.
-// 판매자 정보·수확일은 상세 API에 없어 따로 받는다(A-2). 재고 임박은 표시하지 않는다(A-7).
+// 판매자 정보·수확일은 상세 API에 없어 따로 받는다(A-2).
+// 재고 수량은 내지 않고, 옵션의 lowStock(서버 판단)으로 옵션 선택에서만 ‘품절 임박’을 보인다. 품절이 우선(A-7).
 // 배송비는 상품 API에 없고 정책도 미정이라(A-8, C-1) 주문서에서 안내한다고만 쓴다.
 // TODO(api): 상세 응답에 sellerId가 없어(BE #741) 판매자를 모른다. sellerId가 생기면 ✅ GET /stores/{sellerId}
 //   (shared/api/storeProfile.ts의 storeProfileQueryOptions)로 받아 넘긴다. 📝 관심·팔로우 API.
