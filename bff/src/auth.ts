@@ -68,6 +68,12 @@ export class RequestAuth {
     return true
   }
 
+  /** refresh 쿠키가 있으면 백엔드 세션을 끝내고(실패해도) 두 쿠키를 지운다 */
+  async logout(): Promise<void> {
+    if (this.#refreshToken) await this.#refresher.revoke(this.#refreshToken)
+    this.end()
+  }
+
   end(): void {
     this.#accessToken = null
     this.#cookie = { kind: 'clear' }

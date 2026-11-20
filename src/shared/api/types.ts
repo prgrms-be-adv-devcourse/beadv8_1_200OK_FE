@@ -229,6 +229,8 @@ export type LoginResponse = TokenResponse
 
 export type TokenReissueRequest = { refreshToken: string }
 
+export type LogoutRequest = { refreshToken: string }
+
 // ─── 미디어 ──────────────────────────────────────────────
 
 export type MediaInfo = { mediaId: number; url: string }

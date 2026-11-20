@@ -36,6 +36,40 @@ export class TokenRefresher {
     return task
   }
 
+  /**
+   * 로그아웃: 이 refresh의 백엔드 세션을 끝낸다(POST /api/v1/auth/logout → 204, 없는·만료된 토큰도 204).
+   * 실패(5xx·연결 실패·시간 초과)해도 던지지 않는다. 쿠키는 어차피 지우고, 그때 refresh는 만료까지 백엔드에 남는다.
+   * 이 refresh로 재발급이 진행 중이거나 막 끝났으면 그 새 refresh로 보낸다. 옛 refresh는 백엔드가 이미 바꿔서
+   * 세션을 찾지 못한다(백엔드 AuthControllerSpec 안내). 기억한 결과도 지워 늦게 온 옛 refresh에 새 토큰을 내주지 않는다
+   */
+  async revoke(refreshToken: string): Promise<void> {
+    this.#forgetExpired()
+    let target = refreshToken
+    const running = this.#inflight.get(refreshToken)
+    const reissued = running
+      ? await running.catch(() => null)
+      : (this.#recent.get(refreshToken)?.session ?? null)
+    if (reissued) target = reissued.refreshToken
+    // 다른 탭이 옛 refresh로 늦게 와도(10초 안) 폐기한 세션을 다시 내주지 않는다
+    for (const [token, entry] of this.#recent) {
+      if (token === refreshToken || entry.session.refreshToken === target) {
+        this.#recent.delete(token)
+      }
+    }
+
+    try {
+      const response = await this.#upstream.fetch('member', '/api/v1/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/problem+json' },
+        body: JSON.stringify({ refreshToken: target }),
+        timeoutMs: this.#timeoutMs,
+      })
+      await response.body?.cancel()
+    } catch {
+      // 연결 실패·시간 초과. 백엔드 5xx는 Upstream이 Sentry로 올린다
+    }
+  }
+
   async #reissue(refreshToken: string): Promise<Session | null> {
     const response = await this.#upstream.fetch('member', '/api/v1/auth/reissue', {
       method: 'POST',
