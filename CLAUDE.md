@@ -60,6 +60,8 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
   - 설정은 `bff/src/sentry.ts`예요(이슈 #48). 프록시가 `/api/v1/*` 하나라 Sentry Hono가 이름을 `GET /api/v1/*`로 뭉쳐서, 프록시가 `nameTransaction`으로 `GET /api/v1/products/:id`처럼 바꿔요(정규화는 `bff/src/routeName.ts`).
   - `/health`(Docker HEALTHCHECK, 10초마다)는 트레이스하지 않아요. v11 서버 span은 샘플링할 때 이름이 메서드뿐이라 `tracesSampler`가 `url.path` 속성으로 걸러요.
   - 샘플링은 `SENTRY_TRACES_SAMPLE_RATE`(기본 1.0, 잘못된 값은 경고하고 1.0). 브라우저가 보낸 트레이스는 프론트의 결정을 따라요. release는 `SENTRY_RELEASE`로, 이미지는 `bff-image.yml`이 커밋 SHA를 build-arg로 넣어요(compose에서 넘기지 않아요).
+  - 백엔드에는 Sentry가 없어서 BFF가 백엔드 5xx를 대신 올려요(#49). `Upstream.fetch`가 응답을 받을 때마다 보고해요: 5xx면 모듈·정규화한 경로(`routeName.ts`)·상태·`X-Trace-Id`·problem `detail`을 이슈로(fingerprint `[모듈, 경로, 상태]`), `X-Trace-Id`가 있으면 요청 트랜잭션의 `backend.trace_id` 속성으로 남겨요. 상세 라우트의 부가 호출(리뷰) 5xx도 올라가요. 브라우저 응답은 바꾸지 않고(본문은 clone으로 읽음), Authorization·쿠키·요청 본문은 넣지 않아요.
+  - 보고 함수는 `createApp({ backendReport })`로 주입받아요(기본 `sentryBackendReport`, `backendReport.ts`). 테스트는 `setup()`의 `reported`로 무엇을 보고했는지 봐요.
 - 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 프론트 샘플링은 개발 1.0, 운영 0.1이에요.
 
 ## BFF

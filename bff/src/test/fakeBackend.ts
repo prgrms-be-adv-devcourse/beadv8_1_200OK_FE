@@ -1,5 +1,6 @@
 import { HttpResponse, http } from 'msw'
 import { createApp } from '../app.ts'
+import type { BackendFailure } from '../backendReport.ts'
 import { loadConfig } from '../config.ts'
 import { server } from './server.ts'
 
@@ -82,7 +83,16 @@ export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}
     ALLOWED_ORIGINS: ORIGIN,
     COOKIE_SECURE: String(options.cookieSecure ?? false),
   })
-  const app = createApp({ config, now: () => clock.now })
+  // Sentry 대신 무엇을 보고했는지 모은다
+  const reported = { traceIds: [] as string[], serverErrors: [] as BackendFailure[] }
+  const app = createApp({
+    config,
+    now: () => clock.now,
+    backendReport: {
+      traceId: (traceId) => reported.traceIds.push(traceId),
+      serverError: (failure) => reported.serverErrors.push(failure),
+    },
+  })
 
   /** 브라우저처럼 같은 오리진에서 보낸다. jar를 주면 경로·만료가 맞는 쿠키를 싣고 받은 Set-Cookie를 담는다 */
   const request = async (
@@ -113,7 +123,7 @@ export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}
     return { response, jar }
   }
 
-  return { app, clock, calls, request, login, authenticate, ACCESS_MS, REFRESH_MS }
+  return { app, clock, calls, reported, request, login, authenticate, ACCESS_MS, REFRESH_MS }
 }
 
 /** 브라우저 쿠키 저장소. Path가 요청 경로의 접두어이고 Max-Age가 남은 쿠키만 보낸다 */
