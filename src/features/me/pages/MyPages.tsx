@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useSellerMenuStatus } from '@/features/sellerApply'
@@ -64,6 +64,8 @@ function useWishListPage(page: number) {
   return useQuery({
     ...wishPageQueryOptions(memberId ?? 0, page, LIKES_PAGE_SIZE),
     enabled: access === 'buyer' && memberId !== undefined,
+    // 페이지를 옮기거나 해제 뒤 다시 부를 때 화면 전체가 로딩으로 깜빡이지 않게 이전 목록을 둔다
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -80,7 +82,11 @@ export function LikesPage() {
   // 관심 상품 화면은 로그인해야 들어온다(RequireAuth). 하트는 찜 ID 집합으로 그린다
   const wishes = useWishToggle(() => {})
   const ids = list.data?.content.map((wish) => wish.productId) ?? []
-  const summaries = useQuery({ ...productSummariesQueryOptions(ids), enabled: ids.length > 0 })
+  const summaries = useQuery({
+    ...productSummariesQueryOptions(ids),
+    enabled: ids.length > 0,
+    placeholderData: keepPreviousData,
+  })
   const totalPages = list.data?.totalPages ?? 0
 
   // 마지막 페이지의 찜을 모두 빼면 빈 페이지가 남으므로 마지막 페이지로 옮긴다
@@ -108,7 +114,8 @@ export function LikesPage() {
       onTabChange={(next) => setParams({ tab: next }, { replace: true })}
       products={cards.map((product) => ({ product, liked: likedOf(product.productId) }))}
       totalCount={list.data?.totalElements}
-      hiddenCount={ids.length - cards.length}
+      // 이전 카드를 잠깐 두는 동안에는 숨김 수를 셈하지 않는다
+      hiddenCount={summaries.isPlaceholderData ? 0 : Math.max(0, ids.length - cards.length)}
       page={page}
       totalPages={totalPages}
       onPageChange={(next) => setParams({ tab: 'products', page: String(next) })}
