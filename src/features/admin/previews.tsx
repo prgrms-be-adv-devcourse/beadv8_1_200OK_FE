@@ -2,6 +2,7 @@ import { ApiError } from '@/shared/api/ApiError'
 import type { SellerApplicationAdminDetail } from '@/shared/api/types'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
+import { chargePreviews } from './chargePreviews'
 import {
   NOTHING_TO_RESOLVE_MESSAGE,
   PAYOUT_RUNNING_MESSAGE,
@@ -668,6 +669,7 @@ export const adminPreviews: ScreenPreview[] = [
       },
     ],
   },
+  ...chargePreviews,
   {
     id: 'admin-review-analysis-test',
     title: 'M-04 리뷰 분석 테스트',

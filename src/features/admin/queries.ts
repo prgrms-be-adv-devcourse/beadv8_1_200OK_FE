@@ -27,12 +27,17 @@ import {
   analyzeReviewKeywords,
   analyzeReviewSentiment,
   approveSellerApplication,
+  cancelChargePayment,
+  completeCharge,
   createPayoutAdjustment,
+  failCharge,
   getAdminPayout,
   getAdminPayoutCandidates,
   getAdminPayoutItems,
   getAdminPayouts,
   getBlockedOrders,
+  getChargeDetail,
+  getChargeTargets,
   getDepositCheckReviews,
   getProductChoices,
   getResolutionRequests,
@@ -48,6 +53,7 @@ import {
   runPayoutsSkipWait,
   startSellerApplicationReview,
 } from './api'
+import type { AdminCharge, AdminChargeDetail, ChargeReasonRequest } from './charges'
 import { canQueryPayouts, toAdminPayoutParams } from './payoutFilter'
 import type {
   BlockedOrder,
@@ -335,6 +341,64 @@ export function useDepositCheckReviews(page: number) {
     queryFn: () => getDepositCheckReviews({ page, size: DEPOSIT_CHECK_PAGE_SIZE }),
     placeholderData: (previous) => previous,
   })
+}
+
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+
+export const chargeKeys = {
+  all: [queryKeyPrefix.admin, 'charges'] as const,
+  targets: [queryKeyPrefix.admin, 'charges', 'targets'] as const,
+  detail: (chargeNo: string) => [queryKeyPrefix.admin, 'charges', 'detail', chargeNo] as const,
+}
+
+export function useChargeTargets() {
+  return useQuery<AdminCharge[], ApiError>({
+    queryKey: chargeKeys.targets,
+    queryFn: getChargeTargets,
+  })
+}
+
+/** 부를 때마다 토스에 묻는다. 404(없는 충전 건)는 다시 묻지 않는다 */
+export function useChargeDetail(chargeNo: string | null) {
+  return useQuery<AdminChargeDetail, ApiError>({
+    queryKey: chargeKeys.detail(chargeNo ?? ''),
+    queryFn: () => getChargeDetail(chargeNo as string),
+    enabled: chargeNo !== null,
+    retry: false,
+  })
+}
+
+/** 409(이미 끝났거나 먼저 처리됨 · 토스 상태와 맞지 않음)와 503(토스 답 없음)은 상세를 다시 받아 화면을 맞춘다 */
+export const shouldRefetchAfterChargeError = (error: ApiError) =>
+  error.status === 409 || error.status === 503
+
+/**
+ * 잔액 반영 · 실패 처리 · 결제 취소. 응답은 충전 건뿐이라, 끝나면 토스 상태까지 다시 받으려고 상세와 목록을 비운다.
+ * 409·503도 상세·목록을 다시 받는다.
+ */
+export function useChargeActions(chargeNo: string | null) {
+  const queryClient = useQueryClient()
+  const no = chargeNo ?? ''
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: chargeKeys.all })
+  const onError = (error: ApiError) => {
+    if (shouldRefetchAfterChargeError(error)) refresh()
+  }
+  const complete = useMutation<AdminCharge, ApiError, void>({
+    mutationFn: () => completeCharge(no),
+    onSuccess: refresh,
+    onError,
+  })
+  const fail = useMutation<AdminCharge, ApiError, ChargeReasonRequest>({
+    mutationFn: (body) => failCharge(no, body),
+    onSuccess: refresh,
+    onError,
+  })
+  const cancelPayment = useMutation<AdminCharge, ApiError, ChargeReasonRequest>({
+    mutationFn: (body) => cancelChargePayment(no, body),
+    onSuccess: refresh,
+    onError,
+  })
+  return { complete, fail, cancelPayment }
 }
 
 // ─── 리뷰 분석 테스트 ────────────────────────────────────
