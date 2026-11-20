@@ -73,6 +73,55 @@ describe('상품 상세 캐시', () => {
     for (const response of responses) expect(await response.json()).toEqual({ productId: 1 })
   })
 
+  describe('X-Trace-Id (#82) — 백엔드 로그에서 그 요청을 찾는 번호', () => {
+    /** 부를 때마다 다른 X-Trace-Id를 주는 가짜 상품 상세 */
+    function tracedProduct(options: { delayMs?: number } = {}) {
+      let calls = 0
+      server.use(
+        http.get(`${BACKEND}${PATH}`, async () => {
+          calls += 1
+          if (options.delayMs) await delay(options.delayMs)
+          return HttpResponse.json(
+            { productId: 1 },
+            { headers: { 'X-Trace-Id': `trace-${calls}` } },
+          )
+        }),
+      )
+    }
+
+    it('백엔드를 부른 MISS는 그 응답의 X-Trace-Id를, 캐시로 답한 HIT는 붙이지 않는다', async () => {
+      const { request, clock } = setup()
+      tracedProduct()
+
+      const miss = await request(PATH)
+      const hit = await request(PATH)
+      clock.now += 5_000
+      const missAgain = await request(PATH)
+
+      expect(miss.headers.get('X-Trace-Id')).toBe('trace-1')
+      expect(hit.headers.get('X-Cache')).toBe('HIT')
+      expect(hit.headers.get('X-Trace-Id')).toBeNull()
+      expect(missAgain.headers.get('X-Trace-Id')).toBe('trace-2')
+    })
+
+    it('동시 요청을 합쳐 결과를 나눠 받은 HIT에도 붙이지 않는다', async () => {
+      const { request } = setup()
+      tracedProduct({ delayMs: 30 })
+
+      const responses = await Promise.all(Array.from({ length: 5 }, () => request(PATH)))
+
+      expect(
+        responses.map((r) => [r.headers.get('X-Cache'), r.headers.get('X-Trace-Id')]).sort(),
+      ).toEqual([
+        ['HIT', null],
+        ['HIT', null],
+        ['HIT', null],
+        ['HIT', null],
+        ['MISS', 'trace-1'],
+      ])
+    })
+  })
+
   it.each([
     [404, '상품을 찾을 수 없습니다.'],
     [500, '서버 오류가 발생했습니다.'],
