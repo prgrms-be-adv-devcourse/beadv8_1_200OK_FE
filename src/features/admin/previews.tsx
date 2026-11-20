@@ -1,9 +1,12 @@
 import { ApiError } from '@/shared/api/ApiError'
 import type { SellerApplicationAdminDetail } from '@/shared/api/types'
+import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
+import { ALL_BLOCK_STATUSES, defaultResolutionRequestFilter } from './blockedOrderFilter'
 import { chargePreviews } from './chargePreviews'
 import {
+  DUPLICATE_ADJUSTMENT_MESSAGE,
   NOTHING_TO_RESOLVE_MESSAGE,
   PAYOUT_RUNNING_MESSAGE,
   SEARCH_PERIOD_ORDER_MESSAGE,
@@ -25,11 +28,14 @@ import {
   findPayoutDetail,
   keywordAnalysis,
   keywordNotAnalyzed,
+  orderCandidates,
+  overflowingOrder,
+  periodResolutionRequests,
   resolutionRequests,
   resolutions,
   runResults,
   sampleAdjustment,
-  sampleAdjustTarget,
+  sampleAdjustmentResult,
   sellerApplicationSummaries,
   sellerApplications,
   sentimentAnalysis,
@@ -38,7 +44,7 @@ import {
   zeroResultKeywords,
 } from './fixtures'
 import { defaultSearchInsightsFilter } from './searchInsightsFilter'
-import { type AdjustLookup, SearchInsightsTab, SellerReviewAction } from './types'
+import { type BlockedOrder, SearchInsightsTab, SellerReviewAction } from './types'
 import { AdminPayoutsView, type AdminPayoutsViewProps, payeeNameOf } from './views/AdminPayoutsView'
 import {
   AdminSellerDetailView,
@@ -130,7 +136,6 @@ const reviewingNow: SellerApplicationAdminDetail = {
 // ─── 정산 관리 ───────────────────────────────────────────
 
 const visible = filterPayouts(adminPayouts, defaultPayoutFilter)
-const found: AdjustLookup = { status: 'found', target: sampleAdjustTarget }
 
 const payoutsView = ({
   run,
@@ -149,8 +154,6 @@ const payoutsView = ({
     }}
     single={{ result: null, onRun: noop, ...single }}
     adjustment={{
-      lookup: { status: 'idle' },
-      onOrderItemChange: noop,
       onSubmit: noop,
       result: null,
       logs: [],
@@ -166,14 +169,9 @@ const payoutsView = ({
   />
 )
 
-const adjustWith = (
-  values: Partial<typeof sampleAdjustment>,
-  lookup: AdjustLookup = { status: 'idle' },
-) =>
+const adjustWith = (values: Partial<typeof sampleAdjustment>) =>
   payoutsView({
     adjustment: {
-      lookup,
-      onOrderItemChange: noop,
       onSubmit: noop,
       result: null,
       logs: [],
@@ -223,19 +221,54 @@ const closedHistory: BlockedOrdersViewProps['history'] = {
   onClose: noop,
 }
 
+const allStatuses = { statuses: ALL_BLOCK_STATUSES, orderId: null }
+
+const resolutionsProps: BlockedOrdersViewProps['resolutions'] = {
+  filter: { from: '2026-10-20', to: '2026-11-18', adminId: '' },
+  onFilterChange: noop,
+  status: 'success',
+  rows: periodResolutionRequests,
+  totalElements: periodResolutionRequests.length,
+}
+
 const blockedView = (props: Partial<BlockedOrdersViewProps> = {}) => (
   <BlockedOrdersView
     onSectionChange={noop}
+    filter={allStatuses}
+    onFilterChange={noop}
     status="success"
     orders={blockedOrders}
     totalElements={blockedOrders.length}
     onResolve={noop}
     onShowHistory={noop}
+    focus={null}
+    resolutions={resolutionsProps}
     resolve={closedResolve}
     history={closedHistory}
     {...props}
   />
 )
+
+/** 주문 번호로 찾아 그 주문의 정산후보 · 조정을 같이 보는 화면 */
+const focusView = (
+  order: BlockedOrder | null,
+  orderId: number,
+  adjustment: Partial<NonNullable<BlockedOrdersViewProps['focus']>['adjustment']> = {},
+  props: Partial<BlockedOrdersViewProps> = {},
+) =>
+  blockedView({
+    filter: { ...allStatuses, orderId },
+    orders: order ? [order] : [],
+    totalElements: order ? 1 : 0,
+    focus: {
+      candidates: {
+        status: 'success',
+        candidates: orderCandidates.filter((c) => c.orderId === orderId),
+      },
+      adjustment: { onSubmit: noop, result: null, logs: [], ...adjustment },
+    },
+    ...props,
+  })
 
 const historyOpen = (history: BlockedOrdersViewProps['history']['history']) =>
   blockedView({ history: { ...closedHistory, orderId: 2003, history } })
@@ -465,8 +498,6 @@ export const adminPreviews: ScreenPreview[] = [
         render: () =>
           payoutsView({
             adjustment: {
-              lookup: { status: 'idle' },
-              onOrderItemChange: noop,
               onSubmit: noop,
               result: null,
               logs: [],
@@ -475,32 +506,27 @@ export const adminPreviews: ScreenPreview[] = [
           }),
       },
       {
-        id: 'adjust-preview',
-        label: '조정 · 미리보기 (금액 조회 API 생기면)',
+        id: 'adjust-saved',
+        label: '조정 · 저장함 (201, 조정 내역에 쌓임)',
         render: () =>
           payoutsView({
             adjustment: {
-              lookup: found,
-              onOrderItemChange: noop,
               onSubmit: noop,
-              result: null,
-              logs: [],
-              defaultValues: sampleAdjustment,
+              result: sampleAdjustmentResult,
+              logs: [sampleAdjustmentResult],
             },
           }),
       },
       {
-        id: 'adjust-unsupported',
-        label: '조정 · 미지원 (501)',
+        id: 'adjust-duplicate',
+        label: '조정 · 같은 조정 있음 (409)',
         render: () =>
           payoutsView({
             adjustment: {
-              lookup: { status: 'idle' },
-              onOrderItemChange: noop,
               onSubmit: noop,
               result: null,
               logs: [],
-              errorMessage: UNSUPPORTED_MESSAGE,
+              errorMessage: DUPLICATE_ADJUSTMENT_MESSAGE,
               defaultValues: sampleAdjustment,
             },
           }),
@@ -509,11 +535,6 @@ export const adminPreviews: ScreenPreview[] = [
         id: 'adjust-no-reason',
         label: '조정 · 사유 없음',
         render: () => adjustWith({ reason: '' }),
-      },
-      {
-        id: 'adjust-negative',
-        label: '조정 · 0원 미만 (금액 조회 API 생기면)',
-        render: () => adjustWith({ amount: '-30,000' }, found),
       },
       {
         id: 'detail',
@@ -580,6 +601,113 @@ export const adminPreviews: ScreenPreview[] = [
     path: '/admin/payouts/blocked-orders',
     states: [
       { id: 'default', label: '멈춤 · 잠김 · 해결됨', render: () => blockedView() },
+      {
+        id: 'filter-unresolved',
+        label: '상태 거르기 · 잠김 · 멈춤만',
+        render: () =>
+          blockedView({
+            filter: {
+              statuses: [PayoutBlockStatus.LOCKED, PayoutBlockStatus.STOPPED],
+              orderId: null,
+            },
+            orders: blockedOrders.filter((o) => o.status !== PayoutBlockStatus.RESOLVED),
+            totalElements: 2,
+          }),
+      },
+      {
+        id: 'focus-amount',
+        label: '주문 찾기 · 금액 불일치 (정산후보 · 조정)',
+        render: () => focusView(blockedOrders[0] as BlockedOrder, 2001),
+      },
+      {
+        id: 'focus-overflow',
+        label: '주문 찾기 · 조정 뒤에도 넘침 (예상 합계 경고)',
+        render: () =>
+          focusView(overflowingOrder, 2001, {
+            result: sampleAdjustmentResult,
+            logs: [sampleAdjustmentResult],
+          }),
+      },
+      {
+        id: 'focus-adjust-preview',
+        label: '주문 찾기 · 조정 미리보기 (지금 금액 → 조정 후)',
+        render: () =>
+          focusView(blockedOrders[0] as BlockedOrder, 2001, {
+            defaultValues: {
+              orderItemId: '1302',
+              amount: '-4,850',
+              reason: '판매 금액 오입력 정정',
+            },
+          }),
+      },
+      {
+        id: 'focus-adjust-negative',
+        label: '주문 찾기 · 조정 후 0원 미만',
+        render: () =>
+          focusView(blockedOrders[0] as BlockedOrder, 2001, {
+            defaultValues: { orderItemId: '1301', amount: '-10,000', reason: '환불 회수' },
+            defaultShowErrors: true,
+          }),
+      },
+      {
+        id: 'focus-fee',
+        label: '주문 찾기 · 수수료 불일치 (대기 조정 있음)',
+        render: () => focusView(blockedOrders[1] as BlockedOrder, 2002),
+      },
+      {
+        id: 'focus-resolved',
+        label: '주문 찾기 · 해결됨 (조정 안 함)',
+        render: () => focusView(blockedOrders[2] as BlockedOrder, 2003),
+      },
+      {
+        id: 'focus-not-blocked',
+        label: '주문 찾기 · 막힌 주문 아님',
+        render: () => focusView(null, 2001),
+      },
+      {
+        id: 'resolve-warning',
+        label: '해결 · 대기 조정 0원 경고',
+        render: () =>
+          blockedView({
+            resolve: {
+              ...closedResolve,
+              orderId: 2001,
+              warning:
+                '금액·수수료 불일치인데 대기 조정 합계가 0원이에요. 조정 없이 해결하면 다음 금액 검사에서 다시 막힐 수 있어요. 원인을 확인했다면 그대로 해결해도 돼요.',
+            },
+          }),
+      },
+      {
+        id: 'resolutions',
+        label: '해결 기록 전체 목록',
+        render: () => blockedView({ mode: 'resolutions' }),
+      },
+      {
+        id: 'resolutions-range-error',
+        label: '해결 기록 · 기간 1년 넘음',
+        render: () =>
+          blockedView({
+            mode: 'resolutions',
+            resolutions: {
+              ...resolutionsProps,
+              filter: { from: '2025-11-01', to: '2026-11-18', adminId: '' },
+            },
+          }),
+      },
+      {
+        id: 'resolutions-empty',
+        label: '해결 기록 · 기간 안에 없음',
+        render: () =>
+          blockedView({
+            mode: 'resolutions',
+            resolutions: {
+              ...resolutionsProps,
+              filter: { ...defaultResolutionRequestFilter(), adminId: '3' },
+              rows: [],
+              totalElements: 0,
+            },
+          }),
+      },
       {
         id: 'resolve',
         label: '해결 모달',

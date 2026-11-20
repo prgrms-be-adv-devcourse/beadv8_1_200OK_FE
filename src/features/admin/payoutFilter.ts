@@ -7,18 +7,19 @@ import type { PayoutFilter } from './types'
 
 export const PAYOUT_PAGE_SIZE = 20
 
-/** API 최대 조회 기간 */
-const MAX_RANGE_DAYS = 366
-
 export const defaultPayoutFilter = (): PayoutFilter => ({
   payee: 'all',
   payeeId: '',
   ...recentDays(30),
 })
 
-export function rangeErrorOf({ from, to }: Pick<PayoutFilter, 'from' | 'to'>) {
+/**
+ * 날짜(포함~포함) 기간 검사. 서버는 to(미포함 = 끝일 다음 날 0시)가 from + 1년을 넘으면 422라
+ * 같은 기준으로 본다(예: 2025-11-20 ~ 2026-11-19까지 된다). 정산 목록·해결 기록 전체 목록이 같이 쓴다
+ */
+export function rangeErrorOf({ from, to }: { from: string; to: string }) {
   if (from > to) return '시작일이 종료일보다 늦어요'
-  if (dayjs(to).diff(dayjs(from), 'day') >= MAX_RANGE_DAYS) {
+  if (dayjs(to).add(1, 'day').isAfter(dayjs(from).add(1, 'year'))) {
     return '기간은 1년까지 볼 수 있어요. 시작일이나 종료일을 바꿔 주세요'
   }
   return null

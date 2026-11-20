@@ -1,8 +1,8 @@
 import { isApiError } from '@/shared/api/ApiError'
 import { formatDate } from '@/shared/lib/format'
 
-// 관리자 콘솔 오류 문구. 서버 detail을 그대로 쓰되(DECISIONS.md A-13), 아래 두 가지와 정산 실행·해결 409만 해요체로 바꾼다.
-// - 501: 서버가 막아 둔 기능(1건 정산 · 수동 조정). detail이 "아직 지원하지 않는 기능입니다."라 안내로 바꾼다
+// 관리자 콘솔 오류 문구. 서버 detail을 그대로 쓰되(DECISIONS.md A-13), 아래 두 가지와 정산 실행·해결·조정 409만 해요체로 바꾼다.
+// - 501: 서버가 막아 둔 기능(지금은 1건 정산만). detail이 "아직 지원하지 않는 기능입니다."라 안내로 바꾼다
 // - 404 "No static resource …": 서버에 아직 없는 경로(Spring 내부 문구). 화면에 그대로 내지 않는다
 
 export const UNSUPPORTED_MESSAGE = '아직 지원하지 않는 기능이에요. 서버에서 준비되면 쓸 수 있어요'
@@ -60,4 +60,13 @@ export function searchInsightsErrorMessage(error: unknown): string {
     return SEARCH_PERIOD_ORDER_MESSAGE
   }
   return SEARCH_BAD_REQUEST_MESSAGE
+}
+
+// 조정 409: 같은 주문 항목·종류·금액·사유의 조정이 이미 있음(같은 요청 재전송·동시 요청). 그대로 또 넣으면 판매자가 두 번 덜 받는다
+export const DUPLICATE_ADJUSTMENT_MESSAGE =
+  '같은 조정이 이미 있어요. 막힌 주문의 대기 조정 합계나 정산후보에서 들어갔는지 먼저 확인해 주세요. 일부러 한 번 더 넣으려면 사유를 다르게 적어요'
+
+export function adjustmentErrorMessage(error: unknown): string {
+  if (isApiError(error) && error.status === 409) return DUPLICATE_ADJUSTMENT_MESSAGE
+  return adminErrorMessage(error)
 }

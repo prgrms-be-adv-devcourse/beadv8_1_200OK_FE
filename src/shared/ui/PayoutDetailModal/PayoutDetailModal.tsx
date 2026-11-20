@@ -14,8 +14,15 @@ import classes from './PayoutDetailModal.module.css'
 // 판매자(/payouts/me)·관리자(/admin/payouts) 응답 모양이 조금 달라(systemPayoutId, adjustment 상세) 구조적 타입으로 받는다.
 // TODO(api): 항목에 상품명이 없어 주문 번호·주문 상품 번호만 보여 준다. SALE_FEE 부호는 상관없이 차감으로 그린다.
 
-/** 판매자·관리자 상세 공통 + 관리자만 주는 수수료 정산번호 */
-export type PayoutDetailLike = PayoutDetailCommon & { systemPayoutId?: number | null }
+/**
+ * 판매자·관리자 상세 공통 + 관리자만 주는 수수료 정산번호.
+ * 수수료 합계·건수는 판매자 정산이면 늘 값(없으면 0)이고, 관리자가 연 시스템 몫 정산만 null이다.
+ */
+export type PayoutDetailLike = PayoutDetailCommon & {
+  systemPayoutId?: number | null
+  sellerFeeAmount: number | null
+  sellerFeeItemCount: number | null
+}
 /** 항목. 조정 정보는 사유만 있으면 된다 */
 export type PayoutItemLike = PayoutItemCommon & { adjustment: { reason: string } | null }
 
@@ -95,6 +102,7 @@ export function PayoutDetailModal({
   onRetry,
   payeeName,
 }: PayoutDetailModalProps) {
+  // 시스템 몫 정산은 수수료 합계·건수가 null이라 두 줄을 그리지 않는다
   const orderItemCount = payout?.sellerFeeItemCount ?? null
   const system = payout?.system ?? false
 
