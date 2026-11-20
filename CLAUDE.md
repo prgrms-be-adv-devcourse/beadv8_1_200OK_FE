@@ -78,6 +78,11 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
   - **Redis 세션 저장소는 만들어 두고 쓰지 않아요**(`session/redis.ts`·`store.ts`·`manager.ts`·`sealed.ts`). BFF가 여러 대가 되거나 서버에서 세션을 끊어야 할 때 되살려요. 다시 만들지 말고 `redis.ts` 맨 위 설명부터 봐요.
 - 요청 본문 상한(`bodyLimit.ts`): multipart가 아닌 본문은 `proxy.ts`가 메모리에 통째로 담아서 2MB(`REQUEST_BODY_LIMIT_BYTES`)를 넘으면 413이에요. chunked도 상한까지만 읽고 끊어요. 업로드(multipart)는 흘려보내서 대상이 아니에요. 상한 근거는 상품 상세설명 `@Size(max = 200_000)`(한글 약 600KB)예요.
 - 응답 압축(`compression.ts`): nginx에 gzip이 없어 BFF가 `Accept-Encoding`에 따라 1KB 이상 응답을 압축해요. 백엔드가 작은 응답도 chunked로 보내서 길이를 모르는 본문은 앞 1KB만 읽어 보고 정해요. `/api/v1/auth/*`·`/bff/session/*`는 토큰이 담겨서 압축하지 않아요(BREACH).
+- **상품 상세 캐시**(ADR-0011, `bff/src/productCache.ts`): `GET /api/v1/products/{id}`(쿼리 없이) 응답을 메모리에 5초 두고, 같은 상품 동시 요청은 백엔드 1번으로 합쳐요(single-flight). 한 상품에 몰릴 때 백엔드 DB 커넥션을 덜 쓰려는 예방책이에요.
+  - 200만 담아요. 키는 상품 번호이고, 캐시를 채울 때 토큰 없이 불러요(상세에 사용자별 필드가 없고, 숨김·삭제 상품은 주인 토큰으로도 404). 상세에 사용자별 필드가 생기면 이 캐시부터 다시 봐요.
+  - BFF를 지나는 판매자 수정·상태·노출 변경·삭제가 성공하면 그 상품을 지워요. BFF가 모르는 변경(주문 품절·리뷰 수·관리자·배치)은 TTL이 끝나면 반영돼요.
+  - `/bff/products/:id/detail`의 상품 부분도 같은 캐시를 써요. 응답에 `X-Cache: HIT|MISS`가 붙고, 그 밖의 헤더(`Cache-Control: no-store` 등)는 백엔드 그대로예요.
+  - TTL·상한은 `PRODUCT_CACHE_TTL_MS`(0이면 합치기만)·`PRODUCT_CACHE_MAX_ENTRIES`·`PRODUCT_CACHE_MAX_BYTES`(본문 합계, 기본 16MB — 운영 mem_limit 256MB)예요. 넘으면 LRU로 버려요. 길게 두는 캐시는 무효화를 아는 백엔드 몫이라 BFF에 더하지 않아요.
 - BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
 - 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절, 경로·만료를 지키는 쿠키 저장소 `CookieJar`). 쓰지 않는 Redis 저장소 테스트는 기본 실행에서 빠져 있고 `pnpm --filter @paldo/bff test:redis`로 돌려요(Testcontainers, Docker 필요).
 - 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.

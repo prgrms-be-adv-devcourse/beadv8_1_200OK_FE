@@ -80,16 +80,17 @@ describe('/api/v1 프록시', () => {
     const { jar } = await login()
     const sent: (string | null)[] = []
     server.use(
-      http.get(`${BACKEND}/api/v1/products/1`, ({ request }) => {
+      // 상품 상세는 토큰 없이 캐시로 답하므로(productCache.test.ts) 다른 공개 API로 본다
+      http.get(`${BACKEND}/api/v1/stores/7`, ({ request }) => {
         const authorization = request.headers.get('Authorization')
         sent.push(authorization)
         return authorization
           ? problemJson(401, '유효하지 않은 토큰입니다.')
-          : HttpResponse.json({ productId: 1 })
+          : HttpResponse.json({ sellerId: 7 })
       }),
     )
 
-    const response = await request('/api/v1/products/1', { jar })
+    const response = await request('/api/v1/stores/7', { jar })
 
     expect(response.status).toBe(200)
     expect(sent).toEqual([expect.stringMatching(/^Bearer /), null])
