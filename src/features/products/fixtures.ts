@@ -124,6 +124,7 @@ const option = (
   listPrice,
   discountRate: Math.floor(((listPrice - salePrice) / listPrice) * 100),
   soldOut,
+  lowStock: false,
 })
 
 export const appleOptions: ProductOption[] = [
@@ -133,10 +134,11 @@ export const appleOptions: ProductOption[] = [
 ]
 
 // 품절 임박(lowStock) 미리보기·테스트용. 1kg는 품절이 우선이라 ‘품절’만, 2kg는 ‘품절 임박’, 3kg는 표시 없음.
+// 서버는 품절이면 lowStock을 false로 주지만(BE #815), 화면이 품절을 먼저 보는지 확인하려고 1kg는 둘 다 true로 둔다.
 export const appleLowStockOptions: ProductOption[] = appleOptions.map((o) => {
   if (o.optionId === 1011) return { ...o, soldOut: true, lowStock: true }
   if (o.optionId === 1012) return { ...o, lowStock: true }
-  return { ...o, lowStock: false }
+  return o
 })
 
 // 옵션 6개 이상(Select)일 때의 품절 임박. 2kg·4kg는 ‘(품절 임박)’, 1kg·5kg는 품절이 우선이라 ‘(품절)’만.
