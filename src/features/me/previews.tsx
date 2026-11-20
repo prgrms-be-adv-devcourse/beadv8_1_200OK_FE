@@ -1,4 +1,5 @@
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
+import { PASSWORD_CHANGED_CONCURRENTLY_MESSAGE } from './errors'
 import {
   followedFarms,
   likedProducts,
@@ -11,6 +12,7 @@ import {
   type AccountAddressPanelProps,
   type AccountInfoPanelProps,
   AccountNotConnectedView,
+  type AccountPasswordPanelProps,
   type AccountTab,
   AccountView,
   type AccountViewProps,
@@ -31,11 +33,18 @@ const addressPanel = (props: Partial<AccountAddressPanelProps> = {}): AccountAdd
   ...props,
 })
 
-const accountLive = (tab: AccountTab, address: Partial<AccountAddressPanelProps> = {}) => (
+const passwordPanel: AccountPasswordPanelProps = { onSave: noop }
+
+const accountLive = (
+  tab: AccountTab,
+  address: Partial<AccountAddressPanelProps> = {},
+  password: Partial<AccountPasswordPanelProps> = {},
+) => (
   <AccountNotConnectedView
     tab={tab}
     onTabChange={noop}
     info={infoPanel}
+    password={{ ...passwordPanel, ...password }}
     address={addressPanel(address)}
   />
 )
@@ -185,9 +194,54 @@ export const mePreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 · 비밀번호 탭',
+        label: '연결 전 · 탈퇴 탭',
+        path: '/me/account?tab=withdraw',
+        render: () => accountLive('withdraw'),
+      },
+      {
+        id: 'password-live',
+        label: '비밀번호 (지금 화면)',
         path: '/me/account?tab=password',
         render: () => accountLive('password'),
+      },
+      {
+        id: 'password-submitting',
+        label: '비밀번호 · 바꾸는 중',
+        path: '/me/account?tab=password',
+        render: () => accountLive('password', {}, { submitting: true }),
+      },
+      {
+        id: 'password-wrong-live',
+        label: '비밀번호 · 현재 비밀번호 틀림(400)',
+        path: '/me/account?tab=password',
+        render: () =>
+          accountLive(
+            'password',
+            {},
+            { serverErrors: { currentPassword: '현재 비밀번호가 맞지 않아요' } },
+          ),
+      },
+      {
+        id: 'password-field-error-live',
+        label: '비밀번호 · 칸 오류(422)',
+        path: '/me/account?tab=password',
+        render: () =>
+          accountLive(
+            'password',
+            {},
+            {
+              serverErrors: {
+                newPassword: '비밀번호는 영문, 숫자, 특수문자를 모두 포함해 8~20자여야 합니다.',
+              },
+            },
+          ),
+      },
+      {
+        id: 'password-conflict-live',
+        label: '비밀번호 · 다른 요청이 먼저 바꿈(409)',
+        path: '/me/account?tab=password',
+        render: () =>
+          accountLive('password', {}, { errorMessage: PASSWORD_CHANGED_CONCURRENTLY_MESSAGE }),
       },
       {
         id: 'address-live',
@@ -242,6 +296,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{ ...infoPanel, saved: true }}
           />
@@ -254,6 +309,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{
               ...infoPanel,
@@ -269,6 +325,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{
               ...infoPanel,
@@ -284,6 +341,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{
               status: 'error',
@@ -301,6 +359,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{ status: 'pending', onSave: noop }}
           />

@@ -45,8 +45,9 @@ import classes from './AccountView.module.css'
 // 탈퇴 차단: 예치금 잔액 · 진행 중 요청 · 판매자 (C-13), 신청 뒤 7일 유예.
 // ✅ 내 정보 탭: GET·PUT /members/me (AccountInfoPanel).
 // ✅ 배송지 탭: GET·PUT /shipments/addresses/default (AccountAddressPanel). 회원당 1개, 삭제 API는 없다.
-// TODO(api): ❌ POST /members/me/password, 배송지 DELETE, POST /members/me/withdrawal 없음
-//   지금 라우트는 AccountNotConnectedView(내 정보·배송지 탭만 실제, 나머지 탭은 ‘연결 전’)를 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
+// ✅ 비밀번호 탭: PATCH /members/me/password (AccountPasswordPanel). 성공하면 모든 토큰이 무효라 다시 로그인한다.
+// TODO(api): ❌ 배송지 DELETE, POST /members/me/withdrawal 없음
+//   지금 라우트는 AccountNotConnectedView(내 정보·비밀번호·배송지 탭은 실제, 탈퇴 탭은 ‘연결 전’)를 그린다. AccountView는 /__design 시안용으로 남겨 둔다.
 
 export type AccountTab = 'info' | 'password' | 'address' | 'withdraw'
 
@@ -179,10 +180,13 @@ function InfoForm({
 function PasswordForm({
   onSave,
   serverErrors,
+  errorMessage,
   submitting,
 }: {
   onSave: AccountViewProps['onChangePassword']
   serverErrors?: AccountViewProps['passwordErrors']
+  /** 칸에 붙일 수 없는 변경 실패 문구 */
+  errorMessage?: string
   submitting: boolean
 }) {
   const rulesId = useId()
@@ -206,6 +210,11 @@ function PasswordForm({
       )}
       noValidate
     >
+      {errorMessage && (
+        <Alert color="error" icon={<CircleAlert />} role="alert">
+          {errorMessage}
+        </Alert>
+      )}
       <Stack gap="md" className={classes.narrow}>
         <PasswordInput
           label="현재 비밀번호"
@@ -230,6 +239,9 @@ function PasswordForm({
           {...register('newPasswordConfirm')}
         />
       </Stack>
+      <Text className={classes.help}>
+        비밀번호를 바꾸면 모든 기기에서 로그아웃돼요. 새 비밀번호로 다시 로그인해 주세요.
+      </Text>
       <Group justify="flex-end">
         <Button type="submit" loading={submitting}>
           비밀번호 변경
@@ -480,18 +492,31 @@ export function AccountView({
   )
 }
 
-const notConnectedTabs: Record<
-  Exclude<AccountTab, 'info' | 'address'>,
-  { title: string; api: string }
-> = {
-  password: {
-    title: '비밀번호 변경은 아직 연결되지 않았어요',
-    api: '❌ POST /members/me/password',
-  },
-  withdraw: {
-    title: '회원 탈퇴는 아직 연결되지 않았어요',
-    api: '❌ POST /members/me/withdrawal',
-  },
+export type AccountPasswordPanelProps = {
+  /** 변경 요청. 성공하면 화면이 세션을 끝내고 로그인으로 보낸다 */
+  onSave: AccountViewProps['onChangePassword']
+  submitting?: boolean
+  /** 서버가 돌려준 칸 오류 (400 현재 비밀번호 불일치, 422 errors[].path) */
+  serverErrors?: AccountViewProps['passwordErrors']
+  /** 칸에 붙일 수 없는 실패 문구 (409 다른 요청이 먼저 바꿈 등) */
+  errorMessage?: string
+}
+
+/** 비밀번호 탭: ✅ PATCH /members/me/password */
+export function AccountPasswordPanel({
+  onSave,
+  submitting = false,
+  serverErrors,
+  errorMessage,
+}: AccountPasswordPanelProps) {
+  return (
+    <PasswordForm
+      onSave={onSave}
+      serverErrors={serverErrors}
+      errorMessage={errorMessage}
+      submitting={submitting}
+    />
+  )
 }
 
 export type AccountInfoPanelProps = {
@@ -633,14 +658,16 @@ export function AccountAddressPanel({
   )
 }
 
-/** 지금 라우트가 그리는 계정 관리: 내 정보·배송지 탭은 실제, 나머지 탭은 ‘연결 전’ */
+/** 지금 라우트가 그리는 계정 관리: 내 정보·비밀번호·배송지 탭은 실제, 탈퇴 탭은 ‘연결 전’ */
 export function AccountNotConnectedView({
   tab,
   onTabChange,
   info,
+  password,
   address,
 }: Pick<AccountViewProps, 'tab' | 'onTabChange'> & {
   info: AccountInfoPanelProps
+  password: AccountPasswordPanelProps
   address: AccountAddressPanelProps
 }) {
   return (
@@ -658,12 +685,14 @@ export function AccountNotConnectedView({
           <Tabs.Panel key={t.value} value={t.value} pt="lg">
             {t.value === 'info' ? (
               <AccountInfoPanel {...info} />
+            ) : t.value === 'password' ? (
+              <AccountPasswordPanel {...password} />
             ) : t.value === 'address' ? (
               <AccountAddressPanel {...address} />
             ) : (
               <NotConnected
-                title={notConnectedTabs[t.value].title}
-                api={notConnectedTabs[t.value].api}
+                title="회원 탈퇴는 아직 연결되지 않았어요"
+                api="❌ POST /members/me/withdrawal"
               />
             )}
           </Tabs.Panel>

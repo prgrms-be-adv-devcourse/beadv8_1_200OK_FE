@@ -1009,3 +1009,9 @@ export type MemberInfoUpdateRequest = {
   name: string // 50자 이하, 앞뒤 공백 제거
   nickname: string // 2~30자, 앞뒤 공백 제거. 다른 회원과 같아도 된다
 }
+
+/** PATCH /members/me/password. 두 값 모두 공백을 지우지 않는다(공백도 비밀번호의 일부) */
+export type PasswordChangeRequest = {
+  currentPassword: string // 20자 이하. 형식은 보지 않는다(규칙 전에 만든 계정도 바꿀 수 있게)
+  newPassword: string // 영문·숫자·특수문자 포함 8~20자(가입과 같은 규칙), 현재 비밀번호와 달라야 함
+}
