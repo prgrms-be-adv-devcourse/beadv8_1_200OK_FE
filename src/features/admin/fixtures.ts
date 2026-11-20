@@ -1,4 +1,5 @@
 import {
+  ChargeStatus,
   type PayoutCandidate,
   type PayoutDetail,
   PayoutEventType,
@@ -19,6 +20,7 @@ import {
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
+import { type AdminCharge, type AdminChargeDetail, TossLookup, TossPaymentStatus } from './charges'
 import {
   type AdjustTarget,
   type BlockedOrder,
@@ -228,6 +230,79 @@ export const findApplication = (applicationId: number) =>
 export const applicationCounts = Object.fromEntries(
   Object.values(S).map((s) => [s, sellerApplications.filter((a) => a.status === s).length]),
 ) as Record<SellerApplicationStatus, number>
+
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+// GET /admin/wallets/charges 목록(요청 시각 순)과 상세의 토스 조회 결과. 충전 번호는 CHG_ + UUID.
+
+const heldCharge = (
+  chargeNo: string,
+  memberId: number,
+  amount: number,
+  createdAt: string,
+): AdminCharge => ({
+  chargeNo,
+  memberId,
+  amount,
+  status: ChargeStatus.IN_PROGRESS,
+  failureCode: null,
+  failureMessage: null,
+  heldForReview: true,
+  createdAt,
+  approvedAfterFailureAt: null,
+  paymentCancelRequestedAt: null,
+  paymentCanceledAt: null,
+})
+
+/** 멈춘 처리 중 · 토스 DONE 같은 금액 → 잔액 반영 · 결제 취소 */
+export const CHARGE_DONE = 'CHG_3f2b1c9e-8a4d-4e6f-9b1a-2c3d4e5f6a7b'
+/** 멈춘 처리 중 · 토스에 결제 없음 → 실패 처리 */
+export const CHARGE_NOT_FOUND = 'CHG_7a1d2e3f-4b5c-4d6e-8f9a-0b1c2d3e4f50'
+/** 멈춘 처리 중 · 결제 취소 결과 모름 → 결제 취소만 */
+export const CHARGE_CANCEL_REQUESTED = 'CHG_9c8b7a6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d'
+/** 승인 뒤 실패 → 결제 취소 */
+export const CHARGE_AFTER_FAILURE = 'CHG_1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e'
+/** 멈춘 처리 중 · 토스 답 없음 → 다시 조회만 */
+export const CHARGE_UNKNOWN = 'CHG_5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9'
+
+export const adminCharges: AdminCharge[] = [
+  heldCharge(CHARGE_DONE, 12, 10_000, '2026-11-18T10:00:00'),
+  heldCharge(CHARGE_NOT_FOUND, 23, 30_000, '2026-11-18T11:42:00'),
+  {
+    ...heldCharge(CHARGE_CANCEL_REQUESTED, 31, 50_000, '2026-11-18T13:05:00'),
+    paymentCancelRequestedAt: '2026-11-19T09:12:00',
+  },
+  {
+    ...heldCharge(CHARGE_AFTER_FAILURE, 44, 20_000, '2026-11-18T15:30:00'),
+    status: ChargeStatus.FAILED,
+    heldForReview: false,
+    failureCode: 'CONFIRM_TIMEOUT',
+    failureMessage: '결제 승인 응답을 받지 못했습니다.',
+    approvedAfterFailureAt: '2026-11-18T15:31:10',
+  },
+  heldCharge(CHARGE_UNKNOWN, 52, 100_000, '2026-11-19T08:20:00'),
+]
+
+type TossAnswer = Omit<AdminChargeDetail, 'charge'>
+
+const tossDone = (amount: number): TossAnswer => ({
+  tossLookup: TossLookup.FOUND,
+  tossStatus: TossPaymentStatus.DONE,
+  tossTotalAmount: amount,
+})
+
+export const tossAnswers: Record<string, TossAnswer> = {
+  [CHARGE_DONE]: tossDone(10_000),
+  [CHARGE_NOT_FOUND]: { tossLookup: TossLookup.NOT_FOUND, tossStatus: null, tossTotalAmount: null },
+  [CHARGE_CANCEL_REQUESTED]: tossDone(50_000),
+  [CHARGE_AFTER_FAILURE]: tossDone(20_000),
+  [CHARGE_UNKNOWN]: { tossLookup: TossLookup.UNKNOWN, tossStatus: null, tossTotalAmount: null },
+}
+
+export const findChargeDetail = (chargeNo: string): AdminChargeDetail | null => {
+  const charge = adminCharges.find((c) => c.chargeNo === chargeNo)
+  const toss = tossAnswers[chargeNo]
+  return charge && toss ? { charge, ...toss } : null
+}
 
 // ─── 정산 관리 ───────────────────────────────────────────
 // 매일 02:00 정산. 판매자 정산 = 판매 대금 − 수수료 3% + 배송비(주문 단위), 그날 수수료 합은 플랫폼 몫(system) 한 건.

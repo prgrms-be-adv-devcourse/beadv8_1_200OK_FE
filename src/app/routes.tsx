@@ -251,6 +251,12 @@ export const appRoutes: RouteObject[] = [
             { title: '정산 관리', screenId: 'M-03' },
             'AdminDepositChecksPage',
           ),
+          adminPage('charges', { title: '충전 처리', screenId: 'M-05' }, 'AdminChargesPage'),
+          adminPage(
+            'charges/:chargeNo',
+            { title: '충전 처리', screenId: 'M-05' },
+            'AdminChargeDetailPage',
+          ),
           adminPage(
             'review-analysis-test',
             { title: '리뷰 분석 테스트', screenId: 'M-04' },

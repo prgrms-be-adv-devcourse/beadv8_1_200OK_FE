@@ -15,6 +15,7 @@ import type {
   SellerApplicationListParams,
   SellerApplicationRejectRequest,
 } from '@/shared/api/types'
+import type { AdminCharge, AdminChargeDetail, ChargeReasonRequest } from './charges'
 import type {
   BlockedOrder,
   DepositCheckReview,
@@ -210,6 +211,50 @@ export async function getDepositCheckReviews(
     `${payouts}/deposit-checks`,
     { params },
   )
+  return data
+}
+
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+
+const charges = '/api/v1/admin/wallets/charges'
+const chargePath = (chargeNo: string) => `${charges}/${encodeURIComponent(chargeNo)}`
+
+// ✅ GET /api/v1/admin/wallets/charges → 멈춘 처리 중 건 + 승인 뒤 실패한 건, 요청 시각 순 최대 100건(페이지 없음)
+export async function getChargeTargets(): Promise<AdminCharge[]> {
+  const { data } = await apiClient.get<AdminCharge[]>(charges)
+  return data
+}
+
+// ✅ GET /api/v1/admin/wallets/charges/{chargeNo} → 충전 건 + 토스 결제 상태. 부를 때마다 토스에 묻는다(상태는 안 바꿈). 404 없음
+export async function getChargeDetail(chargeNo: string): Promise<AdminChargeDetail> {
+  const { data } = await apiClient.get<AdminChargeDetail>(chargePath(chargeNo))
+  return data
+}
+
+// 처리 3개는 처리 뒤의 충전 건을 200으로 돌려준다. 404 없음 · 409 끝났거나 먼저 처리됨·토스 상태와 맞지 않음 · 503 토스 답 없음
+
+// ✅ POST …/{chargeNo}/complete (본문 없음) → COMPLETED
+export async function completeCharge(chargeNo: string): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/complete`)
+  return data
+}
+
+// ✅ POST …/{chargeNo}/fail { reason } → FAILED(ADMIN_FAILED). 422 사유 없음·200자 초과(errors[].path = reason)
+export async function failCharge(
+  chargeNo: string,
+  body: ChargeReasonRequest,
+): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/fail`, body)
+  return data
+}
+
+// ✅ POST …/{chargeNo}/cancel-payment { reason } → paymentCanceledAt. 사유는 토스에도 보낸다.
+// 409에 토스 취소 거절 포함, 503이면 다시 눌러도 두 번 취소되지 않는다
+export async function cancelChargePayment(
+  chargeNo: string,
+  body: ChargeReasonRequest,
+): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/cancel-payment`, body)
   return data
 }
 
