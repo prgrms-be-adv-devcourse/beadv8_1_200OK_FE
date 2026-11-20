@@ -28,6 +28,14 @@ export type BackendReport = {
   serverError(failure: BackendFailure): void
 }
 
+/**
+ * 이슈 제목이 `BackendServerError: Backend 500 GET /api/v1/orders/:id`로 읽히게 하는 이름표.
+ * captureMessage로 보내면 SDK가 붙인 스택 때문에 제목이 함수 이름(`Object.serverError`)이 된다
+ */
+export class BackendServerError extends Error {
+  override name = 'BackendServerError'
+}
+
 /** 같은 [모듈, 경로, 상태]는 한 이슈로 묶는다. traceId·detail은 이벤트마다 달라 묶는 기준에서 뺀다 */
 export function backendIssue(failure: BackendFailure) {
   const tags: Record<string, string | number> = {
@@ -56,6 +64,6 @@ export const sentryBackendReport: BackendReport = {
   },
   serverError(failure) {
     const { message, context } = backendIssue(failure)
-    Sentry.captureMessage(message, context)
+    Sentry.captureException(new BackendServerError(message), context)
   },
 }
