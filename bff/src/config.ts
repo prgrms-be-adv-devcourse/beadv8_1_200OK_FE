@@ -41,6 +41,15 @@ const EnvSchema = z.object({
   UPLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   /** 화면용 집계에서 없어도 되는 부가 정보 호출은 짧게 끊는다 */
   OPTIONAL_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
+  /**
+   * multipart가 아닌 요청 본문 상한. proxy.ts가 메모리에 통째로 담아서 둔다. 업로드는 대상이 아니다.
+   * 가장 큰 본문은 상품 상세설명(백엔드 @Size(max = 200_000))이다. 한글이면 UTF-8로 약 600KB라 2MB 안이다
+   */
+  REQUEST_BODY_LIMIT_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2 * 1024 * 1024),
 })
 
 export type Config = {
@@ -53,6 +62,7 @@ export type Config = {
   /** 개발 환경 전용 경로(devRoutes.ts: Sentry 테스트 오류)를 열지 */
   devRoutes: boolean
   cookieSecure: boolean
+  requestBodyLimitBytes: number
   timeouts: { upstream: number; upload: number; optional: number }
 }
 
@@ -75,6 +85,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     allowAnyLocalhostOrigin: parsed.NODE_ENV === 'development',
     devRoutes: parsed.NODE_ENV === 'development',
     cookieSecure: parsed.COOKIE_SECURE ?? parsed.NODE_ENV === 'production',
+    requestBodyLimitBytes: parsed.REQUEST_BODY_LIMIT_BYTES,
     timeouts: {
       upstream: parsed.UPSTREAM_TIMEOUT_MS,
       upload: parsed.UPLOAD_TIMEOUT_MS,
