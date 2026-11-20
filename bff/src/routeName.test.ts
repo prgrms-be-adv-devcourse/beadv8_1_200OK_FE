@@ -21,6 +21,14 @@ describe('routeName', () => {
     ['GET', '/api/v1/cart/', 'GET /api/v1/cart'],
     ['GET', '/api/v1/payouts/me/5/items', 'GET /api/v1/payouts/me/:id/items'],
     ['GET', '/api/v1/wallets/me/charges', 'GET /api/v1/wallets/me/charges'],
+    // #49에서 더한 경우
+    ['get', '/api/v1/products/12/reviews/me', 'GET /api/v1/products/:id/reviews/me'],
+    ['PATCH', '/api/v1/orders/3/items/45/', 'PATCH /api/v1/orders/:id/items/:id'],
+    ['POST', '/api/v1/wallets/me/charges/confirm', 'POST /api/v1/wallets/me/charges/confirm'],
+    ['POST', '/api/v1/wallets/me/charges/fail', 'POST /api/v1/wallets/me/charges/fail'],
+    ['POST', '/api/v1/wallets/me/charges', 'POST /api/v1/wallets/me/charges'],
+    ['GET', '/api/v1/admin/payouts/PENDING', 'GET /api/v1/admin/payouts/PENDING'],
+    ['GET', '/bff/products/1/detail', 'GET /bff/products/:id/detail'],
     ['get', '/', 'GET /'],
   ])('%s %s → %s', (method, pathname, expected) => {
     expect(routeName(method, pathname)).toBe(expected)

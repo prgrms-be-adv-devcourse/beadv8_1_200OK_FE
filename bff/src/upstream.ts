@@ -1,4 +1,7 @@
+import { type BackendReport, TRACE_ID_HEADER } from './backendReport.ts'
 import type { Config, UpstreamModule } from './config.ts'
+import { readProblemDetail } from './problem.ts'
+import { routeName } from './routeName.ts'
 
 // 경로 접두어 → 백엔드 모듈. 백엔드 컨트롤러의 @RequestMapping과 같이 맞춘다(origin/dev 2026-10-27).
 // 긴 접두어부터 본다. 공개 계약 /api/v1만 다루고 /internal은 부르지 않는다 (ADR-0006)
@@ -68,9 +71,11 @@ export type JsonResult<T> = { ok: true; data: T } | { ok: false; response: Respo
 
 export class Upstream {
   readonly #config: Config
+  readonly #report: BackendReport
 
-  constructor(config: Config) {
+  constructor(config: Config, report: BackendReport) {
     this.#config = config
+    this.#report = report
   }
 
   url(module: UpstreamModule | null, pathAndQuery: string): string {
@@ -86,8 +91,9 @@ export class Upstream {
   ): Promise<Response> {
     const { timeoutMs, signal, ...rest } = init
     const timeout = AbortSignal.timeout(timeoutMs)
+    let response: Response
     try {
-      return await fetch(this.url(module, pathAndQuery), {
+      response = await fetch(this.url(module, pathAndQuery), {
         ...rest,
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       })
@@ -96,6 +102,29 @@ export class Upstream {
       if (signal?.aborted) throw error
       throw new UpstreamError(timeout.aborted ? 'timeout' : 'unreachable', error)
     }
+    await this.#observe(module, rest.method ?? 'GET', pathAndQuery, response)
+    return response
+  }
+
+  /** X-Trace-Id를 남기고 5xx면 보고한다. 응답은 바꾸지 않는다(본문은 clone으로 읽는다) */
+  async #observe(
+    module: UpstreamModule | null,
+    method: string,
+    pathAndQuery: string,
+    response: Response,
+  ): Promise<void> {
+    const traceId = response.headers.get(TRACE_ID_HEADER)
+    if (traceId) this.#report.traceId(traceId)
+    if (response.status < 500) return
+    // JSON이 아닌 본문(HTML 오류 페이지 등)은 읽지 않는다
+    const json = /[/+]json\b/.test(response.headers.get('content-type') ?? '')
+    this.#report.serverError({
+      module: module ?? 'backend',
+      route: routeName(method, pathAndQuery),
+      status: response.status,
+      traceId,
+      detail: json ? await readProblemDetail(response.clone()) : null,
+    })
   }
 
   async getJson<T>(
