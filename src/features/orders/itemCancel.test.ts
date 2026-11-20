@@ -40,6 +40,16 @@ describe('itemCancelOf', () => {
     expect(itemCancelOf(item, refunds)).toEqual({ kind: 'available', maxQuantity: 2 })
   })
 
+  it('취소 실패(FAILED)는 진행 중도 취소된 개수도 아니라 다시 요청할 수 있다', () => {
+    expect(itemCancelOf(item, [refund(RefundStatus.FAILED, 3)])).toEqual({
+      kind: 'available',
+      maxQuantity: 3,
+    })
+    expect(
+      itemCancelOf(item, [refund(RefundStatus.COMPLETED, 1), refund(RefundStatus.FAILED, 2)]),
+    ).toEqual({ kind: 'available', maxQuantity: 2 })
+  })
+
   it('산 개수를 다 취소했으면 더 요청할 수 없다', () => {
     expect(itemCancelOf(item, [refund(RefundStatus.COMPLETED, 3)])).toEqual({
       kind: 'allCanceled',

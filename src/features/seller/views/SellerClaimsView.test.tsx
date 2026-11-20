@@ -43,6 +43,16 @@ describe('SellerClaimsView', () => {
     expect(within(rejected).getByText('이미 포장을 마쳐 오늘 출고했어요')).toBeInTheDocument()
   })
 
+  it('취소 실패 요청은 문구·배지와 함께 실패 이유를 보이고 환불하지 않는다고 적는다', () => {
+    renderClaims()
+    const failed = screen.getByRole('article', { name: /주문번호 66/ })
+    expect(within(failed).getByText('취소 실패')).toBeInTheDocument()
+    expect(within(failed).getByText('실패 이유')).toBeInTheDocument()
+    expect(within(failed).getByText(/환불 처리에 실패해 취소를 되돌렸습니다/)).toBeInTheDocument()
+    expect(within(failed).getByText('환불하지 않아요')).toBeInTheDocument()
+    expect(within(failed).queryByRole('button')).not.toBeInTheDocument()
+  })
+
   it('승인 대기 요청에만 승인·거절 버튼을 둔다', () => {
     renderClaims()
     const pending = sellerRefunds.filter((r) => r.status === RefundStatus.REQUESTED)

@@ -51,6 +51,14 @@ export enum ProductVisibility {
   HIDDEN = 'HIDDEN',
 }
 
+/** 구매자 상품 목록 정렬. 보내지 않으면 검색어가 있을 때 RELEVANCE, 없을 때 LATEST. 검색어 없이 RELEVANCE면 LATEST */
+export enum ProductSort {
+  RELEVANCE = 'RELEVANCE',
+  PRICE_ASC = 'PRICE_ASC', // minSalePrice 기준
+  PRICE_DESC = 'PRICE_DESC',
+  LATEST = 'LATEST',
+}
+
 export enum MediaPurpose {
   PRODUCT = 'PRODUCT',
   PRODUCT_REVIEW = 'PRODUCT_REVIEW',
@@ -198,6 +206,12 @@ export type PageResponse<T> = {
 }
 
 export type ProductPage<T> = PageResponse<T>
+
+/** 구매자 상품 목록(GET /products) 응답. 페이지 5칸 + 오타 교정 제안 */
+export type ProductSearchPage = ProductPage<ProductSummary> & {
+  // 검색어가 품목 이름의 오타로 보일 때 바른 품목(예: "고춧가루"). 결과는 원래 검색어 그대로. 없으면 null
+  suggestion: string | null
+}
 export type PayoutPage<T> = PageResponse<T>
 
 // ─── 회원·인증 ───────────────────────────────────────────
@@ -228,6 +242,8 @@ export type TokenResponse = {
 export type LoginResponse = TokenResponse
 
 export type TokenReissueRequest = { refreshToken: string }
+
+export type LogoutRequest = { refreshToken: string }
 
 // ─── 미디어 ──────────────────────────────────────────────
 
@@ -263,9 +279,8 @@ export type ProductOption = {
   salePrice: number
   discountRate: number
   soldOut: boolean // 재고 수량은 내려주지 않음
-  // TODO(api): 백엔드 공개 옵션 응답에 lowStock이 생기면(BE #814) optional을 걷어낸다
-  /** 곧 품절될 옵션(서버가 기준을 정해 판단). 수량은 내려주지 않는다. 없으면 표시하지 않는다(A-7) */
-  lowStock?: boolean
+  /** 곧 품절될 옵션(서버가 기준을 정해 판단). 수량은 내려주지 않는다. 품절이면 false(A-7) */
+  lowStock: boolean
 }
 
 export type ProductDetail = {
@@ -289,9 +304,11 @@ export type ProductDetail = {
 }
 
 export type ProductListParams = {
+  keyword?: string // 50자 이하. 상품명·옵션명·카테고리 이름. 비우거나 공백·기호만이면 검색어 없이 조회
   categoryGroup?: ProductCategoryGroup
   category?: ProductCategory
   region?: ProductRegion
+  sort?: ProductSort
   page?: number
   size?: number
 }
@@ -1008,4 +1025,10 @@ export type MemberInfo = {
 export type MemberInfoUpdateRequest = {
   name: string // 50자 이하, 앞뒤 공백 제거
   nickname: string // 2~30자, 앞뒤 공백 제거. 다른 회원과 같아도 된다
+}
+
+/** PATCH /members/me/password. 두 값 모두 공백을 지우지 않는다(공백도 비밀번호의 일부) */
+export type PasswordChangeRequest = {
+  currentPassword: string // 20자 이하. 형식은 보지 않는다(규칙 전에 만든 계정도 바꿀 수 있게)
+  newPassword: string // 영문·숫자·특수문자 포함 8~20자(가입과 같은 규칙), 현재 비밀번호와 달라야 함
 }

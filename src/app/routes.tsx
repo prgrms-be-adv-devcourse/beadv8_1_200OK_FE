@@ -262,6 +262,11 @@ export const appRoutes: RouteObject[] = [
             { title: '리뷰 분석 테스트', screenId: 'M-04' },
             'AdminReviewAnalysisTestPage',
           ),
+          adminPage(
+            'search-insights',
+            { title: '검색 점검', screenId: 'M-05' },
+            'AdminSearchInsightsPage',
+          ),
         ],
       },
     ],

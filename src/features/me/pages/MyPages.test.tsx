@@ -1,10 +1,16 @@
+import { notifications } from '@mantine/notifications'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { sampleDefaultAddress } from '@/mocks/handlers/addresses'
 import { server } from '@/mocks/server'
-import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
+import {
+  clearAccessToken,
+  getAuthSession,
+  getRefreshToken,
+  setAccessToken,
+} from '@/shared/api/authToken'
 import { MemberRole } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
@@ -165,6 +171,7 @@ function renderAt(path: string) {
     [
       { path: '/me/likes', Component: LikesPage },
       { path: '/me/account', Component: AccountPage },
+      { path: '/login', Component: () => <h1>로그인 화면</h1> },
     ],
     { initialEntries: [path] },
   )
@@ -183,15 +190,160 @@ describe('LikesPage (연결 전)', () => {
 })
 
 describe('AccountPage', () => {
-  it.each([
-    ['password', '비밀번호 변경은 아직 연결되지 않았어요'],
-    ['withdraw', '회원 탈퇴는 아직 연결되지 않았어요'],
-  ])('%s 탭은 폼 대신 연결 전 안내를 보여 준다', async (tab, title) => {
-    renderAt(`/me/account?tab=${tab}`)
-    expect(await screen.findByText(title)).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /^저장$|비밀번호 변경|탈퇴 신청/ }),
-    ).not.toBeInTheDocument()
+  it('탈퇴 탭은 폼 대신 연결 전 안내를 보여 준다', async () => {
+    renderAt('/me/account?tab=withdraw')
+    expect(await screen.findByText('회원 탈퇴는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /탈퇴 신청/ })).not.toBeInTheDocument()
+  })
+
+  describe('비밀번호 탭', () => {
+    const passwordProblem = (status: number, slug: string, detail: string, extra: object = {}) =>
+      HttpResponse.json(
+        {
+          type: `https://api.example.com/problems/${slug}`,
+          title: 'Error',
+          status,
+          detail,
+          instance: '/api/v1/members/me/password',
+          ...extra,
+        },
+        { status, headers: { 'Content-Type': 'application/problem+json' } },
+      )
+
+    beforeEach(() => setAccessToken(fakeToken({ role: MemberRole.BUYER }), 'refresh-1'))
+    // 토스트는 전역 저장소(@mantine/notifications)라 다음 테스트의 role="alert" 조회에 남지 않게 비운다
+    afterEach(() => notifications.clean())
+
+    async function submitPassword(current = 'oldPass1!', next = 'newPass1!') {
+      const user = userEvent.setup()
+      renderAt('/me/account?tab=password')
+      await user.type(await screen.findByLabelText('현재 비밀번호'), current)
+      await user.type(screen.getByLabelText('새 비밀번호'), next)
+      await user.type(screen.getByLabelText('새 비밀번호 확인'), next)
+      await user.click(screen.getByRole('button', { name: '비밀번호 변경' }))
+      return user
+    }
+
+    it('바꾸면 PATCH로 보내고, 토큰을 모두 지운 뒤 로그인 화면으로 보내며 다시 로그인하라고 알린다', async () => {
+      let body: unknown
+      server.use(
+        http.patch('*/api/v1/members/me/password', async ({ request }) => {
+          body = await request.json()
+          return new HttpResponse(null, { status: 204 })
+        }),
+      )
+      await submitPassword(' oldPass1!', 'newPass1! ')
+
+      expect(await screen.findByRole('heading', { name: '로그인 화면' })).toBeInTheDocument()
+      expect(
+        await screen.findByText('비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요'),
+      ).toBeInTheDocument()
+      // 공백도 비밀번호의 일부라 지우지 않고, 확인 칸은 보내지 않는다
+      expect(body).toEqual({ currentPassword: ' oldPass1!', newPassword: 'newPass1! ' })
+      expect(getAuthSession()).toBeNull()
+      expect(getRefreshToken()).toBeNull()
+    })
+
+    it('현재 비밀번호가 틀리면(400) 그 칸에 알리고 focus하며 로그인은 유지한다', async () => {
+      server.use(
+        http.patch('*/api/v1/members/me/password', () =>
+          passwordProblem(
+            400,
+            'member/invalid-current-password',
+            '현재 비밀번호가 올바르지 않습니다.',
+          ),
+        ),
+      )
+      await submitPassword()
+
+      expect(await screen.findByText('현재 비밀번호가 맞지 않아요')).toBeInTheDocument()
+      const current = screen.getByLabelText('현재 비밀번호')
+      expect(current).toHaveAccessibleDescription(
+        expect.stringContaining('현재 비밀번호가 맞지 않아요'),
+      )
+      await waitFor(() => expect(current).toHaveFocus())
+      expect(getAuthSession()).not.toBeNull()
+      expect(screen.queryByRole('heading', { name: '로그인 화면' })).not.toBeInTheDocument()
+    })
+
+    it('새 비밀번호가 현재와 같다고 오면(400) 새 비밀번호 칸에 알린다', async () => {
+      server.use(
+        http.patch('*/api/v1/members/me/password', () =>
+          passwordProblem(
+            400,
+            'member/same-as-current-password',
+            '새 비밀번호가 현재 비밀번호와 같습니다.',
+          ),
+        ),
+      )
+      await submitPassword()
+      expect(
+        await screen.findByText('지금 비밀번호와 다른 비밀번호로 정해 주세요'),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('새 비밀번호')).toHaveFocus()
+    })
+
+    it('서버 422는 errors[].path 칸에 서버 문구를 붙인다', async () => {
+      server.use(
+        http.patch('*/api/v1/members/me/password', () =>
+          HttpResponse.json(
+            {
+              type: 'about:blank',
+              title: 'Validation failed',
+              status: 422,
+              detail: '요청 값이 올바르지 않습니다.',
+              instance: '/api/v1/members/me/password',
+              errors: [
+                {
+                  path: 'newPassword',
+                  detail: '비밀번호는 영문, 숫자, 특수문자를 모두 포함해 8~20자여야 합니다.',
+                },
+              ],
+            },
+            { status: 422, headers: { 'Content-Type': 'application/problem+json' } },
+          ),
+        ),
+      )
+      await submitPassword()
+      expect(
+        await screen.findByText('비밀번호는 영문, 숫자, 특수문자를 모두 포함해 8~20자여야 합니다.'),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('새 비밀번호')).toHaveFocus()
+    })
+
+    it('다른 요청이 먼저 바꿨으면(409) 다시 로그인한 뒤 시도하라고 알린다', async () => {
+      server.use(
+        http.patch('*/api/v1/members/me/password', () =>
+          passwordProblem(
+            409,
+            'member/password-changed-concurrently',
+            '비밀번호가 다른 요청으로 이미 변경되었습니다. 다시 로그인해 주세요.',
+          ),
+        ),
+      )
+      await submitPassword()
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        '다른 곳에서 비밀번호가 먼저 바뀌었어요',
+      )
+    })
+
+    it('규칙에 맞지 않거나 현재 비밀번호가 20자를 넘으면 보내지 않는다', async () => {
+      let called = false
+      server.use(
+        http.patch('*/api/v1/members/me/password', () => {
+          called = true
+          return new HttpResponse(null, { status: 204 })
+        }),
+      )
+      await submitPassword('a'.repeat(21), 'onlyletters')
+      expect(
+        await screen.findByText('현재 비밀번호는 20자 이하로 입력해 주세요'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('영문, 숫자, 특수문자를 모두 포함해 8~20자로 입력해 주세요'),
+      ).toBeInTheDocument()
+      expect(called).toBe(false)
+    })
   })
 
   it('내 정보 탭은 서버 값을 채우고 아이디·이메일은 읽기 전용이다', async () => {

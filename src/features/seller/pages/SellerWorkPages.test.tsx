@@ -225,6 +225,26 @@ describe('SellerClaimsPage', () => {
     expect(await screen.findAllByRole('article')).toHaveLength(sellerRefunds.length)
   })
 
+  it('취소 실패 탭은 status=FAILED로 거른다', async () => {
+    const statuses: (string | null)[] = []
+    server.use(
+      http.get('*/api/v1/seller/refunds', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        statuses.push(params.get('status'))
+        const status = params.get('status')
+        const rows = status ? sellerRefunds.filter((r) => r.status === status) : sellerRefunds
+        return HttpResponse.json(pageOf(rows, params, 25))
+      }),
+    )
+    const failed = sellerRefunds.filter((r) => r.status === RefundStatus.FAILED)
+    const user = userEvent.setup()
+    renderSeller('/seller/claims')
+    await user.click(await screen.findByRole('tab', { name: '취소 실패' }))
+    await waitFor(() => expect(statuses).toContain('FAILED'))
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(failed.length))
+    expect(screen.getByText('실패 이유')).toBeInTheDocument()
+  })
+
   it('승인하면 결정을 보내고 결과를 알린 뒤 목록을 다시 받는다', async () => {
     let body: unknown
     let listCalls = 0

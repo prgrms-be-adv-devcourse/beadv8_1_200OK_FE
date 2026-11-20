@@ -24,7 +24,10 @@ import type {
   Resolution,
   ResolutionRequest,
   ReviewAnalysisRequest,
+  SearchInsightsParams,
   SentimentAnalysis,
+  UntaggedProduct,
+  ZeroResultKeyword,
 } from './types'
 
 // 관리자 콘솔 요청. 모두 Bearer(ADMIN 권한). 토큰 없으면 401, 관리자가 아니면 403.
@@ -285,5 +288,33 @@ export async function analyzeReviewSentiment(
   body: ReviewAnalysisRequest,
 ): Promise<SentimentAnalysis> {
   const { data } = await apiClient.post<SentimentAnalysis>(`${reviewAnalysis}/sentiment`, body)
+  return data
+}
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+const productSearch = '/api/v1/admin/product-search'
+
+// ✅ GET /api/v1/admin/product-search/zero-result-keywords?from&to&limit → 0건 횟수 많은 순(같으면 마지막 검색이 늦은 순).
+// from·to는 yyyy-MM-dd(둘 다 포함, KST), limit 1~100(기본 20). 0건 검색이 없으면 빈 목록.
+// 400 시작일 > 종료일(product/invalid-search-log-period) · 시작일이 보존 기간(기본 90일) 밖(…/search-log-period-beyond-retention) · 형식 · limit 범위
+export async function getZeroResultKeywords(
+  params: SearchInsightsParams,
+): Promise<ZeroResultKeyword[]> {
+  const { data } = await apiClient.get<ZeroResultKeyword[]>(
+    `${productSearch}/zero-result-keywords`,
+    { params },
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/product-search/untagged-products?from&to&limit → 판정을 마쳤는데 태그가 0개인 상품, 최근 판정 순.
+// 기간은 판정 시각 기준. 판정 대기·최종 실패·삭제 상품은 빠진다. 400 시작일 > 종료일(product/invalid-tag-judgment-period) · 형식 · limit 범위
+export async function getUntaggedProducts(
+  params: SearchInsightsParams,
+): Promise<UntaggedProduct[]> {
+  const { data } = await apiClient.get<UntaggedProduct[]>(`${productSearch}/untagged-products`, {
+    params,
+  })
   return data
 }

@@ -14,6 +14,8 @@ const viewOf: Record<RefundStatus, AmountView> = {
   [RefundStatus.COMPLETED]: 'decided',
   [RefundStatus.REJECTED]: 'notRefunded',
   [RefundStatus.WITHDRAWN]: 'notRefunded',
+  // 승인 때 금액은 정해졌지만 취소를 되돌려 돌려준 돈도 다시 가져갔다
+  [RefundStatus.FAILED]: 'notRefunded',
 }
 
 export type RefundAmountsProps = {

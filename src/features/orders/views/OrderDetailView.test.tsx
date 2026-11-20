@@ -4,7 +4,13 @@ import { MemoryRouter } from 'react-router'
 import { RefundStatus } from '@/shared/api/refund'
 import { OrderItemStatus } from '@/shared/api/types'
 import { render } from '@/test/render'
-import { myRefunds, orderDetails, orderWithItemStatus, remoteAreaOrder } from '../fixtures'
+import {
+  failedRefund,
+  myRefunds,
+  orderDetails,
+  orderWithItemStatus,
+  remoteAreaOrder,
+} from '../fixtures'
 import { OrderDetailView, type OrderDetailViewProps } from './OrderDetailView'
 
 function renderDetail(props: Partial<OrderDetailViewProps> = {}) {
@@ -52,6 +58,21 @@ describe('OrderDetailView', () => {
       within(section).getByRole('button', { name: '해남 꿀고구마 베니하루카 취소 요청 철회' }),
     )
     expect(onWithdrawRefund).toHaveBeenCalledWith(41)
+  })
+
+  it('취소 실패한 상품은 실패 이유와 주문 유지 안내를 보이고 다시 요청할 수 있다', () => {
+    renderDetail({ refunds: [failedRefund], onRequestCancel: async () => null })
+    expect(
+      screen.getByRole('button', { name: '해남 꿀고구마 베니하루카 취소 요청' }),
+    ).toBeInTheDocument()
+
+    const card = screen.getByRole('article', { name: '해남 꿀고구마 베니하루카' })
+    expect(within(card).getByText('취소 실패')).toBeInTheDocument()
+    expect(within(card).getByText(/주문은 그대로 유지돼요/)).toBeInTheDocument()
+    expect(within(card).getByText('실패 이유')).toBeInTheDocument()
+    expect(within(card).getByText(failedRefund.rejectReason as string)).toBeInTheDocument()
+    expect(within(card).getByText('환불하지 않아요')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: /철회$/ })).not.toBeInTheDocument()
   })
 
   it('처리 중·완료로 산 개수를 다 취소했으면 더 요청하지 않는다', () => {
