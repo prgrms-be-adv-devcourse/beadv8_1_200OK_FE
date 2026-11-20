@@ -7,12 +7,18 @@ import {
 } from '@/shared/api/types'
 import { formatAmount, formatDate, formatSignedAmount } from '@/shared/lib/format'
 import { payoutEventTypeLabels } from '@/shared/lib/labels'
-import { QueryState } from '@/shared/ui'
+import {
+  isPayoutAdjustmentCheckStatus,
+  PayoutAdjustmentCheckStatus,
+} from '@/shared/lib/payoutAdjustmentCheck'
+import { QueryState, StatusBadge } from '@/shared/ui'
 import classes from '../views/PayoutReviewViews.module.css'
 
 // 한 주문의 정산후보 전부(대기 중 · 정산됨 · 조정). ✅ GET /api/v1/admin/payouts/candidates?orderId&size=100 (기간 없이).
 // 막힌 주문을 조정할 때 상품별 금액을 보고, 줄의 ‘조정’으로 조정 칸을 채운다. 배송비(주문 항목 없음)는 조정할 수 없다.
 // 조정 사유는 입력 원문이라 React 기본 이스케이프로 그린다.
+// 조정 줄에는 금액 검사 상태(adjustmentCheckStatus) 배지를 붙이고, 표 아래에 나온 상태의 뜻과 할 일을 적는다.
+// 서버는 조정을 막지 않고 이 값으로 알리기만 해서, 검사 밖 조정을 여기서 알아채야 한다(Swagger 정산후보 조회 설명).
 
 export type OrderCandidatesTableProps = {
   orderId: number
@@ -41,6 +47,22 @@ const typeOrder: Record<PayoutEventType, number> = {
   [PayoutEventType.SALE_SHIPPING_FEE]: 2,
 }
 
+/** 표 아래 안내. 표에 나온 상태만 이 순서로 보여 준다 */
+const checkGuides: [PayoutAdjustmentCheckStatus, string][] = [
+  [
+    PayoutAdjustmentCheckStatus.UNCHECKED,
+    '금액 검사 없이 지급에만 들어가요. 막힘과 상관없는 보상이면 그대로 두고, 의도한 조정이 아니면 다음 정산 실행 전에 사유를 다르게 적어 반대 금액으로 상쇄해요.',
+  ],
+  [
+    PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
+    '막힌 주문을 해결하면 금액 검사에 들어가 확인됨이 돼요.',
+  ],
+  [
+    PayoutAdjustmentCheckStatus.CONFIRMED,
+    '해결할 때 금액 검사에 들어갔어요. 반대 금액으로 상쇄하지 마세요. 지급에는 두 조정이 다 들어가 결제 금액보다 많이 나갈 수 있어요.',
+  ],
+]
+
 function sortCandidates(candidates: PayoutCandidate[]) {
   return [...candidates].sort(
     (a, b) =>
@@ -62,6 +84,11 @@ export function OrderCandidatesTable({
   onLoadMore,
   onAdjust,
 }: OrderCandidatesTableProps) {
+  const shownChecks = new Set(
+    candidates.map((c) => c.adjustmentCheckStatus).filter(isPayoutAdjustmentCheckStatus),
+  )
+  const guides = checkGuides.filter(([status]) => shownChecks.has(status))
+
   return (
     <QueryState
       status={status === 'success' && candidates.length === 0 ? 'empty' : status}
@@ -118,6 +145,12 @@ export function OrderCandidatesTable({
                         조정 {candidate.adjustment.adjustmentId} · 관리자{' '}
                         {candidate.adjustment.adminId}
                       </span>
+                      {isPayoutAdjustmentCheckStatus(candidate.adjustmentCheckStatus) && (
+                        <span className={classes.checkStatus}>
+                          <span className={classes.help}>금액 검사</span>
+                          <StatusBadge status={candidate.adjustmentCheckStatus} size="sm" inline />
+                        </span>
+                      )}
                       <Text className={`${classes.help} ${classes.detailText}`}>
                         {candidate.adjustment.reason}
                       </Text>
@@ -155,6 +188,16 @@ export function OrderCandidatesTable({
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>
+      {guides.length > 0 && (
+        <ul className={classes.checkGuides} aria-label="조정의 금액 검사 상태">
+          {guides.map(([status, text]) => (
+            <li key={status}>
+              <StatusBadge status={status} size="sm" inline />
+              <span className={classes.desc}>{text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {hasMore && (
         <Button variant="subtle" fullWidth loading={loadingMore} onClick={onLoadMore}>
           정산후보 더 보기

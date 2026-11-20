@@ -18,6 +18,7 @@ import {
   zeroResultKeywords,
 } from '@/features/admin/fixtures'
 import { SellerApplicationStatus } from '@/shared/api/types'
+import { PayoutAdjustmentCheckStatus } from '@/shared/lib/payoutAdjustmentCheck'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { pageOf, problem } from './_shared'
 
@@ -181,7 +182,8 @@ export const adminHandlers = [
   ),
   http.post(`${payouts}/run/order-items/:orderItemId`, () => unsupported()),
   http.post(`${payouts}/run`, () => HttpResponse.json({ executionId: 101, status: 'COMPLETED' })),
-  // 201 방금 저장한 조정. 원래 후보는 주문별 정산후보에서 찾고, 없으면 422
+  // 201 방금 저장한 조정. 원래 후보는 주문별 정산후보에서 찾고, 없으면 422.
+  // 금액 검사 상태: 잠김·멈춤이면서 금액·수수료 불일치인 주문이면 해결 대기, 그 밖(해결됨·막히지 않음·다른 사유)은 검사 밖
   http.post(`${payouts}/adjustments`, async ({ request }) => {
     const body = (await request.json()) as {
       orderItemId: number
@@ -193,6 +195,11 @@ export const adminHandlers = [
       (c) => c.orderItemId === body.orderItemId && c.eventType === body.eventType && !c.adjustment,
     )
     if (!original) return problem(422, '조정할 원래 정산후보가 없습니다.')
+    const blocked = blockedOrders.find((o) => o.orderId === original.orderId)
+    const awaiting =
+      blocked !== undefined &&
+      blocked.status !== PayoutBlockStatus.RESOLVED &&
+      blocked.reasons.some((r) => r === 'AMOUNT_MISMATCH' || r === 'FEE_MISMATCH')
     return HttpResponse.json(
       {
         candidateId: 49001,
@@ -205,6 +212,9 @@ export const adminHandlers = [
         reason: body.reason.trim(),
         adminId: 1,
         createdAt: now(),
+        adjustmentCheckStatus: awaiting
+          ? PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION
+          : PayoutAdjustmentCheckStatus.UNCHECKED,
       },
       { status: 201 },
     )

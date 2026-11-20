@@ -57,7 +57,10 @@ export function OrderFocusPanel({ orderId, order, candidates, adjustment }: Orde
               판매 대금과 수수료 조정을 함께 넣어요. 수수료 = 판매 금액 × {PAYOUT_FEE_RATE}%(원 미만
               버림), 판매 대금 = 판매 금액 − 수수료예요.
             </li>
-            <li>위 주문 줄의 대기 조정 합계에 들어갔는지 확인해요.</li>
+            <li>
+              위 주문 줄의 대기 조정 합계에 들어갔는지, 정산후보의 조정 줄 금액 검사가 ‘해결
+              대기’인지 확인해요.
+            </li>
             <li>‘해결’로 다시 처리해요. 다음 정산 실행이 금액 검사부터 다시 해요.</li>
           </ol>
         ) : (
