@@ -25,7 +25,9 @@ export const fakeJwt = (claims: { sub: string; roles: string[]; n: number }) =>
  * 시계를 움직일 수 있는 BFF + 1회용 refresh를 흉내 내는 가짜 인증 서버.
  * 백엔드처럼 access 30분·refresh 14일, 쓴 refresh는 다시 쓰면 401이다
  */
-export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}) {
+export function setup(
+  options: { roles?: string[]; cookieSecure?: boolean; env?: Record<string, string> } = {},
+) {
   const clock = { now: Date.parse('2026-10-27T00:00:00Z') }
   const roles = options.roles ?? ['BUYER']
   let issued = 0
@@ -82,6 +84,7 @@ export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}
     BACKEND_URL: BACKEND,
     ALLOWED_ORIGINS: ORIGIN,
     COOKIE_SECURE: String(options.cookieSecure ?? false),
+    ...options.env,
   })
   // Sentry 대신 무엇을 보고했는지 모은다
   const reported = { traceIds: [] as string[], serverErrors: [] as BackendFailure[] }

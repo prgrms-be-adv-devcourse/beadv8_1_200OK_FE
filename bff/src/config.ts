@@ -50,6 +50,19 @@ const EnvSchema = z.object({
     .int()
     .positive()
     .default(2 * 1024 * 1024),
+  /** 상품 상세 응답을 BFF 메모리에 두는 시간(ADR-0011). 0이면 담지 않고 동시 요청 합치기만 한다 */
+  PRODUCT_CACHE_TTL_MS: z.coerce.number().int().nonnegative().default(5_000),
+  /** 상품 상세 캐시에 둘 상품 수. 넘으면 가장 오래 안 쓴 것부터 버린다 */
+  PRODUCT_CACHE_MAX_ENTRIES: z.coerce.number().int().positive().default(500),
+  /**
+   * 상품 상세 캐시 본문 합계 상한(바이트). 상세 설명은 최대 20만 자라 개수만으로는 메모리를 묶지 못한다.
+   * 운영 컨테이너 mem_limit이 256MB라 기본 16MB. 넘으면 오래 안 쓴 것부터 버린다
+   */
+  PRODUCT_CACHE_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(16 * 1024 * 1024),
 })
 
 export type Config = {
@@ -64,6 +77,7 @@ export type Config = {
   cookieSecure: boolean
   requestBodyLimitBytes: number
   timeouts: { upstream: number; upload: number; optional: number }
+  productCache: { ttlMs: number; maxEntries: number; maxBytes: number }
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -90,6 +104,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       upstream: parsed.UPSTREAM_TIMEOUT_MS,
       upload: parsed.UPLOAD_TIMEOUT_MS,
       optional: parsed.OPTIONAL_TIMEOUT_MS,
+    },
+    productCache: {
+      ttlMs: parsed.PRODUCT_CACHE_TTL_MS,
+      maxEntries: parsed.PRODUCT_CACHE_MAX_ENTRIES,
+      maxBytes: parsed.PRODUCT_CACHE_MAX_BYTES,
     },
   }
 }
