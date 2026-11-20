@@ -1,5 +1,5 @@
 import { Alert, Button, Group, Modal, Stack, Text, Textarea } from '@mantine/core'
-import { CircleX } from 'lucide-react'
+import { CircleAlert, CircleX } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { RESOLUTION_MEMO_MAX, resolutionMemoSchema } from '../schemas'
 import classes from '../views/PayoutReviewViews.module.css'
@@ -17,6 +17,8 @@ export type ResolveOrderModalProps = {
   submitting?: boolean
   serverError?: string | null
   errorMessage?: string | null
+  /** 해결 전에 다시 볼 것 (예: 금액 불일치인데 대기 조정이 0원) */
+  warning?: string | null
   /** 처음 메모 (미리보기) */
   defaultMemo?: string
 }
@@ -41,6 +43,7 @@ function MemoForm({
   submitting = false,
   serverError = null,
   errorMessage = null,
+  warning = null,
   defaultMemo = '',
 }: Omit<ResolveOrderModalProps, 'orderId'>) {
   const [memo, setMemo] = useState(defaultMemo)
@@ -69,6 +72,11 @@ function MemoForm({
         이 주문의 해결되지 않은 실패 기록을 모두 해결로 표시하고, 다음 정산 실행에서 다시 검사해요.
         돈을 바로 보내지 않아요. 데이터나 코드를 고치지 않고 해결하면 다시 막혀요. 되돌릴 수 없어요.
       </Text>
+      {warning && (
+        <Alert color="warning" icon={<CircleAlert />}>
+          {warning}
+        </Alert>
+      )}
       {errorMessage && (
         <Alert color="error" icon={<CircleX />}>
           {errorMessage}

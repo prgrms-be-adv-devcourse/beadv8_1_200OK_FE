@@ -1,9 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Alert, Button, Group, Modal, NativeSelect, Stack, Text, TextInput } from '@mantine/core'
 import { CircleCheck, CircleX } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Controller, type FieldPath, useForm } from 'react-hook-form'
-import { PayoutEventType } from '@/shared/api/types'
+import {
+  type AdjustablePayoutEventType,
+  type PayoutCandidate,
+  PayoutEventType,
+} from '@/shared/api/types'
 import { formatAmount, formatDate, formatPrice, formatSignedAmount } from '@/shared/lib/format'
 import { payoutEventTypeLabels } from '@/shared/lib/labels'
 import { useServerFieldErrors } from '@/shared/lib/useServerFieldErrors'
@@ -15,44 +19,48 @@ import {
   formatSignedInput,
   parseSignedAmount,
 } from '../schemas'
-import type {
-  AdjustLookup,
-  AdjustmentInput,
-  AdjustmentLog,
-  AdjustmentResult,
-  AdjustTarget,
-} from '../types'
+import type { AdjustmentInput, AdjustmentLog, AdjustmentResult } from '../types'
 import classes from './AdjustmentPanel.module.css'
 
 // 정산 조정. 시안: admin/AdminSettlements ‘정산 조정’ + 확인 모달
-// 기존 기록은 지우지 않고 조정 금액(−/+)을 한 줄 더한다. 오류: 사유 없음 · 0원 · (금액 조회가 있을 때) 0원 미만 · 서버 422.
-// POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } — 지금은 서버가 501로 막아 두었다.
-// TODO(api): ❌ 주문 상품별 정산 금액 조회 · 조정 내역 목록 API 없음 → lookup은 idle, logs는 빈 목록으로 온다
+// 기존 기록은 지우지 않고 조정 금액(−/+)을 한 줄 더한다. 오류: 사유 없음 · 0원 · (후보를 알 때) 이 주문에 없는 상품 · 0원 미만 · 서버 422.
+// ✅ POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } → 201. 배송비는 조정할 수 없다.
+// 주문 상품 번호만으로 금액을 찾는 API는 없다. 막힌 주문 탭에서 한 주문을 열면 그 주문의 정산후보(candidates)를 받아
+// 고른 주문 상품·종류의 지금 금액(원래 + 조정)을 미리 보여 준다. 정산 탭에서는 금액 미리보기 없이 서버 검증에 맡긴다.
+// 조정 내역 목록 API도 없어서, ‘조정 내역’은 이 화면을 연 동안 저장한 조정(201 응답)만 쌓는다.
 
 type MaybeAsync = unknown
 
+/** 후보 줄에서 고른 조정 대상. nonce가 바뀔 때마다 칸을 채우고 금액 칸으로 옮긴다 */
+export type AdjustmentPreset = {
+  orderItemId: number
+  eventType: AdjustablePayoutEventType
+  nonce: number
+}
+
 export type AdjustmentPanelProps = {
-  /** 입력한 주문 상품의 지금 정산 금액 */
-  lookup: AdjustLookup
-  /** 주문 상품 번호가 바뀌면 부른다 (숫자가 아니면 null) */
-  onOrderItemChange: (orderItemId: number | null) => void
   /** 실패하면 reject(throw)한다. 422는 serverErrors, 나머지는 errorMessage로 돌아온다 */
   onSubmit: (input: AdjustmentInput) => MaybeAsync
   submitting?: boolean
-  /** 방금 저장한 조정 */
+  /** 방금 저장한 조정 (201 응답) */
   result: AdjustmentResult | null
-  /** 최근 조정 (최신순) */
+  /** 이 화면에서 저장한 조정 (최신순) */
   logs: AdjustmentLog[]
-  /** 칸에 붙일 수 없는 서버 오류(501 미지원 · 403 등) */
+  /** 칸에 붙일 수 없는 서버 오류(409 같은 조정 · 403 등) */
   errorMessage?: string | null
   /** 서버가 돌려준 칸 오류(422 errors[].path). 문구는 서버 detail */
   serverErrors?: Partial<Record<keyof AdjustmentFormValues, string>>
   defaultValues?: Partial<AdjustmentFormValues>
   /** 처음부터 검사해 오류를 보여 준다 (미리보기) */
   defaultShowErrors?: boolean
+  /** 한 주문을 처리하는 중이면 그 주문의 정산후보. 지금 금액 미리보기 · 0원 미만 검사에 쓴다 */
+  candidates?: PayoutCandidate[]
+  preset?: AdjustmentPreset | null
+  /** 제목 아래 설명 (기본: 언제 쓰는지) */
+  description?: ReactNode
 }
 
-const LOG_LIMIT = 3
+const LOG_LIMIT = 5
 
 const empty: AdjustmentFormValues = {
   orderItemId: '',
@@ -61,39 +69,100 @@ const empty: AdjustmentFormValues = {
   reason: '',
 }
 
-const eventTypeOptions = Object.values(PayoutEventType).map((value) => ({
+const adjustableTypes: AdjustablePayoutEventType[] = [
+  PayoutEventType.SALE_AMOUNT,
+  PayoutEventType.SALE_FEE,
+]
+
+const eventTypeOptions = adjustableTypes.map((value) => ({
   value,
   label: payoutEventTypeLabels[value],
 }))
 
-/** 스키마 밖 검사: 주문 상품이 있는지 · 조정 후 0원 미만 */
+/** 한 주문 상품 · 종류의 지금 금액 (원래 후보 + 지금까지 넣은 조정) */
+type AdjustTarget = {
+  orderItemId: number
+  eventType: AdjustablePayoutEventType
+  sellerId: number
+  original: number
+  adjustmentCount: number
+  adjustmentTotal: number
+  current: number
+}
+
+type AdjustLookup =
+  | { status: 'idle' }
+  | { status: 'notFound' }
+  | { status: 'found'; target: AdjustTarget }
+
+function lookupOf(
+  candidates: PayoutCandidate[] | undefined,
+  orderItemIdText: string,
+  eventType: AdjustablePayoutEventType,
+): AdjustLookup {
+  if (!candidates || !/^\d+$/.test(orderItemIdText)) return { status: 'idle' }
+  const orderItemId = Number(orderItemIdText)
+  const rows = candidates.filter((c) => c.orderItemId === orderItemId && c.eventType === eventType)
+  const originals = rows.filter((c) => !c.adjustment)
+  const first = originals[0] ?? rows[0]
+  if (!first) return { status: 'notFound' }
+  const adjustments = rows.filter((c) => c.adjustment)
+  const original = originals.reduce((sum, c) => sum + c.amount, 0)
+  const adjustmentTotal = adjustments.reduce((sum, c) => sum + c.amount, 0)
+  return {
+    status: 'found',
+    target: {
+      orderItemId,
+      eventType,
+      sellerId: first.sellerId,
+      original,
+      adjustmentCount: adjustments.length,
+      adjustmentTotal,
+      current: original + adjustmentTotal,
+    },
+  }
+}
+
+/** 스키마 밖 검사: 이 주문의 상품인지 · 조정 후 0원 미만 */
 function lookupErrors(
   values: AdjustmentFormValues,
   lookup: AdjustLookup,
 ): [FieldPath<AdjustmentFormValues>, string][] {
   const errors: [FieldPath<AdjustmentFormValues>, string][] = []
   if (lookup.status === 'notFound') {
-    errors.push(['orderItemId', '없는 주문 상품 번호예요. 번호를 다시 확인해 주세요'])
+    errors.push([
+      'orderItemId',
+      '이 주문의 정산후보에 없는 주문 상품이에요. 번호와 항목을 다시 확인해 주세요',
+    ])
   }
   if (lookup.status === 'found') {
-    const { currentAmount } = lookup.target
-    if (currentAmount + parseSignedAmount(values.amount) < 0) {
+    const { current } = lookup.target
+    if (current + parseSignedAmount(values.amount) < 0) {
       errors.push([
         'amount',
-        `조정 후 금액이 0원보다 적어져요. 이 주문 상품은 ${formatPrice(-currentAmount)}까지 뺄 수 있어요`,
+        `조정 후 금액이 0원보다 적어져요. 이 항목은 ${formatPrice(current)}까지 뺄 수 있어요`,
       ])
     }
   }
   return errors
 }
 
-function Preview({ lookup, amount }: { lookup: AdjustLookup; amount: number }) {
+function Preview({
+  lookup,
+  amount,
+  withCandidates,
+}: {
+  lookup: AdjustLookup
+  amount: number
+  withCandidates: boolean
+}) {
   if (lookup.status !== 'found') {
-    const text = {
-      idle: '주문 상품별 정산 금액 조회는 아직 없어요. 조정 전 금액은 정산 상세에서 확인해 주세요.',
-      pending: '정산 금액을 찾고 있어요',
-      notFound: '입력한 번호와 맞는 주문 상품이 없어요. 번호를 다시 확인해 주세요.',
-    }[lookup.status]
+    const text =
+      lookup.status === 'notFound'
+        ? '이 주문의 정산후보에 없는 주문 상품이에요. 아래 정산후보 표에서 골라 주세요.'
+        : withCandidates
+          ? '정산후보 표에서 ‘조정’을 누르거나 주문 상품 번호를 입력하면 지금 금액을 보여 드려요.'
+          : '조정 전 금액은 막힌 주문 탭에서 주문 번호로 찾아 정산후보에서 확인해 주세요.'
     return (
       <div className={classes.ledger} aria-live="polite">
         <Text className={classes.help}>{text}</Text>
@@ -101,26 +170,20 @@ function Preview({ lookup, amount }: { lookup: AdjustLookup; amount: number }) {
     )
   }
   const target = lookup.target
-  const after = target.currentAmount + amount
+  const after = target.current + amount
   return (
     <section className={classes.ledger} aria-label="조정 미리보기" aria-live="polite">
       <dl className={classes.rows}>
         <div>
           <dt>주문 상품</dt>
           <dd className="pd-num">
-            {target.orderItemId} · {target.payeeName}
+            {target.orderItemId} · 판매자 {target.sellerId}
           </dd>
         </div>
         <div>
-          <dt>정산</dt>
-          <dd className="pd-num">
-            {target.payoutId} · {formatDate(target.payoutCreatedAt, 'monthDay')} 정산
-          </dd>
-        </div>
-        <div>
-          <dt>원래 정산 금액</dt>
+          <dt>{payoutEventTypeLabels[target.eventType]}</dt>
           <dd>
-            <PriceText amount={target.currentAmount} size="S" />
+            <PriceText amount={target.current} size="S" />
           </dd>
         </div>
         <div>
@@ -128,16 +191,16 @@ function Preview({ lookup, amount }: { lookup: AdjustLookup; amount: number }) {
           <dd className="pd-num">{formatSignedAmount(amount)}원</dd>
         </div>
         <div className={classes.afterRow}>
-          <dt>조정 후 정산 금액</dt>
+          <dt>조정 후 금액</dt>
           <dd className="pd-num" data-negative={after < 0 || undefined}>
-            {formatPrice(target.currentAmount)} → {formatPrice(after)}
+            {formatPrice(target.current)} → {formatPrice(after)}
           </dd>
         </div>
       </dl>
-      {target.priorAdjustmentCount > 0 && (
+      {target.adjustmentCount > 0 && (
         <Text className={`pd-num ${classes.help}`}>
-          이전 조정 {formatAmount(target.priorAdjustmentCount)}건(
-          {formatSignedAmount(target.priorAdjustmentTotal)}원)을 반영한 금액이에요
+          원래 {formatPrice(target.original)}에 이전 조정 {formatAmount(target.adjustmentCount)}건(
+          {formatSignedAmount(target.adjustmentTotal)}원)을 더한 금액이에요
         </Text>
       )}
     </section>
@@ -159,7 +222,7 @@ function ConfirmRows({
           <dt>주문 상품</dt>
           <dd className="pd-num">
             {values.orderItemId.trim()}
-            {target && ` · ${target.payeeName}`}
+            {target && ` · 판매자 ${target.sellerId}`}
           </dd>
         </div>
         <div>
@@ -172,9 +235,9 @@ function ConfirmRows({
         </div>
         {target && (
           <div>
-            <dt>정산 금액</dt>
+            <dt>금액</dt>
             <dd className="pd-num">
-              {formatPrice(target.currentAmount)} → {formatPrice(target.currentAmount + amount)}
+              {formatPrice(target.current)} → {formatPrice(target.current + amount)}
             </dd>
           </div>
         )}
@@ -195,46 +258,44 @@ function Logs({ logs }: { logs: AdjustmentLog[] }) {
         <h3 id="adjust-log-title" className={classes.logsTitle}>
           조정 내역
         </h3>
-        <span className={`pd-num ${classes.help}`}>최근 {formatAmount(recent.length)}건</span>
+        <span className={`pd-num ${classes.help}`}>이 화면에서 {formatAmount(logs.length)}건</span>
       </div>
       {recent.length === 0 ? (
         <Text className={`${classes.help} ${classes.logsEmpty}`}>
-          조정 내역 목록은 아직 없어요. 조정 건은 정산 상세의 항목에서 ‘정산 조정’으로 보여요.
+          이 화면에서 저장한 조정이 여기에 쌓여요. 지난 조정은 막힌 주문 탭에서 주문 번호로 찾아
+          정산후보에서 봐요.
         </Text>
       ) : (
-        <ul className={classes.logList}>
+        <ul className={classes.logList} aria-label="이 화면에서 저장한 조정">
           {recent.map((log) => (
-            <li key={log.adjustmentId}>
+            <li key={log.candidateId}>
               <div className={classes.logLine}>
-                <strong className="pd-num">주문 상품 {log.orderItemId}</strong>
+                <strong className="pd-num">
+                  주문 상품 {log.orderItemId} · {payoutEventTypeLabels[log.eventType]}
+                </strong>
                 <strong className={`pd-num ${classes.logAmount}`}>
                   {formatSignedAmount(log.amount)}원
                 </strong>
               </div>
-              <div className={classes.logLine}>
-                <span className={classes.help}>{log.payeeName}</span>
-                <span className={`pd-num ${classes.help}`}>
-                  정산 금액 {formatPrice(log.before)} → {formatPrice(log.after)}
-                </span>
-              </div>
+              <span className={`pd-num ${classes.help}`}>
+                주문 {log.orderId} · 판매자 {log.sellerId} · 조정 번호 {log.adjustmentId}
+              </span>
               <span className={classes.logReason}>사유 · {log.reason}</span>
               <span className={`pd-num ${classes.help}`}>
-                {formatDate(log.createdAt, 'dateTime')} · {log.adminName}
+                {formatDate(log.createdAt, 'dateTime')} · 관리자 {log.adminId}
               </span>
             </li>
           ))}
         </ul>
       )}
       <p className={`${classes.help} ${classes.logsFoot}`}>
-        조정은 지울 수 없어요. 잘못 조정했다면 반대 금액으로 한 번 더 조정해요.
+        조정은 지울 수 없어요. 잘못 조정했다면 사유를 다르게 적어 반대 금액으로 한 번 더 조정해요.
       </p>
     </section>
   )
 }
 
 export function AdjustmentPanel({
-  lookup,
-  onOrderItemChange,
   onSubmit,
   submitting = false,
   result,
@@ -243,6 +304,9 @@ export function AdjustmentPanel({
   serverErrors,
   defaultValues,
   defaultShowErrors = false,
+  candidates,
+  preset,
+  description = '정산이나 정산후보 금액을 고쳐야 할 때 써요. 기존 기록은 지우지 않고, 조정 금액(−/+)을 한 줄 더해 남겨요.',
 }: AdjustmentPanelProps) {
   const [confirming, setConfirming] = useState<AdjustmentFormValues | null>(null)
   const {
@@ -252,6 +316,9 @@ export function AdjustmentPanel({
     watch,
     reset,
     setError,
+    setValue,
+    setFocus,
+    clearErrors,
     trigger,
     getValues,
     formState: { errors },
@@ -262,22 +329,22 @@ export function AdjustmentPanel({
   useServerFieldErrors(setError, serverErrors)
 
   const orderItemId = watch('orderItemId').trim()
-  const amountText = watch('amount')
-  const amount = parseSignedAmount(amountText)
+  const eventType = watch('eventType')
+  const amount = parseSignedAmount(watch('amount'))
+  const lookup = lookupOf(candidates, orderItemId, eventType)
 
-  const onChangeRef = useRef(onOrderItemChange)
-  onChangeRef.current = onOrderItemChange
+  // 후보 줄에서 ‘조정’을 누르면 주문 상품 · 항목을 채우고 금액 칸으로 옮긴다 (사유는 남긴다)
+  const nonce = preset?.nonce
+  const presetRef = useRef(preset)
+  presetRef.current = preset
   useEffect(() => {
-    onChangeRef.current(/^\d+$/.test(orderItemId) ? Number(orderItemId) : null)
-  }, [orderItemId])
-
-  const applyLookupErrors = (values: AdjustmentFormValues, focus: boolean) => {
-    const extra = lookupErrors(values, lookup)
-    extra.forEach(([field, message], i) => {
-      setError(field, { type: 'lookup', message }, { shouldFocus: focus && i === 0 })
-    })
-    return extra.length
-  }
+    const next = presetRef.current
+    if (nonce === undefined || !next) return
+    setValue('orderItemId', String(next.orderItemId))
+    setValue('eventType', next.eventType)
+    clearErrors(['orderItemId', 'eventType', 'amount'])
+    setFocus('amount')
+  }, [nonce, setValue, clearErrors, setFocus])
 
   // 미리보기: 처음부터 오류를 보여 준다
   const lookupRef = useRef(lookup)
@@ -293,13 +360,16 @@ export function AdjustmentPanel({
 
   const submit = handleSubmit(
     (values) => {
-      if (applyLookupErrors(values, true) > 0) return
+      const extra = lookupErrors(values, lookup)
+      extra.forEach(([field, message], i) => {
+        setError(field, { type: 'lookup', message }, { shouldFocus: i === 0 })
+      })
+      if (extra.length > 0) return
       setConfirming(values)
     },
     (fieldErrors) => {
       // 형식 오류와 함께 주문 상품·0원 미만 오류도 같이 보여 준다 (형식 오류가 없는 칸만)
-      const values = getValues()
-      lookupErrors(values, lookup)
+      lookupErrors(getValues(), lookup)
         .filter(([field]) => !fieldErrors[field])
         .forEach(([field, message]) => {
           setError(field, { type: 'lookup', message })
@@ -334,17 +404,18 @@ export function AdjustmentPanel({
           <h2 id="adjust-title" className={classes.title}>
             정산 조정
           </h2>
-          <Text className={classes.desc}>
-            정산이나 정산 후보 금액을 고쳐야 할 때 써요. 기존 기록은 지우지 않고, 조정 금액(−/+)을
-            한 줄 더해 남겨요.
-          </Text>
+          <Text className={classes.desc}>{description}</Text>
         </div>
 
         {result && (
           <Alert color="success" icon={<CircleCheck />}>
             <span className="pd-num">
-              주문 상품 {result.orderItemId} {payoutEventTypeLabels[result.eventType]} 금액을{' '}
-              {formatSignedAmount(result.amount)}원 조정했어요. 다음 정산 때 반영돼요.
+              주문 {result.orderId} · 주문 상품 {result.orderItemId}{' '}
+              {payoutEventTypeLabels[result.eventType]} {formatSignedAmount(result.amount)}원 조정을
+              저장했어요(조정 번호 {result.adjustmentId}).{' '}
+              {candidates
+                ? '대기 조정 합계에 들어갔는지 확인한 뒤 해결해 주세요.'
+                : '원래 정산후보를 따라 정산돼요.'}
             </span>
           </Alert>
         )}
@@ -364,7 +435,7 @@ export function AdjustmentPanel({
         />
         <NativeSelect
           label="항목"
-          description="원래 정산 후보와 같은 종류를 골라요"
+          description="원래 정산후보와 같은 종류를 골라요. 배송비는 조정할 수 없어요"
           data={eventTypeOptions}
           {...register('eventType')}
           error={errors.eventType?.message}
@@ -391,13 +462,13 @@ export function AdjustmentPanel({
         />
         <TextInput
           label="사유"
-          placeholder="예: 구매확정 후 환불 회수"
+          placeholder="예: 판매 금액 오입력 정정"
           maxLength={ADJUST_REASON_MAX}
           {...register('reason')}
           error={errors.reason?.message}
         />
 
-        <Preview lookup={lookup} amount={amount} />
+        <Preview lookup={lookup} amount={amount} withCandidates={candidates !== undefined} />
 
         <div className={classes.submit}>
           <DisabledReason
@@ -426,7 +497,7 @@ export function AdjustmentPanel({
           <Stack gap="md">
             <Text className={classes.desc}>
               기존 정산은 지우지 않고 조정 기록을 한 줄 더해요. 저장한 조정은 지울 수 없어요.
-              바로잡으려면 반대 금액으로 다시 조정해요.
+              바로잡으려면 사유를 다르게 적어 반대 금액으로 다시 조정해요.
             </Text>
             <ConfirmRows
               values={confirming}

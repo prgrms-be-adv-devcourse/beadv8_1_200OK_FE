@@ -1,4 +1,5 @@
 import {
+  type PayoutAdjustmentCreateResponse,
   type PayoutCandidate,
   type PayoutDetail,
   PayoutEventType,
@@ -20,7 +21,6 @@ import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import {
-  type AdjustTarget,
   type BlockedOrder,
   DepositCheckReason,
   type DepositCheckReview,
@@ -487,20 +487,23 @@ export const runResults: Record<'ok' | 'skipWait' | 'error', PayoutRunResult> = 
 /** 미리보기 샘플: 청송 햇살농원 1210 (23,900 − 717 + 3,000 = 26,183원) */
 export const sampleAdjustment = {
   orderItemId: '1210',
-  eventType: PayoutEventType.SALE_AMOUNT,
+  eventType: PayoutEventType.SALE_AMOUNT as const,
   amount: '-10,000',
   reason: '구매확정 후 환불 회수',
 }
 
-/** 금액 조회 API가 생겼을 때의 미리보기 모양 (지금 화면은 idle만 쓴다) */
-export const sampleAdjustTarget: AdjustTarget = {
-  orderItemId: 1210,
-  payeeName: '판매자 7',
-  payoutId: 1021,
-  payoutCreatedAt: '2026-10-18T02:00:00',
-  currentAmount: 26183,
-  priorAdjustmentCount: 0,
-  priorAdjustmentTotal: 0,
+/** 방금 저장한 조정 (POST /admin/payouts/adjustments 201) */
+export const sampleAdjustmentResult: PayoutAdjustmentCreateResponse = {
+  candidateId: 40031,
+  adjustmentId: 1,
+  orderId: 2001,
+  orderItemId: 1302,
+  sellerId: 7,
+  eventType: PayoutEventType.SALE_AMOUNT,
+  amount: -4850,
+  reason: '판매 금액 오입력 정정 (20,000 → 15,000)',
+  adminId: ADMIN_MEMBER_ID,
+  createdAt: '2026-11-16T10:00:00',
 }
 
 // ─── 리뷰 분석 테스트 ────────────────────────────────────
@@ -684,6 +687,8 @@ export const blockedOrders: BlockedOrder[] = [
       sellerCount: 1,
       conflictAmounts: [35000],
     },
+    pendingSaleAmountAdjustment: 0,
+    pendingSaleFeeAdjustment: 0,
   },
   {
     orderId: 2002,
@@ -706,6 +711,9 @@ export const blockedOrders: BlockedOrder[] = [
     ],
     evidenceAtBlock: null,
     evidenceNow: null,
+    // 실패 뒤 넣은 조정: 대금 +200 · 수수료 −200 (판매 10,000 = 대금 9,700 + 수수료 300으로 맞춤)
+    pendingSaleAmountAdjustment: 200,
+    pendingSaleFeeAdjustment: -200,
   },
   {
     orderId: 2003,
@@ -728,7 +736,79 @@ export const blockedOrders: BlockedOrder[] = [
     ],
     evidenceAtBlock: null,
     evidenceNow: null,
+    pendingSaleAmountAdjustment: 0,
+    pendingSaleFeeAdjustment: 0,
   },
+]
+
+/** 멈춘 주문 2001이 지금 초과 청구로 넘친 모양 (미리보기 · 예상 합계) */
+export const overflowingOrder: BlockedOrder = {
+  ...(blockedOrders[0] as BlockedOrder),
+  evidenceNow: {
+    deductedAmount: 30000,
+    candidateTotal: 35000,
+    overflowAmount: 5000,
+    firstOverflowItem: '1302',
+    settledAmount: 10000,
+    settledItems: ['1300'],
+    aloneOverItems: [],
+    sellerCount: 1,
+    conflictAmounts: [],
+  },
+  pendingSaleAmountAdjustment: -4850,
+  pendingSaleFeeAdjustment: 0,
+}
+
+const candidate = (
+  candidateId: number,
+  orderId: number,
+  orderItemId: number | null,
+  eventType: PayoutEventType,
+  amount: number,
+  extra: Partial<PayoutCandidate> = {},
+): PayoutCandidate => ({
+  candidateId,
+  eventType,
+  orderId,
+  orderItemId,
+  sellerId: orderId === 2002 ? 8 : 7,
+  amount,
+  candidateCreatedAt: '2026-11-01T13:10:00',
+  settled: false,
+  payoutId: null,
+  adjustment: null,
+  ...extra,
+})
+
+/**
+ * 주문별 정산후보 (GET /admin/payouts/candidates?orderId). 기간 없이 대기 중 · 정산됨 · 조정이 함께 나온다.
+ * 2001: 1300은 정산됨, 1301·1302는 대기(1302 판매 금액이 15,000이어야 하는데 20,000으로 들어옴). 2002: 수수료 500 → 조정 2건
+ */
+export const orderCandidates: PayoutCandidate[] = [
+  candidate(41001, 2001, 1300, PayoutEventType.SALE_AMOUNT, 9700, {
+    settled: true,
+    payoutId: 1021,
+  }),
+  candidate(41002, 2001, 1300, PayoutEventType.SALE_FEE, 300, { settled: true, payoutId: 1022 }),
+  candidate(41003, 2001, 1301, PayoutEventType.SALE_AMOUNT, 4850),
+  candidate(41004, 2001, 1301, PayoutEventType.SALE_FEE, 150),
+  candidate(41005, 2001, 1302, PayoutEventType.SALE_AMOUNT, 19400),
+  candidate(41006, 2001, 1302, PayoutEventType.SALE_FEE, 600),
+  candidate(41007, 2001, null, PayoutEventType.SALE_SHIPPING_FEE, 0),
+  candidate(42001, 2002, 1401, PayoutEventType.SALE_AMOUNT, 9500),
+  candidate(42002, 2002, 1401, PayoutEventType.SALE_FEE, 500),
+  candidate(42003, 2002, 1401, PayoutEventType.SALE_AMOUNT, 200, {
+    candidateCreatedAt: '2026-11-15T09:00:00',
+    adjustment: {
+      adjustmentId: 1,
+      adminId: ADMIN_MEMBER_ID,
+      reason: '수수료 3% 재계산 <i>원문</i>',
+    },
+  }),
+  candidate(42004, 2002, 1401, PayoutEventType.SALE_FEE, -200, {
+    candidateCreatedAt: '2026-11-15T09:01:00',
+    adjustment: { adjustmentId: 1, adminId: ADMIN_MEMBER_ID, reason: '수수료 3% 재계산' },
+  }),
 ]
 
 const REQUEST_ID = '3f2b8c1e-7d4a-4b9e-9c21-5a6d8e0f1b23'
@@ -742,6 +822,20 @@ export const resolutionRequests: ResolutionRequest[] = [
     resolvedAt: '2026-11-14T10:00:00',
     memo: '검증 코드 수정 배포 후 다시 처리 <script>alert(1)</script>',
     resolvedFailureCount: 1,
+  },
+]
+
+/** 해결 기록 전체 목록 (GET /admin/payouts/resolution-requests). 지난 정산 실행으로 목록에서 빠진 주문도 나온다 */
+export const periodResolutionRequests: ResolutionRequest[] = [
+  ...resolutionRequests,
+  {
+    resolutionRequestId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    orderId: 1907,
+    method: 'REPROCESS',
+    adminId: 2,
+    resolvedAt: '2026-11-10T15:30:00',
+    memo: '지갑 결제 기록 들어온 것 확인',
+    resolvedFailureCount: 3,
   },
 ]
 

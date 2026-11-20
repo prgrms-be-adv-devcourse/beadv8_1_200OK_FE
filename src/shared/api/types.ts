@@ -914,17 +914,20 @@ export type PayoutDetailCommon = PayoutSummary & {
   periodFrom: string | null // 포함. 첫 정산이면 null
   periodTo: string // 미포함
   itemCount: number
-  sellerFeeAmount: number | null // 판매자 정산일 때만
-  sellerFeeItemCount: number | null // 판매자 정산일 때만
 }
 
 /** 관리자 정산 상세 GET /admin/payouts/{payoutId} */
 export type PayoutDetail = PayoutDetailCommon & {
-  systemPayoutId: number | null // 판매자 정산이면 같은 스냅샷의 시스템 몫 정산 ID
+  systemPayoutId: number | null // 판매자 정산이면 같은 스냅샷의 시스템 몫 정산 ID. 그 회차에 시스템 몫이 없으면 null
+  sellerFeeAmount: number | null // 판매자 정산이면 값(수수료가 없으면 0). 시스템 몫 정산만 null
+  sellerFeeItemCount: number | null // 위와 같음
 }
 
 /** 판매자 본인 정산 상세 GET /payouts/me/{payoutId}. system은 항상 false */
-export type PayoutSellerDetail = PayoutDetailCommon
+export type PayoutSellerDetail = PayoutDetailCommon & {
+  sellerFeeAmount: number // 수수료가 없으면 0. 정산 금액에 이미 반영된 참고값
+  sellerFeeItemCount: number
+}
 
 /** 항목 공통 */
 export type PayoutItemCommon = {
@@ -974,12 +977,29 @@ export type PayoutSellerCandidate = PayoutCandidateCommon & {
 /** POST /admin/payouts/run, /run/skip-wait */
 export type PayoutRunResponse = { executionId: number; status: string }
 
-/** POST /admin/payouts/adjustments (지금은 501) */
+/** 조정할 수 있는 항목 종류. 배송비(SALE_SHIPPING_FEE)는 주문 항목 ID가 없어 조정할 수 없다 */
+export type AdjustablePayoutEventType = PayoutEventType.SALE_AMOUNT | PayoutEventType.SALE_FEE
+
+/** POST /admin/payouts/adjustments */
 export type PayoutAdjustmentCreateRequest = {
   orderItemId: number
-  eventType: PayoutEventType
+  eventType: AdjustablePayoutEventType
   amount: number // 0 불가, 음수면 차감
-  reason: string // 255자 이하
+  reason: string // 1~255자, 서버가 앞뒤 공백을 지운다
+}
+
+/** POST /admin/payouts/adjustments → 201. 방금 저장한 조정 정산후보 */
+export type PayoutAdjustmentCreateResponse = {
+  candidateId: number
+  adjustmentId: number // 그 주문 항목·종류에서 1, 2, 3…
+  orderId: number
+  orderItemId: number
+  sellerId: number
+  eventType: AdjustablePayoutEventType
+  amount: number
+  reason: string // 입력 원문 → 출력 시 이스케이프
+  adminId: number
+  createdAt: string
 }
 
 // from(포함)·to(미포함) 필수, "yyyy-MM-ddTHH:mm:ss", 최대 1년. size 1~100
@@ -992,7 +1012,14 @@ export type AdminPayoutListParams = SellerPayoutListParams & {
   system?: boolean // true 시스템 몫만, false 판매자 몫만
 }
 
-export type AdminPayoutCandidateParams = SellerPayoutCandidateParams & { sellerId?: number }
+/** orderId를 주면 기간(from·to) 없이 그 주문의 후보 전부(대기 중·정산됨·조정 포함). 없으면 기간 필수 */
+export type AdminPayoutCandidateParams = Partial<Pick<SellerPayoutListParams, 'from' | 'to'>> & {
+  sellerId?: number
+  orderId?: number
+  unsettledOnly?: boolean
+  page?: number
+  size?: number
+}
 
 // ─── 내 정보 ─────────────────────────────────────────────
 

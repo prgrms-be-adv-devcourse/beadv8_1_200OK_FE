@@ -92,8 +92,8 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 
 ## API가 없는 곳
 
-- API로 연결된 feature: auth(재발급 포함) · products · cart · checkout(배송비 견적) · wallet(약관·잔액·충전(토스)·이용 내역) · reviews · orders(목록·상세·배송 조회·구매확정·출고 전 취소 요청·철회·취소 요청 내역 `/orders/refunds`) · me(내 정보 조회·수정, 기본 배송지 `/shipments/addresses/default` 조회·저장 — 주문서 처음 값에도 씀) · seller(내 상품·상품 상세·출고 목록·송장·배송지 변경 승인·거절·취소 요청 처리 `/seller/refunds`·프로필·잔액·정산 `/payouts/me`) · sellerApply · admin(판매자 심사·정산 조회·실행) · farms(상점 프로필 `GET /stores/{sellerId}` — 로그인 없이 부름, 상품 상세도 sellerId가 생기면(BE #741) `shared/api/storeProfile.ts`로 씀).
-- 아직 연결 전(`NotConnected`)인 곳: me(관심·팔로우·비밀번호·탈퇴·배송지 삭제), farms의 판매자별 상품·팔로우·팔로워 수, 아이디·비밀번호 찾기, orders의 배송지 변경 요청 화면·문의, products의 인기 농가·판매자 정보·관심·팔로우, 비회원 약관, seller의 출고 지연·판매자 취소·출금·팔로워·홈 주문 집계, admin의 수취인 이름·조정 내역·1건 정산·조정(서버 501).
+- API로 연결된 feature: auth(재발급 포함) · products · cart · checkout(배송비 견적) · wallet(약관·잔액·충전(토스)·이용 내역) · reviews · orders(목록·상세·배송 조회·구매확정·출고 전 취소 요청·철회·취소 요청 내역 `/orders/refunds`) · me(내 정보 조회·수정, 기본 배송지 `/shipments/addresses/default` 조회·저장 — 주문서 처음 값에도 씀) · seller(내 상품·상품 상세·출고 목록·송장·배송지 변경 승인·거절·취소 요청 처리 `/seller/refunds`·프로필·잔액·정산 `/payouts/me`) · sellerApply · admin(판매자 심사·정산 조회·실행·수동 조정·막힌 주문(상태·주문 번호 거르기, 주문 정산후보 `candidates?orderId`)·해결·해결 기록 전체 목록) · farms(상점 프로필 `GET /stores/{sellerId}` — 로그인 없이 부름, 상품 상세도 sellerId가 생기면(BE #741) `shared/api/storeProfile.ts`로 씀).
+- 아직 연결 전(`NotConnected`)인 곳: me(관심·팔로우·비밀번호·탈퇴·배송지 삭제), farms의 판매자별 상품·팔로우·팔로워 수, 아이디·비밀번호 찾기, orders의 배송지 변경 요청 화면·문의, products의 인기 농가·판매자 정보·관심·팔로우, 비회원 약관, seller의 출고 지연·판매자 취소·출금·팔로워·홈 주문 집계, admin의 수취인 이름·조정 내역 목록(이 화면에서 저장한 조정만 보여 줌)·1건 정산(서버 501).
 - **실제 화면은 fixtures를 그리지 않아요.** API가 없는 화면·섹션은 `NotConnected`(`shared/ui`, "아직 연결되지 않은 화면이에요", 개발 서버에선 필요한 API 이름도 표시), 모르는 숫자는 `NotConnectedValue`(–), 서버를 부르지 못하는 버튼은 막고 `DisabledReason reason={NOT_CONNECTED_REASON}`으로 보여 줘요. 토스트만 띄우는 가짜 동작은 만들지 않아요. 비어 보이는 이유가 '데이터 없음'인지 '연결 전'인지 구분되게 하려는 규칙이에요.
   - Biome이 pages·views·components·`app/layouts`에서 fixtures import를 막아요. 화면 상태를 보려면 `previews.tsx`에서 fixtures로 그려요.
 - API가 없어 임시로 처리한 곳에는 `TODO(api)` 주석이 있어요(`grep -rn "TODO(api)" src`). API가 생기면 이 주석을 따라 걷어내요.

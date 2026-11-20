@@ -6,9 +6,14 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole } from '@/shared/api/types'
+import { MINUS } from '@/shared/lib/format'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
-import { PAYOUT_RUNNING_MESSAGE, SKIP_WAIT_DISABLED_MESSAGE } from '../errors'
+import {
+  DUPLICATE_ADJUSTMENT_MESSAGE,
+  PAYOUT_RUNNING_MESSAGE,
+  SKIP_WAIT_DISABLED_MESSAGE,
+} from '../errors'
 import { adminPayouts } from '../fixtures'
 import { AdminPayoutsPage } from './AdminPages'
 
@@ -177,24 +182,87 @@ describe('AdminPayoutsPage', () => {
     expect(within(card).getByLabelText('주문 상품 번호')).toHaveAttribute('aria-invalid', 'true')
   })
 
-  it('정산 조정은 서버 501이라 저장 뒤 패널 위에 미지원 안내를 보여 준다', async () => {
+  it('정산 조정 → POST /adjustments 본문을 보내고, 201 응답을 결과와 조정 내역에 보여 준다', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.post(`${base}/adjustments`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        bodies.push(body)
+        return HttpResponse.json(
+          {
+            candidateId: 49001,
+            adjustmentId: 2,
+            orderId: 2001,
+            orderItemId: 1302,
+            sellerId: 7,
+            eventType: 'SALE_AMOUNT',
+            amount: -4850,
+            reason: '판매 금액 오입력 정정',
+            adminId: 1,
+            createdAt: '2026-11-16T10:00:00',
+          },
+          { status: 201 },
+        )
+      }),
+    )
     const user = renderAt()
     await screen.findByRole('table', { name: '정산 목록' })
     const form = screen.getByRole('heading', { name: '정산 조정' }).closest('form') as HTMLElement
-    await user.type(within(form).getByLabelText('주문 상품 번호'), '1210')
-    await user.type(within(form).getByLabelText('조정 금액'), '-10000')
-    await user.type(within(form).getByLabelText('사유'), '구매확정 후 환불 회수')
+    await user.type(within(form).getByLabelText('주문 상품 번호'), '1302')
+    await user.type(within(form).getByLabelText('조정 금액'), '-4850')
+    await user.type(within(form).getByLabelText('사유'), ' 판매 금액 오입력 정정 ')
     await user.click(within(form).getByRole('button', { name: '조정하기' }))
     await user.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: '조정 저장' }),
     )
+
     expect(
       await within(form).findByText(
-        '아직 지원하지 않는 기능이에요. 서버에서 준비되면 쓸 수 있어요',
+        new RegExp(`주문 2001 · 주문 상품 1302 상품판매 대금 ${MINUS}4,850원 조정을`),
       ),
-    ).toBeInTheDocument()
+    ).toHaveTextContent('조정 번호 2')
+    expect(bodies).toEqual([
+      {
+        orderItemId: 1302,
+        eventType: 'SALE_AMOUNT',
+        amount: -4850,
+        reason: '판매 금액 오입력 정정',
+      },
+    ])
+    const logs = screen.getByRole('list', { name: '이 화면에서 저장한 조정' })
+    expect(within(logs).getByText('주문 상품 1302 · 상품판매 대금')).toBeInTheDocument()
+    expect(within(logs).getByText('사유 · 판매 금액 오입력 정정')).toBeInTheDocument()
+    // 저장했으니 입력은 비운다
+    expect(within(form).getByLabelText('주문 상품 번호')).toHaveValue('')
+  })
+
+  it('조정 409(같은 조정)는 해요체 안내로 바꾸고 입력을 남긴다', async () => {
+    server.use(
+      http.post(`${base}/adjustments`, () =>
+        HttpResponse.json(
+          {
+            type: 'https://api.example.com/problems/payout/duplicate-adjustment',
+            title: 'Duplicate adjustment',
+            status: 409,
+            detail: '같은 조정이 이미 있습니다. 한 번 더 넣으려면 사유를 다르게 적으세요.',
+            instance: '/x',
+          },
+          { status: 409 },
+        ),
+      ),
+    )
+    const user = renderAt()
+    await screen.findByRole('table', { name: '정산 목록' })
+    const form = screen.getByRole('heading', { name: '정산 조정' }).closest('form') as HTMLElement
+    await user.type(within(form).getByLabelText('주문 상품 번호'), '1302')
+    await user.type(within(form).getByLabelText('조정 금액'), '-4850')
+    await user.type(within(form).getByLabelText('사유'), '판매 금액 오입력 정정')
+    await user.click(within(form).getByRole('button', { name: '조정하기' }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '조정 저장' }),
+    )
+    expect(await within(form).findByText(DUPLICATE_ADJUSTMENT_MESSAGE)).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    // 실패했으니 입력은 남아 있다
-    expect(within(form).getByLabelText('주문 상품 번호')).toHaveValue('1210')
+    expect(within(form).getByLabelText('주문 상품 번호')).toHaveValue('1302')
   })
 })

@@ -4,6 +4,7 @@ import type {
   AdminPayoutListParams,
   PageResponse,
   PayoutAdjustmentCreateRequest,
+  PayoutAdjustmentCreateResponse,
   PayoutCandidate,
   PayoutDetail,
   PayoutItem,
@@ -17,17 +18,19 @@ import type {
 } from '@/shared/api/types'
 import type {
   BlockedOrder,
+  BlockedOrderParams,
   DepositCheckReview,
   KeywordAnalysis,
   OrderResolveRequest,
   Resolution,
   ResolutionRequest,
+  ResolutionRequestParams,
   ReviewAnalysisRequest,
   SentimentAnalysis,
 } from './types'
 
 // 관리자 콘솔 요청. 모두 Bearer(ADMIN 권한). 토큰 없으면 401, 관리자가 아니면 403.
-// 오류는 서버 detail을 그대로 보여 준다(errors.ts에서 501·404 문구만 바꾼다).
+// 오류는 서버 detail을 그대로 보여 준다(errors.ts에서 501·404와 일부 409 문구만 바꾼다).
 
 // ─── 판매자 신청 심사 ────────────────────────────────────
 
@@ -118,7 +121,8 @@ export async function getAdminPayoutItems(
   return data
 }
 
-// ✅ GET /api/v1/admin/payouts/candidates?sellerId&from&to&unsettledOnly&page&size → 후보 생성 시각 최신순
+// ✅ GET /api/v1/admin/payouts/candidates?sellerId&orderId&from&to&unsettledOnly&page&size → 후보 생성 시각 최신순.
+// orderId가 없으면 기간 필수(422 path periodPresentWithoutOrderId), 있으면 기간 없이 그 주문의 후보 전부(대기 중·정산됨·조정)
 export async function getAdminPayoutCandidates(
   params: AdminPayoutCandidateParams,
 ): Promise<PageResponse<PayoutCandidate>> {
@@ -146,21 +150,33 @@ export async function runPayoutForOrderItem(orderItemId: number): Promise<void> 
   await apiClient.post(`${payouts}/run/order-items/${orderItemId}`)
 }
 
-// POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } → 지금은 501(조정 번호 발급 방식 미정).
-// 422(금액 0 · 사유 공백·255자 초과 · 항목 종류)가 501보다 먼저 온다
-export async function createPayoutAdjustment(body: PayoutAdjustmentCreateRequest): Promise<void> {
-  await apiClient.post(`${payouts}/adjustments`, body)
+// ✅ POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } → 201 방금 저장한 조정 정산후보.
+// eventType은 SALE_AMOUNT·SALE_FEE만(배송비 불가). 422 금액 0 · 사유 공백·255자 초과 · 항목 종류 · 원래 정산후보 없음,
+// 409 같은 주문 항목·종류·금액·사유의 조정이 이미 있음(재전송). 조정은 지울 수 없어 반대 금액으로 상쇄한다
+export async function createPayoutAdjustment(
+  body: PayoutAdjustmentCreateRequest,
+): Promise<PayoutAdjustmentCreateResponse> {
+  const { data } = await apiClient.post<PayoutAdjustmentCreateResponse>(
+    `${payouts}/adjustments`,
+    body,
+  )
+  return data
 }
 
 // ─── 막힌 주문 · 대사 확인 ───────────────────────────────
 
 type PageParams = { page: number; size: number }
 
-// ✅ GET /api/v1/admin/payouts/blocked-orders?page&size → 마지막 실패 시각 최신순. 기간 조건 없음.
-// 정산 실행이 끝날 때 갱신되는 집계라 해결한 주문은 다음 실행 전까지 RESOLVED로 남는다
-export async function getBlockedOrders(params: PageParams): Promise<PageResponse<BlockedOrder>> {
+// ✅ GET /api/v1/admin/payouts/blocked-orders?orderId&status&page&size → 마지막 실패 시각 최신순. 기간 조건 없음.
+// status는 여러 개(status=LOCKED&status=STOPPED), 생략하면 셋 다. orderId면 그 주문 줄만(막힌 주문이 아니면 빈 목록).
+// 422 status 값이 LOCKED·STOPPED·RESOLVED가 아님. 해결한 주문은 다음 정산 실행이 끝날 때까지 RESOLVED로 남는다
+export async function getBlockedOrders(
+  params: BlockedOrderParams,
+): Promise<PageResponse<BlockedOrder>> {
   const { data } = await apiClient.get<PageResponse<BlockedOrder>>(`${payouts}/blocked-orders`, {
     params,
+    // 배열을 status[]=가 아니라 status=로 반복한다 (Spring List 바인딩)
+    paramsSerializer: { indexes: null },
   })
   return data
 }
@@ -197,6 +213,18 @@ export async function getResolutions(
 ): Promise<PageResponse<Resolution>> {
   const { data } = await apiClient.get<PageResponse<Resolution>>(
     `${payouts}/orders/${orderId}/resolutions`,
+    { params },
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/payouts/resolution-requests?from&to&adminId&page&size → 기간 안의 해결 요청 1번 = 1줄, 해결 시각 최신순.
+// 기간 필수(해결 시각 기준, from 포함·to 미포함), 최대 1년. 422 기간 없음 · 시작이 끝보다 같거나 늦음 · 1년 초과 · adminId 범위
+export async function getResolutionRequestsInPeriod(
+  params: ResolutionRequestParams,
+): Promise<PageResponse<ResolutionRequest>> {
+  const { data } = await apiClient.get<PageResponse<ResolutionRequest>>(
+    `${payouts}/resolution-requests`,
     { params },
   )
   return data

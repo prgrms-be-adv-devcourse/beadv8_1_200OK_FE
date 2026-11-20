@@ -32,10 +32,23 @@ const viewOptions: { value: ResolutionView; label: string }[] = [
 /** UUID 앞 8자리. 같은 요청인지 맞춰 보는 데 충분하다 */
 const shortId = (id: string) => id.slice(0, 8)
 
-function RequestItem({ row }: { row: ResolutionRequest }) {
+/** 해결 요청 1줄. 해결 기록 전체 목록은 주문 번호와 ‘주문 기록 보기’(onShowOrder)를 같이 그린다 */
+export function RequestItem({
+  row,
+  onShowOrder,
+}: {
+  row: ResolutionRequest
+  onShowOrder?: (orderId: number) => void
+}) {
   return (
     <li className={classes.order}>
       <dl className={classes.meta}>
+        {onShowOrder && (
+          <>
+            <dt>주문</dt>
+            <dd className="pd-num">{row.orderId}</dd>
+          </>
+        )}
         <dt>해결 시각</dt>
         <dd className="pd-num">{formatDate(row.resolvedAt, 'dateTime')}</dd>
         <dt>관리자</dt>
@@ -51,6 +64,17 @@ function RequestItem({ row }: { row: ResolutionRequest }) {
         <dt>메모</dt>
         <dd className={classes.detailText}>{row.memo}</dd>
       </dl>
+      {onShowOrder && (
+        <div className={classes.actions}>
+          <Button
+            variant="outline"
+            onClick={() => onShowOrder(row.orderId)}
+            aria-label={`주문 ${row.orderId} 해결 기록 보기`}
+          >
+            주문 기록 보기
+          </Button>
+        </div>
+      )}
     </li>
   )
 }

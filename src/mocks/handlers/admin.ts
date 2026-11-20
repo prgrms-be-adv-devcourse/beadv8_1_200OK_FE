@@ -8,6 +8,8 @@ import {
   findApplication,
   findPayoutDetail,
   keywordAnalysis,
+  orderCandidates,
+  periodResolutionRequests,
   resolutionRequests,
   resolutions,
   sellerApplicationSummaries,
@@ -83,9 +85,31 @@ export const adminHandlers = [
 
   // ─── 정산 ──────────────────────────────────────────────
   // candidates · run · adjustments · blocked-orders · deposit-checks는 /:payoutId보다 먼저 둔다
-  http.get(`${payouts}/blocked-orders`, ({ request }) =>
-    HttpResponse.json(pageOf(blockedOrders, new URL(request.url).searchParams)),
-  ),
+  // orderId · status(여러 개, status=LOCKED&status=STOPPED)로 거른다
+  http.get(`${payouts}/blocked-orders`, ({ request }) => {
+    const params = new URL(request.url).searchParams
+    const orderId = params.get('orderId')
+    const statuses = params.getAll('status')
+    const list = blockedOrders.filter(
+      (o) =>
+        (!orderId || String(o.orderId) === orderId) &&
+        (statuses.length === 0 || statuses.includes(o.status)),
+    )
+    return HttpResponse.json(pageOf(list, params))
+  }),
+  // 기간(해결 시각, from 포함·to 미포함) 필수, adminId로 거른다
+  http.get(`${payouts}/resolution-requests`, ({ request }) => {
+    const params = new URL(request.url).searchParams
+    const from = params.get('from')
+    const to = params.get('to')
+    if (!from || !to) return problem(422, '요청 값이 올바르지 않습니다.')
+    const adminId = params.get('adminId')
+    const list = periodResolutionRequests.filter(
+      (r) =>
+        r.resolvedAt >= from && r.resolvedAt < to && (!adminId || String(r.adminId) === adminId),
+    )
+    return HttpResponse.json(pageOf(list, params))
+  }),
   http.get(`${payouts}/deposit-checks`, ({ request }) =>
     HttpResponse.json(pageOf(depositChecks, new URL(request.url).searchParams)),
   ),
@@ -124,8 +148,25 @@ export const adminHandlers = [
       { status: 201 },
     )
   }),
+  // orderId면 기간 없이 그 주문의 후보 전부, 아니면 기간 필수(422)
   http.get(`${payouts}/candidates`, ({ request }) => {
     const params = new URL(request.url).searchParams
+    const orderId = params.get('orderId')
+    if (orderId) {
+      const list = orderCandidates.filter((c) => String(c.orderId) === orderId)
+      return HttpResponse.json(pageOf(list, params))
+    }
+    if (!params.get('from') || !params.get('to')) {
+      return problem(422, '요청 값이 올바르지 않습니다.', {
+        errors: [
+          {
+            path: 'periodPresentWithoutOrderId',
+            pointer: '/periodPresentWithoutOrderId',
+            detail: '주문 ID가 없으면 조회 시작 시각과 종료 시각은 필수입니다.',
+          },
+        ],
+      })
+    }
     const unsettledOnly = params.get('unsettledOnly') === 'true'
     const list = unsettledOnly
       ? adminPayoutCandidates.filter((c) => !c.settled)
@@ -137,7 +178,34 @@ export const adminHandlers = [
   ),
   http.post(`${payouts}/run/order-items/:orderItemId`, () => unsupported()),
   http.post(`${payouts}/run`, () => HttpResponse.json({ executionId: 101, status: 'COMPLETED' })),
-  http.post(`${payouts}/adjustments`, () => unsupported()),
+  // 201 방금 저장한 조정. 원래 후보는 주문별 정산후보에서 찾고, 없으면 422
+  http.post(`${payouts}/adjustments`, async ({ request }) => {
+    const body = (await request.json()) as {
+      orderItemId: number
+      eventType: string
+      amount: number
+      reason: string
+    }
+    const original = orderCandidates.find(
+      (c) => c.orderItemId === body.orderItemId && c.eventType === body.eventType && !c.adjustment,
+    )
+    if (!original) return problem(422, '조정할 원래 정산후보가 없습니다.')
+    return HttpResponse.json(
+      {
+        candidateId: 49001,
+        adjustmentId: 1,
+        orderId: original.orderId,
+        orderItemId: body.orderItemId,
+        sellerId: original.sellerId,
+        eventType: body.eventType,
+        amount: body.amount,
+        reason: body.reason.trim(),
+        adminId: 1,
+        createdAt: now(),
+      },
+      { status: 201 },
+    )
+  }),
   http.get(payouts, ({ request }) => {
     const params = new URL(request.url).searchParams
     const system = params.get('system')
