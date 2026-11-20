@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from './auth.ts'
+import { isMultipart } from './bodyLimit.ts'
 import type { Config } from './config.ts'
 import { readProblemDetail } from './problem.ts'
 import { nameTransaction } from './sentry.ts'
@@ -36,11 +37,11 @@ export function proxyRoutes(deps: { upstream: Upstream; config: Config }) {
     nameTransaction(request.method, url.pathname)
     const pathAndQuery = `${url.pathname}${url.search}`
     const module = moduleForPath(url.pathname)
-    const multipart = request.headers.get('content-type')?.startsWith('multipart/') ?? false
+    const multipart = isMultipart(request)
     const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
 
     // 업로드(최대 30MB)는 메모리에 담지 않고 흘려보낸다. 대신 다시 보낼 수 없어서 재시도하지 않는다.
-    // 그 밖의 본문은 작아서 담아 두고 토큰 없이 다시 보낼 때 쓴다
+    // 그 밖의 본문은 상한(requestBodyLimit) 안이라 담아 두고 토큰 없이 다시 보낼 때 쓴다
     const body = hasBody && !multipart ? await request.arrayBuffer() : null
     const replayable = !hasBody || body !== null
 

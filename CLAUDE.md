@@ -76,6 +76,8 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
   - BFF는 `/api` 요청 중에 재발급하지 않아요. 백엔드가 만료로 401을 주면 그대로 돌려주고 프론트가 재발급해요. 같은 refresh로 온 재발급은 한 번만 하고 결과를 10초 기억해요(`refresher.ts`, 여러 탭 대비). BFF가 한 대라 메모리로 충분해요.
   - 로그아웃은 쿠키만 지워요. 백엔드에 logout API가 없어 refresh를 서버에서 끊지 못해요.
   - **Redis 세션 저장소는 만들어 두고 쓰지 않아요**(`session/redis.ts`·`store.ts`·`manager.ts`·`sealed.ts`). BFF가 여러 대가 되거나 서버에서 세션을 끊어야 할 때 되살려요. 다시 만들지 말고 `redis.ts` 맨 위 설명부터 봐요.
+- 요청 본문 상한(`bodyLimit.ts`): multipart가 아닌 본문은 `proxy.ts`가 메모리에 통째로 담아서 2MB(`REQUEST_BODY_LIMIT_BYTES`)를 넘으면 413이에요. chunked도 상한까지만 읽고 끊어요. 업로드(multipart)는 흘려보내서 대상이 아니에요. 상한 근거는 상품 상세설명 `@Size(max = 200_000)`(한글 약 600KB)예요.
+- 응답 압축(`compression.ts`): nginx에 gzip이 없어 BFF가 `Accept-Encoding`에 따라 1KB 이상 응답을 압축해요. 백엔드가 작은 응답도 chunked로 보내서 길이를 모르는 본문은 앞 1KB만 읽어 보고 정해요. `/api/v1/auth/*`·`/bff/session/*`는 토큰이 담겨서 압축하지 않아요(BREACH).
 - BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
 - 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절, 경로·만료를 지키는 쿠키 저장소 `CookieJar`). 쓰지 않는 Redis 저장소 테스트는 기본 실행에서 빠져 있고 `pnpm --filter @paldo/bff test:redis`로 돌려요(Testcontainers, Docker 필요).
 - 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.

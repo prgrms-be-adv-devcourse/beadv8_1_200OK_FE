@@ -2,6 +2,8 @@ import { getClient, sentry } from '@sentry/hono/node'
 import { Hono } from 'hono'
 import { type AppEnv, authMiddleware } from './auth.ts'
 import { type BackendReport, sentryBackendReport } from './backendReport.ts'
+import { requestBodyLimit } from './bodyLimit.ts'
+import { responseCompression } from './compression.ts'
 import type { Config } from './config.ts'
 import { devRoutes } from './devRoutes.ts'
 import { originGuard } from './originGuard.ts'
@@ -33,6 +35,7 @@ export function createApp(options: {
 
   const app = base
     .get('/health', (c) => c.json({ status: 'UP' }))
+    .use(responseCompression())
     .use(
       originGuard({
         allowedOrigins: config.allowedOrigins,
@@ -40,6 +43,7 @@ export function createApp(options: {
         cookies,
       }),
     )
+    .use(requestBodyLimit(config.requestBodyLimitBytes))
     .use('/api/*', authMiddleware({ refresher, cookies }))
     .use('/bff/*', authMiddleware({ refresher, cookies }))
     .route('/', sessionRoutes({ upstream, timeoutMs: config.timeouts.upstream }))
