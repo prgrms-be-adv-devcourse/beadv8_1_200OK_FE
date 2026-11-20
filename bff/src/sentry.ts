@@ -1,6 +1,7 @@
 // Sentry 설정과 트랜잭션 이름. instrument.ts(init)와 proxy.ts(이름)가 쓴다.
 // Sentry가 꺼져 있으면(getClient 없음) 여기 함수들은 아무것도 보내지 않는다
 import * as Sentry from '@sentry/hono/node'
+import type { CacheStatus } from './productCache.ts'
 import { routeName } from './routeName.ts'
 
 type InitOptions = NonNullable<Parameters<typeof Sentry.init>[0]>
@@ -40,11 +41,22 @@ export function createTracesSampler(rate: number): TracesSampler {
   }
 }
 
+/**
+ * 기본 Dedupe는 직전 이벤트와 메시지·fingerprint·스택이 같으면 버린다. 백엔드 5xx 보고(#49)는
+ * 장애가 이어질 때 바로 그런 이벤트가 연달아 나고 이벤트마다 backend.trace_id가 달라서, 켜 두면
+ * 장애 횟수가 줄고 백엔드 로그로 가는 단서가 사라진다(로컬 검증에서 6건 중 3건만 남음)
+ */
+const DEDUPE = 'Dedupe'
+
 export function sentryInitOptions(
   env: Record<string, string | undefined>,
   warn?: (message: string) => void,
-): Pick<InitOptions, 'environment' | 'release' | 'tracesSampler'> {
+): Pick<InitOptions, 'environment' | 'release' | 'tracesSampler' | 'integrations'> {
   return {
+    integrations: (defaults) => [
+      ...defaults.filter((integration) => integration.name !== DEDUPE),
+      Sentry.consoleLoggingIntegration({ levels: ['warn', 'error'] }),
+    ],
     environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV ?? 'development',
     // 이미지 빌드 때 커밋 SHA가 들어간다(bff/Dockerfile ARG, bff-image.yml). 로컬은 없어도 된다
     release: env.SENTRY_RELEASE || undefined,
@@ -66,4 +78,13 @@ export function nameTransaction(method: string, pathname: string): void {
   }
   // 오류 이벤트의 transaction 태그
   Sentry.getIsolationScope().setTransactionName(name)
+}
+
+/**
+ * 상품 상세 캐시 결과(X-Cache와 같은 값)를 요청 트랜잭션에 남긴다 (ADR-0011).
+ * Sentry에서 `bff.cache`로 나눠 HIT·MISS의 지연과 비율을 본다
+ */
+export function tagCache(cache: CacheStatus): void {
+  const span = Sentry.getActiveSpan()
+  if (span) Sentry.getRootSpan(span).setAttribute('bff.cache', cache)
 }

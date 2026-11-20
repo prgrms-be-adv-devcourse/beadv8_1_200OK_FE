@@ -9,7 +9,7 @@ import {
   changedProductId,
   type ProductDetailCache,
 } from './productCache.ts'
-import { nameTransaction } from './sentry.ts'
+import { nameTransaction, tagCache } from './sentry.ts'
 import { HOP_BY_HOP, moduleForPath, relay, type Upstream } from './upstream.ts'
 
 // /api/v1/*을 경로 그대로 백엔드 모듈로 넘긴다. 프론트 feature의 요청 경로는 바뀌지 않는다 (ADR-0006).
@@ -46,7 +46,11 @@ export function proxyRoutes(deps: {
     const url = new URL(request.url)
     nameTransaction(request.method, url.pathname)
     const cachedId = cachedProductId(request.method, url)
-    if (cachedId !== null) return cachedResponse(await deps.productCache.get(cachedId))
+    if (cachedId !== null) {
+      const cached = await deps.productCache.get(cachedId)
+      tagCache(cached.cache)
+      return cachedResponse(cached)
+    }
 
     const response = await forward(c.var.auth, request, url, deps)
     const changedId = changedProductId(request.method, url.pathname)
