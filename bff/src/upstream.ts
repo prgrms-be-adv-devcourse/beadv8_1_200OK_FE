@@ -1,4 +1,7 @@
+import { type BackendReport, TRACE_ID_HEADER } from './backendReport.ts'
 import type { Config, UpstreamModule } from './config.ts'
+import { readProblemDetail } from './problem.ts'
+import { routeName } from './routeName.ts'
 
 // 경로 접두어 → 백엔드 모듈. 백엔드 컨트롤러의 @RequestMapping과 같이 맞춘다(origin/dev 2026-10-27).
 // 긴 접두어부터 본다. 공개 계약 /api/v1만 다루고 /internal은 부르지 않는다 (ADR-0006)
@@ -12,6 +15,7 @@ const routes: [prefix: string, module: UpstreamModule][] = [
   ['/api/v1/seller/shipments', 'delivery'],
   ['/api/v1/auth', 'member'],
   ['/api/v1/members', 'member'],
+  ['/api/v1/stores', 'member'], // 상점 프로필 공개 조회(판매자 하위 도메인이 member에 있다)
   ['/api/v1/products', 'product'],
   ['/api/v1/reviews', 'product'],
   ['/api/v1/cart', 'order'],
@@ -52,6 +56,9 @@ export function moduleForPath(path: string): UpstreamModule | null {
   return routes.find(([prefix]) => matches(path, prefix))?.[1] ?? null
 }
 
+// Sentry 이슈에 남길 백엔드 detail 길이. 오류 문구는 짧고, 긴 본문을 통째로 보내지 않는다
+const DETAIL_MAX_LENGTH = 500
+
 export class UpstreamError extends Error {
   readonly kind: 'timeout' | 'unreachable'
   constructor(kind: 'timeout' | 'unreachable', cause: unknown) {
@@ -67,9 +74,11 @@ export type JsonResult<T> = { ok: true; data: T } | { ok: false; response: Respo
 
 export class Upstream {
   readonly #config: Config
+  readonly #report: BackendReport
 
-  constructor(config: Config) {
+  constructor(config: Config, report: BackendReport) {
     this.#config = config
+    this.#report = report
   }
 
   url(module: UpstreamModule | null, pathAndQuery: string): string {
@@ -85,8 +94,9 @@ export class Upstream {
   ): Promise<Response> {
     const { timeoutMs, signal, ...rest } = init
     const timeout = AbortSignal.timeout(timeoutMs)
+    let response: Response
     try {
-      return await fetch(this.url(module, pathAndQuery), {
+      response = await fetch(this.url(module, pathAndQuery), {
         ...rest,
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       })
@@ -94,6 +104,35 @@ export class Upstream {
       // 브라우저가 먼저 끊은 요청은 그대로 던진다. 응답을 받을 쪽이 없다
       if (signal?.aborted) throw error
       throw new UpstreamError(timeout.aborted ? 'timeout' : 'unreachable', error)
+    }
+    await this.#observe(module, rest.method ?? 'GET', pathAndQuery, response)
+    return response
+  }
+
+  /** X-Trace-Id를 남기고 5xx면 보고한다. 응답은 바꾸지 않는다(본문은 clone으로 읽는다) */
+  async #observe(
+    module: UpstreamModule | null,
+    method: string,
+    pathAndQuery: string,
+    response: Response,
+  ): Promise<void> {
+    // 보고가 실패해도 응답은 그대로 돌려준다. 관측 때문에 API가 500이 되면 안 된다
+    try {
+      const traceId = response.headers.get(TRACE_ID_HEADER)
+      if (traceId) this.#report.traceId(traceId)
+      if (response.status < 500) return
+      // JSON이 아닌 본문(HTML 오류 페이지 등)은 읽지 않는다
+      const json = /[/+]json\b/.test(response.headers.get('content-type') ?? '')
+      const detail = json ? await readProblemDetail(response.clone()) : null
+      this.#report.serverError({
+        module: module ?? 'backend',
+        route: routeName(method, pathAndQuery),
+        status: response.status,
+        traceId,
+        detail: detail?.slice(0, DETAIL_MAX_LENGTH) ?? null,
+      })
+    } catch (error) {
+      console.warn('백엔드 응답 보고에 실패했어요', error)
     }
   }
 

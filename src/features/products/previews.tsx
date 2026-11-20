@@ -1,6 +1,9 @@
-import { ProductCategory, ProductRegion, ProductStatus } from '@/shared/api/types'
+import { ProductCategory, ProductRegion, ProductSort, ProductStatus } from '@/shared/api/types'
+import { WISH_ADMIN_REASON } from '@/shared/api/wishes'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
+  appleLowStockOptions,
+  appleManyLowStockOptions,
   appleReviewKeywordIds,
   appleReviewKeywords,
   appleReviews,
@@ -42,6 +45,8 @@ const list = (props: Partial<ProductListViewProps> = {}) => (
     totalCount={productCardItems.length}
     categories={categoryOptions}
     onRegionChange={noop}
+    onSearch={noop}
+    onSortChange={noop}
     hideSoldOut={false}
     onHideSoldOutChange={noop}
     onToggleLike={noop}
@@ -51,6 +56,10 @@ const list = (props: Partial<ProductListViewProps> = {}) => (
 )
 
 const fruits = productCardItems.filter(({ product }) => product.category === ProductCategory.FRUIT)
+const apples = productCardItems.filter(({ product }) => product.name.includes('사과'))
+const byPriceAsc = [...productCardItems].sort(
+  (a, b) => a.product.minSalePrice - b.product.minSalePrice,
+)
 
 // ─── 상세 ────────────────────────────────────────────────
 
@@ -91,7 +100,12 @@ export const productPreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면: 농가·하트·팔로우)',
+        label: '연결 전 (지금 화면: 농가·팔로우)',
+        render: () => home({ farms: undefined, onToggleFollow: undefined }),
+      },
+      {
+        id: 'admin',
+        label: '관리자 (하트 없음)',
         render: () =>
           home({ farms: undefined, onToggleLike: undefined, onToggleFollow: undefined }),
       },
@@ -108,7 +122,7 @@ export const productPreviews: ScreenPreview[] = [
       {
         id: 'liked',
         label: '관심 담음 토스트',
-        toast: { message: '관심 상품에 담았어요' },
+        toast: { message: '관심 상품에 담았어요', actionLabel: '관심 상품 보기' },
         render: () => home(),
       },
     ],
@@ -128,9 +142,15 @@ export const productPreviews: ScreenPreview[] = [
       },
       { id: 'all', label: '전체', render: () => list() },
       {
-        id: 'not-connected',
-        label: '연결 전 (지금 화면: 하트 없음)',
+        id: 'admin',
+        label: '관리자 (하트 없음)',
         render: () => list({ onToggleLike: undefined }),
+      },
+      {
+        id: 'guest-like',
+        label: '비회원 관심 → 로그인',
+        session: 'guest',
+        render: () => list({ loginPrompt: 'like' }),
       },
       {
         id: 'empty-category',
@@ -149,9 +169,62 @@ export const productPreviews: ScreenPreview[] = [
           }),
       },
       {
+        id: 'search',
+        label: '검색 결과 (사과, 관련도순)',
+        path: '/products?q=사과',
+        render: () =>
+          list({ query: '사과', onClearQuery: noop, items: apples, totalCount: apples.length }),
+      },
+      {
+        id: 'sort-price',
+        label: '정렬: 낮은 가격순',
+        path: '/products?sort=PRICE_ASC',
+        render: () => list({ sort: ProductSort.PRICE_ASC, items: byPriceAsc }),
+      },
+      {
         id: 'no-result',
         label: '검색 결과 없음',
+        path: '/products?q=샤인머스캣',
         render: () => list({ query: '샤인머스캣', onClearQuery: noop, items: [], totalCount: 0 }),
+      },
+      {
+        id: 'no-result-filtered',
+        label: '검색 결과 없음 (산지 조건)',
+        path: '/products?q=사과&region=JEJU',
+        render: () =>
+          list({
+            query: '사과',
+            region: ProductRegion.JEJU,
+            onClearQuery: noop,
+            items: [],
+            totalCount: 0,
+          }),
+      },
+      {
+        id: 'suggestion',
+        label: '오타 제안 (고추가루 → 고춧가루)',
+        path: '/products?q=고추가루',
+        render: () =>
+          list({
+            query: '고추가루',
+            suggestion: '고춧가루',
+            onClearQuery: noop,
+            items: [],
+            totalCount: 0,
+          }),
+      },
+      {
+        id: 'suggestion-with-results',
+        label: '오타 제안 + 결과 있음',
+        path: '/products?q=사가',
+        render: () =>
+          list({
+            query: '사가',
+            suggestion: '사과',
+            onClearQuery: noop,
+            items: apples,
+            totalCount: apples.length,
+          }),
       },
       {
         id: 'sold-out-hidden',
@@ -184,9 +257,41 @@ export const productPreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면: 판매자·관심·팔로우)',
+        label: '연결 전 (지금 화면: 판매자·팔로우)',
+        render: () => detail({ seller: undefined, onToggleFollow: undefined }),
+      },
+      {
+        id: 'liked',
+        label: '관심 담음',
+        toast: { message: '관심 상품에 담았어요', actionLabel: '관심 상품 보기' },
+        render: () => detail({ seller: undefined, onToggleFollow: undefined, liked: true }),
+      },
+      {
+        id: 'like-failed',
+        label: '관심 실패 (되돌림)',
+        toast: {
+          message: '관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요',
+          actionLabel: '다시 시도',
+        },
+        render: () => detail({ seller: undefined, onToggleFollow: undefined }),
+      },
+      {
+        id: 'admin',
+        label: '관리자 (관심 막힘)',
         render: () =>
-          detail({ seller: undefined, onToggleLike: undefined, onToggleFollow: undefined }),
+          detail({
+            seller: undefined,
+            onToggleLike: undefined,
+            likeDisabledReason: WISH_ADMIN_REASON,
+            onToggleFollow: undefined,
+          }),
+      },
+      {
+        id: 'guest-like',
+        label: '비회원 관심 → 로그인',
+        session: 'guest',
+        render: () =>
+          detail({ seller: undefined, loginPrompt: 'like', currentMemberId: undefined }),
       },
       { id: 'on-sale', label: '판매 중', render: () => detail() },
       {
@@ -198,6 +303,16 @@ export const productPreviews: ScreenPreview[] = [
               options: apple?.options.map((o, i) => (i === 0 ? { ...o, soldOut: true } : o)),
             }),
           }),
+      },
+      {
+        id: 'option-low-stock',
+        label: '옵션 일부 품절 임박 (카드)',
+        render: () => detail({ product: appleWith({ options: appleLowStockOptions }) }),
+      },
+      {
+        id: 'option-low-stock-select',
+        label: '옵션 일부 품절 임박 (6개 이상 Select)',
+        render: () => detail({ product: appleWith({ options: appleManyLowStockOptions }) }),
       },
       {
         id: 'sold-out',

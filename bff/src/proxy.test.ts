@@ -80,16 +80,17 @@ describe('/api/v1 프록시', () => {
     const { jar } = await login()
     const sent: (string | null)[] = []
     server.use(
-      http.get(`${BACKEND}/api/v1/products/1`, ({ request }) => {
+      // 상품 상세는 토큰 없이 캐시로 답하므로(productCache.test.ts) 다른 공개 API로 본다
+      http.get(`${BACKEND}/api/v1/stores/7`, ({ request }) => {
         const authorization = request.headers.get('Authorization')
         sent.push(authorization)
         return authorization
           ? problemJson(401, '유효하지 않은 토큰입니다.')
-          : HttpResponse.json({ productId: 1 })
+          : HttpResponse.json({ sellerId: 7 })
       }),
     )
 
-    const response = await request('/api/v1/products/1', { jar })
+    const response = await request('/api/v1/stores/7', { jar })
 
     expect(response.status).toBe(200)
     expect(sent).toEqual([expect.stringMatching(/^Bearer /), null])
@@ -115,6 +116,23 @@ describe('/api/v1 프록시', () => {
     expect(response.status).toBe(201)
     expect(contentType).toMatch(/^multipart\/form-data; boundary=/)
     expect(size).toBeGreaterThan(1024)
+  })
+
+  it('로그인 없이 부르는 공개 GET(상점 프로필)은 Authorization 없이 그대로 넘긴다', async () => {
+    const { request } = setup()
+    let authorization: string | null = 'not-called'
+    server.use(
+      http.get(`${BACKEND}/api/v1/stores/7`, ({ request }) => {
+        authorization = request.headers.get('Authorization')
+        return HttpResponse.json({ sellerId: 7, storeName: '청송 햇살농원' })
+      }),
+    )
+
+    const response = await request('/api/v1/stores/7')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ sellerId: 7, storeName: '청송 햇살농원' })
+    expect(authorization).toBeNull()
   })
 
   it('백엔드에 닿지 못하면 problem+json 502를 준다', async () => {

@@ -30,6 +30,7 @@ describe('WalletHistoryPage', () => {
               occurredAt: '2026-10-18T14:30:00',
               type: 'PAYMENT',
               orderId: 184,
+              orderSummary: null,
               amount: 39800,
               balanceAfter: 128000,
             },
@@ -57,5 +58,56 @@ describe('WalletHistoryPage', () => {
 
     await user.click(screen.getByRole('radio', { name: '충전' }))
     await waitFor(() => expect(queries.at(-1)?.type).toBe('CHARGE'))
+    await user.click(screen.getByRole('radio', { name: '환불' }))
+    await waitFor(() => expect(queries.at(-1)?.type).toBe('REFUND'))
+    await user.click(screen.getByRole('radio', { name: '환불 취소' }))
+    await waitFor(() => expect(queries.at(-1)?.type).toBe('REFUND_REVERT'))
+  })
+
+  it('환불·환불 취소 줄을 부호와 주문 요약으로 보이고, 요약·주문 번호가 없어도 그린다', async () => {
+    server.use(
+      http.get('*/api/v1/wallets/me/ledgers', () =>
+        HttpResponse.json({
+          content: [
+            {
+              occurredAt: '2026-10-12T12:00:00',
+              type: 'REFUND_REVERT',
+              orderId: 1001,
+              orderSummary: '사과 외 3건',
+              amount: 3000,
+              balanceAfter: 0,
+            },
+            {
+              occurredAt: '2026-10-11T12:00:00',
+              type: 'REFUND',
+              orderId: 1001,
+              orderSummary: '사과 외 3건',
+              amount: 3000,
+              balanceAfter: 3000,
+            },
+            {
+              occurredAt: '2026-10-10T12:00:00',
+              type: 'REFUND',
+              orderId: null,
+              orderSummary: null,
+              amount: 1000,
+              balanceAfter: 0,
+            },
+          ],
+          page: 0,
+          size: 10,
+          totalElements: 3,
+          totalPages: 1,
+        }),
+      ),
+    )
+    renderHistory()
+
+    const links = await screen.findAllByRole('link', { name: '사과 외 3건' })
+    for (const link of links) expect(link).toHaveAttribute('href', '/orders/1001')
+    expect(screen.getAllByText('−3,000').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('+').length).toBeGreaterThan(0)
+    expect(screen.getAllByTitle('환불').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('link', { name: '환불' })).not.toBeInTheDocument()
   })
 })

@@ -251,10 +251,21 @@ export const appRoutes: RouteObject[] = [
             { title: '정산 관리', screenId: 'M-03' },
             'AdminDepositChecksPage',
           ),
+          adminPage('charges', { title: '충전 처리', screenId: 'M-05' }, 'AdminChargesPage'),
+          adminPage(
+            'charges/:chargeNo',
+            { title: '충전 처리', screenId: 'M-05' },
+            'AdminChargeDetailPage',
+          ),
           adminPage(
             'review-analysis-test',
             { title: '리뷰 분석 테스트', screenId: 'M-04' },
             'AdminReviewAnalysisTestPage',
+          ),
+          adminPage(
+            'search-insights',
+            { title: '검색 점검', screenId: 'M-05' },
+            'AdminSearchInsightsPage',
           ),
         ],
       },
@@ -276,6 +287,10 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
       {
         path: '__design/screen/:screenId',
         lazy: async () => ({ Component: (await import('./dev/ScreenPreview')).ScreenPreview }),
+      },
+      {
+        path: '__design/sentry',
+        lazy: async () => ({ Component: (await import('./dev/SentryLab')).SentryLab }),
       },
     ]
   : []

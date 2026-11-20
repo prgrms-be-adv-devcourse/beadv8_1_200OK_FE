@@ -1,8 +1,9 @@
 import { ActionIcon, Alert, Box, Button, Drawer, Group, Skeleton, Stack, Text } from '@mantine/core'
-import { CircleAlert, Heart, Info, PackageX, Truck } from 'lucide-react'
+import { CircleAlert, Heart, Info, PackageX, Phone, TriangleAlert, Truck } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import type { ProductDetail, ProductReview, ReviewKeyword, SellerProfile } from '@/shared/api/types'
+import { SITE_INFO } from '@/shared/lib/constants'
 import { formatAmount } from '@/shared/lib/format'
 import { categoryLabels } from '@/shared/lib/labels'
 import {
@@ -37,17 +38,20 @@ import classes from './ProductDetailView.module.css'
 
 // B-02 상품 상세. 시안: b2c/Main(데스크톱), b2c/ProductMobile
 // 데스크톱: 사진 | 정보 + 옵션 + 수량 + 담기. 모바일: 하단 CTA 바(관심 + 담기) → 옵션 시트.
-// 판매자 정보·수확일은 상세 API에 없어 따로 받는다(A-2). 재고 임박은 표시하지 않는다(A-7).
+// 판매자 정보·수확일은 상세 API에 없어 따로 받는다(A-2).
+// 재고 수량은 내지 않고, 옵션의 lowStock(서버 판단)으로 옵션 선택에서만 ‘품절 임박’을 보인다. 품절이 우선(A-7).
 // 배송비는 상품 API에 없고 정책도 미정이라(A-8, C-1) 주문서에서 안내한다고만 쓴다.
-// TODO(api): 📝 GET /sellers/{sellerId}(상세에 sellerId 없음), 📝 관심·팔로우 API.
-//   seller가 없으면 생산 정보에 ‘연결 전’ 안내, onToggleLike·onToggleFollow가 없으면 버튼을 막고 이유(NOT_CONNECTED_REASON)를 보인다.
+// TODO(api): 상세 응답에 sellerId가 없어(BE #741) 판매자를 모른다. sellerId가 생기면 ✅ GET /stores/{sellerId}
+//   (shared/api/storeProfile.ts의 storeProfileQueryOptions)로 받아 넘긴다. 📝 팔로우 API.
+//   seller가 없으면 생산 정보에 ‘연결 전’ 안내, onToggleFollow가 없으면 팔로우 버튼을 막고 이유(NOT_CONNECTED_REASON)를 보인다.
+// 관심 버튼: onToggleLike가 있으면 누를 수 있고, 없고 likeDisabledReason이 있으면 막고 그 이유를 보인다(관리자).
 
 export type DetailStatus = 'pending' | 'error' | 'notFound' | 'success'
 
 export type ProductDetailViewProps = {
   status: DetailStatus
   product?: ProductDetail
-  /** TODO(api): 상세 API에 판매자가 없다. 📝 GET /sellers/{sellerId}. 없으면 ‘연결 전’ */
+  /** TODO(api): 상세 응답에 sellerId가 없다(BE #741). 생기면 GET /stores/{sellerId}로 받는다. 없으면 ‘연결 전’ */
   seller?: SellerProfile
   /** TODO(api): 수확일 필드 없음(A-2) */
   harvestDate?: string
@@ -75,8 +79,10 @@ export type ProductDetailViewProps = {
   defaultQuantity?: number
   adding?: boolean
   onAddToCart: (selection: CartSelection) => void
-  /** TODO(api): 📝 관심 상품. 없으면 관심 버튼을 막고 이유를 보인다(연결 전) */
+  /** 관심 버튼. 없으면 버튼을 그리지 않는다(likeDisabledReason이 있으면 막고 이유를 보인다) */
   onToggleLike?: () => void
+  /** 관심 버튼을 막은 이유 (예: 관리자 계정). onToggleLike가 없을 때만 본다 */
+  likeDisabledReason?: string
   /** TODO(api): 📝 팔로우. 없으면 팔로우 버튼을 막고 이유를 보인다(연결 전) */
   onToggleFollow?: () => void
   onDeleteReview?: (reviewId: number) => void
@@ -107,6 +113,33 @@ const shippingNotes = [
   '배송 후 상품에 문제가 있으면 사진과 함께 고객센터로 문의해 주세요.',
   '구매확정 후에는 취소·환불이 안 돼요.',
 ]
+
+/**
+ * 판매자 본문 위에 고정으로 두는 플랫폼 안내(#45). 판매자가 쓴 내용과 섞이지 않게 본문 밖에 둔다.
+ * 정적 안내라 열 때마다 읽히지 않게 Mantine Alert 기본값 role="alert" 대신 note로 둔다.
+ * 고객센터는 푸터와 같은 전화번호(SITE_INFO.csPhone)를 쓴다.
+ */
+function DirectDepositWarning() {
+  return (
+    <Alert
+      role="note"
+      color="warning"
+      icon={<TriangleAlert />}
+      title="계좌로 직접 입금하라는 안내는 따르지 마세요"
+    >
+      <Stack gap={4} align="flex-start">
+        <span>
+          판매자가 팔도곳간 결제 밖에서 입금을 요청하면 입금하지 말고 팔도곳간 고객센터로 알려
+          주세요. 직접 입금한 금액은 보호받을 수 없어요.
+        </span>
+        <a className={classes.csLink} href={`tel:${SITE_INFO.csPhone}`}>
+          <Phone size={16} aria-hidden="true" />
+          고객센터 {SITE_INFO.csPhone}
+        </a>
+      </Stack>
+    </Alert>
+  )
+}
 
 function DetailSkeleton() {
   return (
@@ -168,6 +201,7 @@ export function ProductDetailView({
   adding = false,
   onAddToCart,
   onToggleLike,
+  likeDisabledReason,
   onToggleFollow,
   onDeleteReview,
   onRetry,
@@ -246,9 +280,9 @@ export function ProductDetailView({
       <Heart size={22} aria-hidden="true" />
     </ActionIcon>
   )
-  // 관심 API가 없을 때: 버튼은 보이되 막고 이유를 붙인다
-  const likeNotConnected = !onToggleLike && !isOwner && (
-    <DisabledReason reason={NOT_CONNECTED_REASON}>
+  // 관심을 쓸 수 없는 계정(관리자): 버튼은 보이되 막고 이유를 붙인다
+  const likeBlocked = !onToggleLike && !isOwner && likeDisabledReason && (
+    <DisabledReason reason={likeDisabledReason}>
       <Button variant="default" leftSection={<Heart size={18} aria-hidden="true" />} disabled>
         관심 상품
       </Button>
@@ -392,7 +426,7 @@ export function ProductDetailView({
                       </Button>
                     </DisabledReason>
                   </div>
-                  {likeNotConnected}
+                  {likeBlocked}
                 </>
               )}
             </Stack>
@@ -401,7 +435,7 @@ export function ProductDetailView({
           <Box hiddenFrom="md">
             <Stack gap="md">
               <ShippingSummary />
-              {likeNotConnected}
+              {likeBlocked}
             </Stack>
           </Box>
         </div>
@@ -430,6 +464,7 @@ export function ProductDetailView({
           <h2 id="product-info-title" className={classes.sectionTitle}>
             상품 정보
           </h2>
+          <DirectDepositWarning />
           <RichContent html={product.descriptionHtml} />
         </section>
 
@@ -470,7 +505,7 @@ export function ProductDetailView({
               <NotConnected
                 layout="inline"
                 title="판매자 정보는 아직 연결되지 않았어요"
-                api="📝 GET /sellers/{sellerId} (상세에 sellerId 없음)"
+                api="상세 응답의 sellerId(BE #741) → GET /stores/{sellerId}"
               />
               {followControl}
             </Stack>

@@ -2,6 +2,8 @@
 // 서버 enum은 TS enum으로 둔다(값 = 서버 문자열). const enum은 쓰지 않는다(파일 단위 변환에서 깨짐).
 // 화면 표시명은 shared/lib/labels.ts.
 
+import type { PayoutAdjustmentCheckStatus } from '@/shared/lib/payoutAdjustmentCheck'
+
 // ─── Enum ────────────────────────────────────────────────
 
 export enum ProductCategoryGroup {
@@ -49,6 +51,14 @@ export enum ProductStatus {
 export enum ProductVisibility {
   VISIBLE = 'VISIBLE',
   HIDDEN = 'HIDDEN',
+}
+
+/** 구매자 상품 목록 정렬. 보내지 않으면 검색어가 있을 때 RELEVANCE, 없을 때 LATEST. 검색어 없이 RELEVANCE면 LATEST */
+export enum ProductSort {
+  RELEVANCE = 'RELEVANCE',
+  PRICE_ASC = 'PRICE_ASC', // minSalePrice 기준
+  PRICE_DESC = 'PRICE_DESC',
+  LATEST = 'LATEST',
 }
 
 export enum MediaPurpose {
@@ -140,9 +150,14 @@ export enum ChargeStatus {
 }
 
 /** 예치금 이용 내역 유형 */
+/** 예치금 이용 내역 유형. 충전·환불 반환은 +, 결제·환불 되돌리기는 − */
 export enum LedgerType {
   CHARGE = 'CHARGE',
   PAYMENT = 'PAYMENT',
+  /** 환불로 돌려받은 돈 */
+  REFUND = 'REFUND',
+  /** 환불을 되돌려 다시 가져간 돈 */
+  REFUND_REVERT = 'REFUND_REVERT',
 }
 
 /** 택배사 (출고 등록) */
@@ -193,6 +208,12 @@ export type PageResponse<T> = {
 }
 
 export type ProductPage<T> = PageResponse<T>
+
+/** 구매자 상품 목록(GET /products) 응답. 페이지 5칸 + 오타 교정 제안 */
+export type ProductSearchPage = ProductPage<ProductSummary> & {
+  // 검색어가 품목 이름의 오타로 보일 때 바른 품목(예: "고춧가루"). 결과는 원래 검색어 그대로. 없으면 null
+  suggestion: string | null
+}
 export type PayoutPage<T> = PageResponse<T>
 
 // ─── 회원·인증 ───────────────────────────────────────────
@@ -223,6 +244,8 @@ export type TokenResponse = {
 export type LoginResponse = TokenResponse
 
 export type TokenReissueRequest = { refreshToken: string }
+
+export type LogoutRequest = { refreshToken: string }
 
 // ─── 미디어 ──────────────────────────────────────────────
 
@@ -258,6 +281,8 @@ export type ProductOption = {
   salePrice: number
   discountRate: number
   soldOut: boolean // 재고 수량은 내려주지 않음
+  /** 곧 품절될 옵션(서버가 기준을 정해 판단). 수량은 내려주지 않는다. 품절이면 false(A-7) */
+  lowStock: boolean
 }
 
 export type ProductDetail = {
@@ -281,25 +306,32 @@ export type ProductDetail = {
 }
 
 export type ProductListParams = {
+  keyword?: string // 50자 이하. 상품명·옵션명·카테고리 이름. 비우거나 공백·기호만이면 검색어 없이 조회
   categoryGroup?: ProductCategoryGroup
   category?: ProductCategory
   region?: ProductRegion
+  sort?: ProductSort
   page?: number
   size?: number
 }
 
-// ─── 판매자 상점 (구매자가 보는 쪽, 계획 API) ─────────────
+// ─── 판매자 상점 (구매자가 보는 쪽) ─────────────────────
 
-// TODO(api): 📝 GET /sellers/{sellerId} 없음. 구매자 화면(상품 상세·농가·찜) fixtures 전용 임시 타입.
-// 상품 목록·상세에도 판매자 정보가 없어 화면이 따로 받는다(DECISIONS.md A-2). 판매자 본인 프로필은 아래 SellerProfileResponse.
-export type SellerProfile = {
+/** ✅ 상점 프로필 GET /stores/{sellerId}. 로그인 없이 누구나 부른다. sellerId는 판매자의 회원 번호다.
+ * 판매자 본인 프로필(출고지 우편번호 포함)은 아래 SellerProfileResponse */
+export type StoreProfile = {
   sellerId: number
   storeName: string
   representativeName: string
+  customerServicePhone: string
+  introduction: string | null
+  profileImageUrl: string | null // 없으면 상호 첫 글자를 보여 준다
+}
+
+// TODO(api): 지역·팔로워 수·판매 중지 여부는 서버 응답에 없다(❌). 구매자 화면 fixtures·시안 전용 확장 타입.
+// 실제 화면은 StoreProfile만 받고 이 값들은 ‘연결 전’으로 둔다.
+export type SellerProfile = StoreProfile & {
   region: ProductRegion | null
-  introduction: string | null // 200자 이하
-  customerServicePhone: string | null
-  profileImageUrl: string | null
   followerCount: number
   suspended: boolean // 판매 중지(정지)된 판매자. API 미정(C-9)
 }
@@ -468,7 +500,10 @@ export type ChargeFailRequest = { chargeNo: string; code: string; message?: stri
 export type LedgerEntry = {
   occurredAt: string
   type: LedgerType
-  orderId: number | null // 결제일 때만
+  /** 결제·환불 반환·환불 되돌리기일 때. 충전이면 null, 서버가 기록을 못 찾아도 null */
+  orderId: number | null
+  /** 주문 요약(예: "사과 외 3건", 최대 120자). 충전·요약 저장 전 결제는 null */
+  orderSummary: string | null
   amount: number
   balanceAfter: number
 }
@@ -898,17 +933,20 @@ export type PayoutDetailCommon = PayoutSummary & {
   periodFrom: string | null // 포함. 첫 정산이면 null
   periodTo: string // 미포함
   itemCount: number
-  sellerFeeAmount: number | null // 판매자 정산일 때만
-  sellerFeeItemCount: number | null // 판매자 정산일 때만
 }
 
 /** 관리자 정산 상세 GET /admin/payouts/{payoutId} */
 export type PayoutDetail = PayoutDetailCommon & {
-  systemPayoutId: number | null // 판매자 정산이면 같은 스냅샷의 시스템 몫 정산 ID
+  systemPayoutId: number | null // 판매자 정산이면 같은 스냅샷의 시스템 몫 정산 ID. 그 회차에 시스템 몫이 없으면 null
+  sellerFeeAmount: number | null // 판매자 정산이면 값(수수료가 없으면 0). 시스템 몫 정산만 null
+  sellerFeeItemCount: number | null // 위와 같음
 }
 
 /** 판매자 본인 정산 상세 GET /payouts/me/{payoutId}. system은 항상 false */
-export type PayoutSellerDetail = PayoutDetailCommon
+export type PayoutSellerDetail = PayoutDetailCommon & {
+  sellerFeeAmount: number // 수수료가 없으면 0. 정산 금액에 이미 반영된 참고값
+  sellerFeeItemCount: number
+}
 
 /** 항목 공통 */
 export type PayoutItemCommon = {
@@ -947,6 +985,11 @@ type PayoutCandidateCommon = {
 export type PayoutCandidate = PayoutCandidateCommon & {
   eventType: PayoutEventType
   adjustment: PayoutAdjustment | null
+  /**
+   * 조정이 금액 검사에 들어가는지. orderId로 조회한 조정 줄에만 값이 있고, 원래 후보와 기간만 준 조회는 null.
+   * Swagger에는 값 목록 없이 설명에만 적힌 문자열 칸이라(null과 enum을 같이 적지 않으려고) 화면은 아는 값만 배지로 그린다
+   */
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus | null
 }
 
 /** 판매자 GET /payouts/me/candidates. 수수료(SALE_FEE) 후보는 안 나온다 */
@@ -958,12 +1001,31 @@ export type PayoutSellerCandidate = PayoutCandidateCommon & {
 /** POST /admin/payouts/run, /run/skip-wait */
 export type PayoutRunResponse = { executionId: number; status: string }
 
-/** POST /admin/payouts/adjustments (지금은 501) */
+/** 조정할 수 있는 항목 종류. 배송비(SALE_SHIPPING_FEE)는 주문 항목 ID가 없어 조정할 수 없다 */
+export type AdjustablePayoutEventType = PayoutEventType.SALE_AMOUNT | PayoutEventType.SALE_FEE
+
+/** POST /admin/payouts/adjustments */
 export type PayoutAdjustmentCreateRequest = {
   orderItemId: number
-  eventType: PayoutEventType
+  eventType: AdjustablePayoutEventType
   amount: number // 0 불가, 음수면 차감
-  reason: string // 255자 이하
+  reason: string // 1~255자, 서버가 앞뒤 공백을 지운다
+}
+
+/** POST /admin/payouts/adjustments → 201. 방금 저장한 조정 정산후보 */
+export type PayoutAdjustmentCreateResponse = {
+  candidateId: number
+  adjustmentId: number // 그 주문 항목·종류에서 1, 2, 3…
+  orderId: number
+  orderItemId: number
+  sellerId: number
+  eventType: AdjustablePayoutEventType
+  amount: number
+  reason: string // 입력 원문 → 출력 시 이스케이프
+  adminId: number
+  createdAt: string
+  /** 방금 넣은 조정이 금액 검사에 들어가는지(넣은 순간의 값, 늘 있음). 해결 뒤 상태는 정산후보 조회(orderId)로 본다 */
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus
 }
 
 // from(포함)·to(미포함) 필수, "yyyy-MM-ddTHH:mm:ss", 최대 1년. size 1~100
@@ -976,7 +1038,14 @@ export type AdminPayoutListParams = SellerPayoutListParams & {
   system?: boolean // true 시스템 몫만, false 판매자 몫만
 }
 
-export type AdminPayoutCandidateParams = SellerPayoutCandidateParams & { sellerId?: number }
+/** orderId를 주면 기간(from·to) 없이 그 주문의 후보 전부(대기 중·정산됨·조정 포함). 없으면 기간 필수 */
+export type AdminPayoutCandidateParams = Partial<Pick<SellerPayoutListParams, 'from' | 'to'>> & {
+  sellerId?: number
+  orderId?: number
+  unsettledOnly?: boolean
+  page?: number
+  size?: number
+}
 
 // ─── 내 정보 ─────────────────────────────────────────────
 
@@ -993,3 +1062,20 @@ export type MemberInfoUpdateRequest = {
   name: string // 50자 이하, 앞뒤 공백 제거
   nickname: string // 2~30자, 앞뒤 공백 제거. 다른 회원과 같아도 된다
 }
+
+/** PATCH /members/me/password. 두 값 모두 공백을 지우지 않는다(공백도 비밀번호의 일부) */
+export type PasswordChangeRequest = {
+  currentPassword: string // 20자 이하. 형식은 보지 않는다(규칙 전에 만든 계정도 바꿀 수 있게)
+  newPassword: string // 영문·숫자·특수문자 포함 8~20자(가입과 같은 규칙), 현재 비밀번호와 달라야 함
+}
+
+// ─── 관심 상품(찜) (Bearer BUYER) ───────────────────────
+
+/** GET /members/me/wishes의 한 건. 상품 카드는 GET /products/summaries로 따로 받는다 */
+export type Wish = {
+  productId: number
+  wishedAt: string // 해제 후 다시 찜했으면 다시 찜한 시각
+}
+
+/** GET /members/me/wishes. 최근 찜 순. totalElements는 숨김·삭제된 상품의 찜도 센다 */
+export type WishPage = PageResponse<Wish>

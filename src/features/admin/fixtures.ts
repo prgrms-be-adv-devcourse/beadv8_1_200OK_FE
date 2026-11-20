@@ -1,4 +1,6 @@
 import {
+  ChargeStatus,
+  type PayoutAdjustmentCreateResponse,
   type PayoutCandidate,
   type PayoutDetail,
   PayoutEventType,
@@ -17,10 +19,11 @@ import {
   type SellerApplicationAdminSummary,
 } from '@/shared/api/types'
 import { PAYOUT_FEE_RATE } from '@/shared/lib/constants'
+import { PayoutAdjustmentCheckStatus } from '@/shared/lib/payoutAdjustmentCheck'
 import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
+import { type AdminCharge, type AdminChargeDetail, TossLookup, TossPaymentStatus } from './charges'
 import {
-  type AdjustTarget,
   type BlockedOrder,
   DepositCheckReason,
   type DepositCheckReview,
@@ -30,6 +33,8 @@ import {
   type Resolution,
   type ResolutionRequest,
   type SentimentAnalysis,
+  type UntaggedProduct,
+  type ZeroResultKeyword,
 } from './types'
 
 // 서버 응답 모양 그대로 둔 샘플 데이터 (previews · 테스트 · MSW 기본 응답).
@@ -228,6 +233,79 @@ export const findApplication = (applicationId: number) =>
 export const applicationCounts = Object.fromEntries(
   Object.values(S).map((s) => [s, sellerApplications.filter((a) => a.status === s).length]),
 ) as Record<SellerApplicationStatus, number>
+
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+// GET /admin/wallets/charges 목록(요청 시각 순)과 상세의 토스 조회 결과. 충전 번호는 CHG_ + UUID.
+
+const heldCharge = (
+  chargeNo: string,
+  memberId: number,
+  amount: number,
+  createdAt: string,
+): AdminCharge => ({
+  chargeNo,
+  memberId,
+  amount,
+  status: ChargeStatus.IN_PROGRESS,
+  failureCode: null,
+  failureMessage: null,
+  heldForReview: true,
+  createdAt,
+  approvedAfterFailureAt: null,
+  paymentCancelRequestedAt: null,
+  paymentCanceledAt: null,
+})
+
+/** 멈춘 처리 중 · 토스 DONE 같은 금액 → 잔액 반영 · 결제 취소 */
+export const CHARGE_DONE = 'CHG_3f2b1c9e-8a4d-4e6f-9b1a-2c3d4e5f6a7b'
+/** 멈춘 처리 중 · 토스에 결제 없음 → 실패 처리 */
+export const CHARGE_NOT_FOUND = 'CHG_7a1d2e3f-4b5c-4d6e-8f9a-0b1c2d3e4f50'
+/** 멈춘 처리 중 · 결제 취소 결과 모름 → 결제 취소만 */
+export const CHARGE_CANCEL_REQUESTED = 'CHG_9c8b7a6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d'
+/** 승인 뒤 실패 → 결제 취소 */
+export const CHARGE_AFTER_FAILURE = 'CHG_1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e'
+/** 멈춘 처리 중 · 토스 답 없음 → 다시 조회만 */
+export const CHARGE_UNKNOWN = 'CHG_5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9'
+
+export const adminCharges: AdminCharge[] = [
+  heldCharge(CHARGE_DONE, 12, 10_000, '2026-11-18T10:00:00'),
+  heldCharge(CHARGE_NOT_FOUND, 23, 30_000, '2026-11-18T11:42:00'),
+  {
+    ...heldCharge(CHARGE_CANCEL_REQUESTED, 31, 50_000, '2026-11-18T13:05:00'),
+    paymentCancelRequestedAt: '2026-11-19T09:12:00',
+  },
+  {
+    ...heldCharge(CHARGE_AFTER_FAILURE, 44, 20_000, '2026-11-18T15:30:00'),
+    status: ChargeStatus.FAILED,
+    heldForReview: false,
+    failureCode: 'CONFIRM_TIMEOUT',
+    failureMessage: '결제 승인 응답을 받지 못했습니다.',
+    approvedAfterFailureAt: '2026-11-18T15:31:10',
+  },
+  heldCharge(CHARGE_UNKNOWN, 52, 100_000, '2026-11-19T08:20:00'),
+]
+
+type TossAnswer = Omit<AdminChargeDetail, 'charge'>
+
+const tossDone = (amount: number): TossAnswer => ({
+  tossLookup: TossLookup.FOUND,
+  tossStatus: TossPaymentStatus.DONE,
+  tossTotalAmount: amount,
+})
+
+export const tossAnswers: Record<string, TossAnswer> = {
+  [CHARGE_DONE]: tossDone(10_000),
+  [CHARGE_NOT_FOUND]: { tossLookup: TossLookup.NOT_FOUND, tossStatus: null, tossTotalAmount: null },
+  [CHARGE_CANCEL_REQUESTED]: tossDone(50_000),
+  [CHARGE_AFTER_FAILURE]: tossDone(20_000),
+  [CHARGE_UNKNOWN]: { tossLookup: TossLookup.UNKNOWN, tossStatus: null, tossTotalAmount: null },
+}
+
+export const findChargeDetail = (chargeNo: string): AdminChargeDetail | null => {
+  const charge = adminCharges.find((c) => c.chargeNo === chargeNo)
+  const toss = tossAnswers[chargeNo]
+  return charge && toss ? { charge, ...toss } : null
+}
 
 // ─── 정산 관리 ───────────────────────────────────────────
 // 매일 02:00 정산. 판매자 정산 = 판매 대금 − 수수료 3% + 배송비(주문 단위), 그날 수수료 합은 플랫폼 몫(system) 한 건.
@@ -428,6 +506,7 @@ export const adminPayoutCandidates: PayoutCandidate[] = [
     settled: false,
     payoutId: null,
     adjustment: null,
+    adjustmentCheckStatus: null,
   },
   {
     candidateId: 40012,
@@ -440,6 +519,7 @@ export const adminPayoutCandidates: PayoutCandidate[] = [
     settled: false,
     payoutId: null,
     adjustment: null,
+    adjustmentCheckStatus: null,
   },
   {
     candidateId: 40013,
@@ -452,6 +532,7 @@ export const adminPayoutCandidates: PayoutCandidate[] = [
     settled: false,
     payoutId: null,
     adjustment: null,
+    adjustmentCheckStatus: null,
   },
 ]
 
@@ -487,20 +568,36 @@ export const runResults: Record<'ok' | 'skipWait' | 'error', PayoutRunResult> = 
 /** 미리보기 샘플: 청송 햇살농원 1210 (23,900 − 717 + 3,000 = 26,183원) */
 export const sampleAdjustment = {
   orderItemId: '1210',
-  eventType: PayoutEventType.SALE_AMOUNT,
+  eventType: PayoutEventType.SALE_AMOUNT as const,
   amount: '-10,000',
   reason: '구매확정 후 환불 회수',
 }
 
-/** 금액 조회 API가 생겼을 때의 미리보기 모양 (지금 화면은 idle만 쓴다) */
-export const sampleAdjustTarget: AdjustTarget = {
-  orderItemId: 1210,
-  payeeName: '판매자 7',
-  payoutId: 1021,
-  payoutCreatedAt: '2026-10-18T02:00:00',
-  currentAmount: 26183,
-  priorAdjustmentCount: 0,
-  priorAdjustmentTotal: 0,
+/** 방금 저장한 조정 (POST /admin/payouts/adjustments 201). 멈춘 주문 2001에 넣어 해결하면 금액 검사에 들어간다 */
+export const sampleAdjustmentResult: PayoutAdjustmentCreateResponse = {
+  candidateId: 40031,
+  adjustmentId: 1,
+  orderId: 2001,
+  orderItemId: 1302,
+  sellerId: 7,
+  eventType: PayoutEventType.SALE_AMOUNT,
+  amount: -4850,
+  reason: '판매 금액 오입력 정정 (20,000 → 15,000)',
+  adminId: ADMIN_MEMBER_ID,
+  createdAt: '2026-11-16T10:00:00',
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
+}
+
+/** 해결한 뒤 같은 조정을 또 넣음 (201 · 검사 밖). 금액 검사 없이 지급에만 들어가 경고한다 */
+export const sampleUncheckedAdjustmentResult: PayoutAdjustmentCreateResponse = {
+  ...sampleAdjustmentResult,
+  candidateId: 44005,
+  adjustmentId: 2,
+  orderId: 2004,
+  orderItemId: 1601,
+  reason: '판매 금액 오입력 정정 (해결 뒤 다시 입력)',
+  createdAt: '2026-11-17T09:00:00',
+  adjustmentCheckStatus: PayoutAdjustmentCheckStatus.UNCHECKED,
 }
 
 // ─── 리뷰 분석 테스트 ────────────────────────────────────
@@ -524,7 +621,13 @@ const analysisProduct = (
   reviewCount: 0,
   averageRating: 0,
   imageUrls: [],
-  options: options.map((o) => ({ ...o, listPrice: o.salePrice, discountRate: 0, soldOut: false })),
+  options: options.map((o) => ({
+    ...o,
+    listPrice: o.salePrice,
+    discountRate: 0,
+    soldOut: false,
+    lowStock: false,
+  })),
   createdAt: '2026-10-01T09:00:00',
   updatedAt: '2026-10-01T09:00:00',
 })
@@ -684,6 +787,8 @@ export const blockedOrders: BlockedOrder[] = [
       sellerCount: 1,
       conflictAmounts: [35000],
     },
+    pendingSaleAmountAdjustment: 0,
+    pendingSaleFeeAdjustment: 0,
   },
   {
     orderId: 2002,
@@ -706,6 +811,9 @@ export const blockedOrders: BlockedOrder[] = [
     ],
     evidenceAtBlock: null,
     evidenceNow: null,
+    // 실패 뒤 넣은 조정: 대금 +200 · 수수료 −200 (판매 10,000 = 대금 9,700 + 수수료 300으로 맞춤)
+    pendingSaleAmountAdjustment: 200,
+    pendingSaleFeeAdjustment: -200,
   },
   {
     orderId: 2003,
@@ -728,7 +836,116 @@ export const blockedOrders: BlockedOrder[] = [
     ],
     evidenceAtBlock: null,
     evidenceNow: null,
+    pendingSaleAmountAdjustment: 0,
+    pendingSaleFeeAdjustment: 0,
   },
+]
+
+/** 멈춘 주문 2001이 지금 초과 청구로 넘친 모양 (미리보기 · 예상 합계) */
+export const overflowingOrder: BlockedOrder = {
+  ...(blockedOrders[0] as BlockedOrder),
+  evidenceNow: {
+    deductedAmount: 30000,
+    candidateTotal: 35000,
+    overflowAmount: 5000,
+    firstOverflowItem: '1302',
+    settledAmount: 10000,
+    settledItems: ['1300'],
+    aloneOverItems: [],
+    sellerCount: 1,
+    conflictAmounts: [],
+  },
+  pendingSaleAmountAdjustment: -4850,
+  pendingSaleFeeAdjustment: 0,
+}
+
+const candidate = (
+  candidateId: number,
+  orderId: number,
+  orderItemId: number | null,
+  eventType: PayoutEventType,
+  amount: number,
+  extra: Partial<PayoutCandidate> = {},
+): PayoutCandidate => ({
+  candidateId,
+  eventType,
+  orderId,
+  orderItemId,
+  sellerId: orderId === 2002 ? 8 : 7,
+  amount,
+  candidateCreatedAt: '2026-11-01T13:10:00',
+  settled: false,
+  payoutId: null,
+  adjustment: null,
+  adjustmentCheckStatus: null,
+  ...extra,
+})
+
+/**
+ * 주문별 정산후보 (GET /admin/payouts/candidates?orderId). 기간 없이 대기 중 · 정산됨 · 조정이 함께 나온다.
+ * 2001: 1300은 정산됨, 1301·1302는 대기(1302 판매 금액이 15,000이어야 하는데 20,000으로 들어옴). 2002: 수수료 500 → 조정 2건
+ * 조정 줄의 adjustmentCheckStatus: 2002는 잠긴 뒤 넣어 해결 대기. 2004는 막힌 목록에서 빠진 주문으로,
+ * 해결 전에 넣은 조정 2건은 확인됨(정산됨), 해결 뒤 같은 조정을 또 넣은 1건은 검사 밖(대기)이다.
+ */
+export const orderCandidates: PayoutCandidate[] = [
+  candidate(41001, 2001, 1300, PayoutEventType.SALE_AMOUNT, 9700, {
+    settled: true,
+    payoutId: 1021,
+  }),
+  candidate(41002, 2001, 1300, PayoutEventType.SALE_FEE, 300, { settled: true, payoutId: 1022 }),
+  candidate(41003, 2001, 1301, PayoutEventType.SALE_AMOUNT, 4850),
+  candidate(41004, 2001, 1301, PayoutEventType.SALE_FEE, 150),
+  candidate(41005, 2001, 1302, PayoutEventType.SALE_AMOUNT, 19400),
+  candidate(41006, 2001, 1302, PayoutEventType.SALE_FEE, 600),
+  candidate(41007, 2001, null, PayoutEventType.SALE_SHIPPING_FEE, 0),
+  candidate(42001, 2002, 1401, PayoutEventType.SALE_AMOUNT, 9500),
+  candidate(42002, 2002, 1401, PayoutEventType.SALE_FEE, 500),
+  candidate(42003, 2002, 1401, PayoutEventType.SALE_AMOUNT, 200, {
+    candidateCreatedAt: '2026-11-15T09:00:00',
+    adjustment: {
+      adjustmentId: 1,
+      adminId: ADMIN_MEMBER_ID,
+      reason: '수수료 3% 재계산 <i>원문</i>',
+    },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
+  }),
+  candidate(42004, 2002, 1401, PayoutEventType.SALE_FEE, -200, {
+    candidateCreatedAt: '2026-11-15T09:01:00',
+    adjustment: { adjustmentId: 1, adminId: ADMIN_MEMBER_ID, reason: '수수료 3% 재계산' },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.AWAITING_RESOLUTION,
+  }),
+  candidate(44001, 2004, 1601, PayoutEventType.SALE_AMOUNT, 19400, {
+    settled: true,
+    payoutId: 1021,
+  }),
+  candidate(44002, 2004, 1601, PayoutEventType.SALE_FEE, 600, { settled: true, payoutId: 1022 }),
+  candidate(44003, 2004, 1601, PayoutEventType.SALE_AMOUNT, -4850, {
+    candidateCreatedAt: '2026-11-12T10:00:00',
+    settled: true,
+    payoutId: 1021,
+    adjustment: {
+      adjustmentId: 1,
+      adminId: ADMIN_MEMBER_ID,
+      reason: '판매 금액 오입력 정정 (20,000 → 15,000)',
+    },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.CONFIRMED,
+  }),
+  candidate(44004, 2004, 1601, PayoutEventType.SALE_FEE, -150, {
+    candidateCreatedAt: '2026-11-12T10:01:00',
+    settled: true,
+    payoutId: 1022,
+    adjustment: { adjustmentId: 1, adminId: ADMIN_MEMBER_ID, reason: '수수료 재계산 (600 → 450)' },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.CONFIRMED,
+  }),
+  candidate(44005, 2004, 1601, PayoutEventType.SALE_AMOUNT, -4850, {
+    candidateCreatedAt: '2026-11-17T09:00:00',
+    adjustment: {
+      adjustmentId: 2,
+      adminId: ADMIN_MEMBER_ID,
+      reason: '판매 금액 오입력 정정 (해결 뒤 다시 입력)',
+    },
+    adjustmentCheckStatus: PayoutAdjustmentCheckStatus.UNCHECKED,
+  }),
 ]
 
 const REQUEST_ID = '3f2b8c1e-7d4a-4b9e-9c21-5a6d8e0f1b23'
@@ -742,6 +959,20 @@ export const resolutionRequests: ResolutionRequest[] = [
     resolvedAt: '2026-11-14T10:00:00',
     memo: '검증 코드 수정 배포 후 다시 처리 <script>alert(1)</script>',
     resolvedFailureCount: 1,
+  },
+]
+
+/** 해결 기록 전체 목록 (GET /admin/payouts/resolution-requests). 지난 정산 실행으로 목록에서 빠진 주문도 나온다 */
+export const periodResolutionRequests: ResolutionRequest[] = [
+  ...resolutionRequests,
+  {
+    resolutionRequestId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    orderId: 1907,
+    method: 'REPROCESS',
+    adminId: 2,
+    resolvedAt: '2026-11-10T15:30:00',
+    memo: '지갑 결제 기록 들어온 것 확인',
+    resolvedFailureCount: 3,
   },
 ]
 
@@ -810,5 +1041,67 @@ export const depositChecks: DepositCheckReview[] = [
     attemptCount: 3,
     notFoundCount: 0,
     lastAskedAt: '2026-11-13T02:00:00',
+  },
+]
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+/** 0건 많은 순 (같으면 마지막 검색이 늦은 순) */
+export const zeroResultKeywords: ZeroResultKeyword[] = [
+  {
+    normalizedKeyword: '샤인머스켓',
+    zeroResultCount: 12,
+    lastSearchedAt: '2026-11-18T14:05:31',
+    sampleKeyword: '샤인 머스켓',
+  },
+  {
+    normalizedKeyword: '김장배추20kg',
+    zeroResultCount: 7,
+    lastSearchedAt: '2026-11-17T09:41:02',
+    sampleKeyword: '김장배추 20kg',
+  },
+  {
+    normalizedKeyword: '무농약블루베리',
+    zeroResultCount: 4,
+    lastSearchedAt: '2026-11-16T21:13:45',
+    sampleKeyword: '무농약블루베리',
+  },
+  {
+    normalizedKeyword: '제주한라봉선물세트',
+    zeroResultCount: 1,
+    lastSearchedAt: '2026-11-14T08:02:10',
+    sampleKeyword: '제주 한라봉 선물세트',
+  },
+]
+
+/** 최근 판정 순. 가장 높았던 태그가 목록에서 빠진 경우 · 확률 기록이 없는 경우를 같이 둔다 */
+export const untaggedProducts: UntaggedProduct[] = [
+  {
+    productId: 128,
+    productName: '국산 생강 1kg',
+    judgedAt: '2026-11-18T14:05:31',
+    topTagLabel: '김장·김치용',
+    topScore: 0.83,
+  },
+  {
+    productId: 131,
+    productName: '햇 들기름 350ml (저온 압착, 국산 들깨 100%)',
+    judgedAt: '2026-11-17T11:20:00',
+    topTagLabel: '선물용',
+    topScore: 0.8999,
+  },
+  {
+    productId: 117,
+    productName: '말린 표고버섯 슬라이스 200g',
+    judgedAt: '2026-11-15T16:48:12',
+    topTagLabel: null,
+    topScore: 0.42,
+  },
+  {
+    productId: 109,
+    productName: '수제 도토리묵 2모',
+    judgedAt: '2026-11-13T10:00:00',
+    topTagLabel: null,
+    topScore: null,
   },
 ]

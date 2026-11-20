@@ -16,6 +16,8 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS가 필요해요}
       # Sentry paldo-bff 프로젝트 DSN(.env). 비우면 Sentry로 보내지 않아요
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # 비우면 1.0이에요. SENTRY_RELEASE는 이미지 env(커밋 SHA)라 여기서 넘기지 않아요(넘기면 덮여요)
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-}
       # 힙을 mem_limit보다 작게 묶어 힙 밖(버퍼·스택) 몫을 남겨요
       NODE_OPTIONS: --max-old-space-size=192
     mem_limit: 256m

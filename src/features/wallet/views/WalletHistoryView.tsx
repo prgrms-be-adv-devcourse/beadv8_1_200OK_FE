@@ -1,6 +1,6 @@
 import { Anchor, Badge, Button, Chip, Group, Skeleton, Stack, Table } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
-import { CreditCard, ReceiptText, WalletCards } from 'lucide-react'
+import { CreditCard, ReceiptText, RotateCcw, Undo2, WalletCards } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { formatDate } from '@/shared/lib/format'
@@ -10,8 +10,10 @@ import { type WalletPeriod, type WalletTransaction, WalletTxType } from '../type
 import classes from './WalletHistoryView.module.css'
 
 // B-13 지갑 이용 내역 /me/wallet. 시안: b2c/Wallet, WalletMobile
-// 기간(1개월 · 3개월 · 직접 선택 + 날짜 검증) · 유형(전체 · 충전 · 결제). 데스크톱 표, 모바일 목록. 결제 줄은 주문 상세로 이어진다.
-// ✅ GET /wallets/me/balance · GET /wallets/me/ledgers. 시안의 결제 취소·환불 입금 유형은 서버에 없어 뺐다.
+// 기간(1개월 · 3개월 · 직접 선택 + 날짜 검증) · 유형(전체 · 충전 · 결제 · 환불 · 환불 취소). 데스크톱 표, 모바일 목록.
+// 주문 번호가 있는 줄(결제·환불)은 주문 상세로 이어진다. 내용(주문 요약)이 길면 한 줄로 말줄임하고 title에 전체를 둔다.
+// 들어온 돈은 + 기호와 초록, 나간 돈은 − 기호로 보이고 유형은 배지(아이콘 + 문구)로도 알린다.
+// ✅ GET /wallets/me/balance · GET /wallets/me/ledgers
 
 export type WalletHistoryViewProps = {
   status: 'pending' | 'error' | 'success'
@@ -42,6 +44,16 @@ const typeLook: Record<WalletTxType, { label: string; tone: StatusTone; icon: Re
     tone: 'neutral',
     icon: <ReceiptText aria-hidden="true" />,
   },
+  [WalletTxType.REFUND]: {
+    label: '환불',
+    tone: 'info',
+    icon: <RotateCcw aria-hidden="true" />,
+  },
+  [WalletTxType.REFUND_REVERT]: {
+    label: '환불 취소',
+    tone: 'warning',
+    icon: <Undo2 aria-hidden="true" />,
+  },
 }
 
 const periods: { value: WalletPeriod; label: string }[] = [
@@ -61,11 +73,19 @@ function TypeBadge({ type }: { type: WalletTxType }) {
 
 function Description({ tx }: { tx: WalletTransaction }) {
   return tx.orderId !== null ? (
-    <Anchor component={Link} to={`/orders/${tx.orderId}`} size="sm">
+    <Anchor
+      component={Link}
+      to={`/orders/${tx.orderId}`}
+      size="sm"
+      className={classes.description}
+      title={tx.description}
+    >
       {tx.description}
     </Anchor>
   ) : (
-    <span>{tx.description}</span>
+    <span className={classes.description} title={tx.description}>
+      {tx.description}
+    </span>
   )
 }
 
@@ -211,7 +231,7 @@ export function WalletHistoryView({
                   <Table.Td>
                     <TypeBadge type={tx.type} />
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td className={classes.descriptionCell}>
                     <Description tx={tx} />
                   </Table.Td>
                   <Table.Td className={classes.right}>

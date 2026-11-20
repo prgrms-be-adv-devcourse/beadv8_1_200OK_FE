@@ -14,6 +14,8 @@ const statusHelp: Record<RefundStatus, string> = {
   [RefundStatus.COMPLETED]: '예치금으로 돌려줬어요.',
   [RefundStatus.REJECTED]: '취소되지 않았어요. 상품은 그대로 보내 드려요.',
   [RefundStatus.WITHDRAWN]: '요청을 거뒀어요. 출고 전이면 다시 요청할 수 있어요.',
+  [RefundStatus.FAILED]:
+    '취소를 처리하지 못해 되돌렸어요. 주문은 그대로 유지돼요. 출고 전이면 다시 요청할 수 있어요.',
 }
 
 export type RefundCardProps = {
@@ -56,7 +58,7 @@ export function RefundCard({
           )}
           {refund.rejectReason && (
             <div>
-              <dt>거절 사유</dt>
+              <dt>{refund.status === RefundStatus.FAILED ? '실패 이유' : '거절 사유'}</dt>
               <dd>{refund.rejectReason}</dd>
             </div>
           )}

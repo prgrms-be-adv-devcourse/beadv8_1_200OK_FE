@@ -9,6 +9,7 @@ import {
   ProductCategory,
   ProductCategoryGroup,
   ProductRegion,
+  ProductSort,
   ProductStatus,
   ProductVisibility,
   type RegionGroup,
@@ -75,6 +76,13 @@ export const productStatusLabels: Record<ProductStatus, string> = {
   [ProductStatus.ON_SALE]: '판매 중',
   [ProductStatus.PAUSED]: '일시 중지',
   [ProductStatus.ENDED]: '판매 종료',
+}
+
+export const productSortLabels: Record<ProductSort, string> = {
+  [ProductSort.RELEVANCE]: '관련도순',
+  [ProductSort.LATEST]: '최신순',
+  [ProductSort.PRICE_ASC]: '낮은 가격순',
+  [ProductSort.PRICE_DESC]: '높은 가격순',
 }
 
 export const productVisibilityLabels: Record<ProductVisibility, string> = {
@@ -161,6 +169,8 @@ export const chargeStatusLabels: Record<ChargeStatus, string> = {
 export const ledgerTypeLabels: Record<LedgerType, string> = {
   [LedgerType.CHARGE]: '충전',
   [LedgerType.PAYMENT]: '결제',
+  [LedgerType.REFUND]: '환불',
+  [LedgerType.REFUND_REVERT]: '환불 취소',
 }
 
 export const carrierLabels: Record<ShipmentCarrier, string> = {

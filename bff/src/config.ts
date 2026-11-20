@@ -41,6 +41,28 @@ const EnvSchema = z.object({
   UPLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   /** 화면용 집계에서 없어도 되는 부가 정보 호출은 짧게 끊는다 */
   OPTIONAL_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
+  /**
+   * multipart가 아닌 요청 본문 상한. proxy.ts가 메모리에 통째로 담아서 둔다. 업로드는 대상이 아니다.
+   * 가장 큰 본문은 상품 상세설명(백엔드 @Size(max = 200_000))이다. 한글이면 UTF-8로 약 600KB라 2MB 안이다
+   */
+  REQUEST_BODY_LIMIT_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2 * 1024 * 1024),
+  /** 상품 상세 응답을 BFF 메모리에 두는 시간(ADR-0011). 0이면 담지 않고 동시 요청 합치기만 한다 */
+  PRODUCT_CACHE_TTL_MS: z.coerce.number().int().nonnegative().default(5_000),
+  /** 상품 상세 캐시에 둘 상품 수. 넘으면 가장 오래 안 쓴 것부터 버린다 */
+  PRODUCT_CACHE_MAX_ENTRIES: z.coerce.number().int().positive().default(500),
+  /**
+   * 상품 상세 캐시 본문 합계 상한(바이트). 상세 설명은 최대 20만 자라 개수만으로는 메모리를 묶지 못한다.
+   * 운영 컨테이너 mem_limit이 256MB라 기본 16MB. 넘으면 오래 안 쓴 것부터 버린다
+   */
+  PRODUCT_CACHE_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(16 * 1024 * 1024),
 })
 
 export type Config = {
@@ -50,8 +72,12 @@ export type Config = {
   allowedOrigins: string[]
   /** vite는 5173이 차 있으면 5174로 뜬다. 그때도 개발이 막히지 않게 한다 */
   allowAnyLocalhostOrigin: boolean
+  /** 개발 환경 전용 경로(devRoutes.ts: Sentry 테스트 오류)를 열지 */
+  devRoutes: boolean
   cookieSecure: boolean
+  requestBodyLimitBytes: number
   timeouts: { upstream: number; upload: number; optional: number }
+  productCache: { ttlMs: number; maxEntries: number; maxBytes: number }
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -71,11 +97,18 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     allowedOrigins: parsed.ALLOWED_ORIGINS,
     allowAnyLocalhostOrigin: parsed.NODE_ENV === 'development',
+    devRoutes: parsed.NODE_ENV === 'development',
     cookieSecure: parsed.COOKIE_SECURE ?? parsed.NODE_ENV === 'production',
+    requestBodyLimitBytes: parsed.REQUEST_BODY_LIMIT_BYTES,
     timeouts: {
       upstream: parsed.UPSTREAM_TIMEOUT_MS,
       upload: parsed.UPLOAD_TIMEOUT_MS,
       optional: parsed.OPTIONAL_TIMEOUT_MS,
+    },
+    productCache: {
+      ttlMs: parsed.PRODUCT_CACHE_TTL_MS,
+      maxEntries: parsed.PRODUCT_CACHE_MAX_ENTRIES,
+      maxBytes: parsed.PRODUCT_CACHE_MAX_BYTES,
     },
   }
 }

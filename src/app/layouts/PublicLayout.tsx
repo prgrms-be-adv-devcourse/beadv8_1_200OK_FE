@@ -1,9 +1,9 @@
 import { ActionIcon, Button, VisuallyHidden } from '@mantine/core'
-import { Heart, House, ShoppingCart, User } from 'lucide-react'
+import { Heart, House, Search, ShoppingCart, User } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useCartCount } from '@/features/cart'
-import { useCategories } from '@/features/products'
+import { ProductSearchForm, useCategories } from '@/features/products'
 import { MemberRole, type ProductCategory } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
 import { Logo } from '@/shared/ui'
@@ -13,8 +13,9 @@ import classes from './PublicLayout.module.css'
 import { SiteFooterView } from './SiteFooter'
 import { SkipLink } from './SkipLink'
 
-// B2C 레이아웃. 데스크톱(≥ 1024): 헤더 64(로고 · 내 메뉴) + 카테고리 48. 모바일: 상단 56(홈만) + 하단 탭 56(최상위 화면만).
-// 콘텐츠 최대 1200. 헤더 검색창은 검색 API가 생길 때까지 두지 않는다(DECISIONS.md A-9).
+// B2C 레이아웃. 데스크톱(≥ 1024): 헤더 64(로고 · 검색 · 내 메뉴) + 카테고리 48. 모바일: 상단 56(홈만) + 하단 탭 56(최상위 화면만).
+// 콘텐츠 최대 1200. 헤더 검색창은 제출하면 /products?q= 로 간다(필터·정렬 없이 새 검색).
+// 모바일은 상단 바의 검색 버튼이 상품 목록으로 가고, 검색창은 목록 위에 있다(시안 HomeMobile → CategoryMobile).
 // 카테고리는 GET /products/categories 응답으로 그린다(A-1). 받기 전·실패하면 표시명 표로 그린다.
 
 export type CategoryLink = { code: ProductCategory; label: string }
@@ -86,6 +87,10 @@ export function PublicLayoutView({
   const url = new URL(path, 'http://local')
   const onProducts = url.pathname === '/products'
   const activeCategory = onProducts ? url.searchParams.get('category') : undefined
+  const query = onProducts ? (url.searchParams.get('q')?.trim() ?? '') : ''
+  const navigate = useNavigate()
+  const search = (keyword: string) =>
+    navigate(`/products?${new URLSearchParams({ q: keyword }).toString()}`)
 
   const loggedIn = session.status === 'authenticated'
   const isSeller = loggedIn && session.role === MemberRole.SELLER
@@ -100,6 +105,12 @@ export function PublicLayoutView({
           <Link to="/" className={classes.logo}>
             <Logo preset="header" />
           </Link>
+          <ProductSearchForm
+            key={query}
+            className={classes.search}
+            defaultValue={query}
+            onSearch={search}
+          />
           <nav aria-label="내 메뉴" className={classes.myMenu}>
             {isSeller && (
               <Button component={Link} to="/seller" variant="subtle">
@@ -157,12 +168,17 @@ export function PublicLayoutView({
           <Link to="/" className={classes.mobileLogo}>
             <Logo preset="headerMobile" />
           </Link>
-          <ActionIcon component={Link} to="/cart" aria-label="장바구니">
-            <span className={classes.iconWithCount}>
-              <ShoppingCart aria-hidden="true" />
-              <CartCount count={cartCount} />
-            </span>
-          </ActionIcon>
+          <div className={classes.mobileActions}>
+            <ActionIcon component={Link} to="/products" aria-label="상품 검색">
+              <Search aria-hidden="true" />
+            </ActionIcon>
+            <ActionIcon component={Link} to="/cart" aria-label="장바구니">
+              <span className={classes.iconWithCount}>
+                <ShoppingCart aria-hidden="true" />
+                <CartCount count={cartCount} />
+              </span>
+            </ActionIcon>
+          </div>
         </header>
       )}
 

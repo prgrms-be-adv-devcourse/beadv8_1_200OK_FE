@@ -10,8 +10,8 @@ import classes from './MyPageView.module.css'
 // 프로필 · 예치금(충전·이용 내역) · 주문 현황 · 관심/팔로우/배송지 바로가기 · 판매자 안내(역할 3종).
 // 메뉴(데스크톱 왼쪽 · 모바일 아래 목록)는 MyPageLayout이 그린다.
 // 예치금·보유 한도는 ✅ GET /wallets/me/balance, 판매자 카드는 토큰 역할 + 신청 현황.
-// 프로필은 ✅ GET /members/me.
-// TODO(api): 관심·팔로우·배송지 API 없음, 주문 현황 수는 주문 목록에 상태별 집계가 없다.
+// 프로필은 ✅ GET /members/me. 관심 상품 수는 ✅ 찜 목록의 totalElements(숨김·삭제된 상품의 찜도 센다).
+// TODO(api): 팔로우 API 없음, 주문 현황 수는 주문 목록에 상태별 집계가 없다.
 //   모르는 값은 넘기지 않는다(undefined) → 숫자·배송지는 ‘–’(NotConnectedValue). 0이나 ‘등록 전’으로 그리지 않는다.
 
 export type MyPageViewProps = {

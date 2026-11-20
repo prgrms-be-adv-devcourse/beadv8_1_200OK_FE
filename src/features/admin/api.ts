@@ -4,6 +4,7 @@ import type {
   AdminPayoutListParams,
   PageResponse,
   PayoutAdjustmentCreateRequest,
+  PayoutAdjustmentCreateResponse,
   PayoutCandidate,
   PayoutDetail,
   PayoutItem,
@@ -15,19 +16,25 @@ import type {
   SellerApplicationListParams,
   SellerApplicationRejectRequest,
 } from '@/shared/api/types'
+import type { AdminCharge, AdminChargeDetail, ChargeReasonRequest } from './charges'
 import type {
   BlockedOrder,
+  BlockedOrderParams,
   DepositCheckReview,
   KeywordAnalysis,
   OrderResolveRequest,
   Resolution,
   ResolutionRequest,
+  ResolutionRequestParams,
   ReviewAnalysisRequest,
+  SearchInsightsParams,
   SentimentAnalysis,
+  UntaggedProduct,
+  ZeroResultKeyword,
 } from './types'
 
 // 관리자 콘솔 요청. 모두 Bearer(ADMIN 권한). 토큰 없으면 401, 관리자가 아니면 403.
-// 오류는 서버 detail을 그대로 보여 준다(errors.ts에서 501·404 문구만 바꾼다).
+// 오류는 서버 detail을 그대로 보여 준다(errors.ts에서 501·404와 일부 409 문구만 바꾼다).
 
 // ─── 판매자 신청 심사 ────────────────────────────────────
 
@@ -118,7 +125,8 @@ export async function getAdminPayoutItems(
   return data
 }
 
-// ✅ GET /api/v1/admin/payouts/candidates?sellerId&from&to&unsettledOnly&page&size → 후보 생성 시각 최신순
+// ✅ GET /api/v1/admin/payouts/candidates?sellerId&orderId&from&to&unsettledOnly&page&size → 후보 생성 시각 최신순.
+// orderId가 없으면 기간 필수(422 path periodPresentWithoutOrderId), 있으면 기간 없이 그 주문의 후보 전부(대기 중·정산됨·조정)
 export async function getAdminPayoutCandidates(
   params: AdminPayoutCandidateParams,
 ): Promise<PageResponse<PayoutCandidate>> {
@@ -146,21 +154,33 @@ export async function runPayoutForOrderItem(orderItemId: number): Promise<void> 
   await apiClient.post(`${payouts}/run/order-items/${orderItemId}`)
 }
 
-// POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } → 지금은 501(조정 번호 발급 방식 미정).
-// 422(금액 0 · 사유 공백·255자 초과 · 항목 종류)가 501보다 먼저 온다
-export async function createPayoutAdjustment(body: PayoutAdjustmentCreateRequest): Promise<void> {
-  await apiClient.post(`${payouts}/adjustments`, body)
+// ✅ POST /api/v1/admin/payouts/adjustments { orderItemId, eventType, amount, reason } → 201 방금 저장한 조정 정산후보.
+// eventType은 SALE_AMOUNT·SALE_FEE만(배송비 불가). 422 금액 0 · 사유 공백·255자 초과 · 항목 종류 · 원래 정산후보 없음,
+// 409 같은 주문 항목·종류·금액·사유의 조정이 이미 있음(재전송). 조정은 지울 수 없어 반대 금액으로 상쇄한다
+export async function createPayoutAdjustment(
+  body: PayoutAdjustmentCreateRequest,
+): Promise<PayoutAdjustmentCreateResponse> {
+  const { data } = await apiClient.post<PayoutAdjustmentCreateResponse>(
+    `${payouts}/adjustments`,
+    body,
+  )
+  return data
 }
 
 // ─── 막힌 주문 · 대사 확인 ───────────────────────────────
 
 type PageParams = { page: number; size: number }
 
-// ✅ GET /api/v1/admin/payouts/blocked-orders?page&size → 마지막 실패 시각 최신순. 기간 조건 없음.
-// 정산 실행이 끝날 때 갱신되는 집계라 해결한 주문은 다음 실행 전까지 RESOLVED로 남는다
-export async function getBlockedOrders(params: PageParams): Promise<PageResponse<BlockedOrder>> {
+// ✅ GET /api/v1/admin/payouts/blocked-orders?orderId&status&page&size → 마지막 실패 시각 최신순. 기간 조건 없음.
+// status는 여러 개(status=LOCKED&status=STOPPED), 생략하면 셋 다. orderId면 그 주문 줄만(막힌 주문이 아니면 빈 목록).
+// 422 status 값이 LOCKED·STOPPED·RESOLVED가 아님. 해결한 주문은 다음 정산 실행이 끝날 때까지 RESOLVED로 남는다
+export async function getBlockedOrders(
+  params: BlockedOrderParams,
+): Promise<PageResponse<BlockedOrder>> {
   const { data } = await apiClient.get<PageResponse<BlockedOrder>>(`${payouts}/blocked-orders`, {
     params,
+    // 배열을 status[]=가 아니라 status=로 반복한다 (Spring List 바인딩)
+    paramsSerializer: { indexes: null },
   })
   return data
 }
@@ -202,6 +222,18 @@ export async function getResolutions(
   return data
 }
 
+// ✅ GET /api/v1/admin/payouts/resolution-requests?from&to&adminId&page&size → 기간 안의 해결 요청 1번 = 1줄, 해결 시각 최신순.
+// 기간 필수(해결 시각 기준, from 포함·to 미포함), 최대 1년. 422 기간 없음 · 시작이 끝보다 같거나 늦음 · 1년 초과 · adminId 범위
+export async function getResolutionRequestsInPeriod(
+  params: ResolutionRequestParams,
+): Promise<PageResponse<ResolutionRequest>> {
+  const { data } = await apiClient.get<PageResponse<ResolutionRequest>>(
+    `${payouts}/resolution-requests`,
+    { params },
+  )
+  return data
+}
+
 // ✅ GET /api/v1/admin/payouts/deposit-checks?page&size → 관리자 확인이 필요한 정산만, 새 정산 먼저. 조회 전용
 export async function getDepositCheckReviews(
   params: PageParams,
@@ -210,6 +242,50 @@ export async function getDepositCheckReviews(
     `${payouts}/deposit-checks`,
     { params },
   )
+  return data
+}
+
+// ─── 멈춘 충전 건 ────────────────────────────────────────
+
+const charges = '/api/v1/admin/wallets/charges'
+const chargePath = (chargeNo: string) => `${charges}/${encodeURIComponent(chargeNo)}`
+
+// ✅ GET /api/v1/admin/wallets/charges → 멈춘 처리 중 건 + 승인 뒤 실패한 건, 요청 시각 순 최대 100건(페이지 없음)
+export async function getChargeTargets(): Promise<AdminCharge[]> {
+  const { data } = await apiClient.get<AdminCharge[]>(charges)
+  return data
+}
+
+// ✅ GET /api/v1/admin/wallets/charges/{chargeNo} → 충전 건 + 토스 결제 상태. 부를 때마다 토스에 묻는다(상태는 안 바꿈). 404 없음
+export async function getChargeDetail(chargeNo: string): Promise<AdminChargeDetail> {
+  const { data } = await apiClient.get<AdminChargeDetail>(chargePath(chargeNo))
+  return data
+}
+
+// 처리 3개는 처리 뒤의 충전 건을 200으로 돌려준다. 404 없음 · 409 끝났거나 먼저 처리됨·토스 상태와 맞지 않음 · 503 토스 답 없음
+
+// ✅ POST …/{chargeNo}/complete (본문 없음) → COMPLETED
+export async function completeCharge(chargeNo: string): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/complete`)
+  return data
+}
+
+// ✅ POST …/{chargeNo}/fail { reason } → FAILED(ADMIN_FAILED). 422 사유 없음·200자 초과(errors[].path = reason)
+export async function failCharge(
+  chargeNo: string,
+  body: ChargeReasonRequest,
+): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/fail`, body)
+  return data
+}
+
+// ✅ POST …/{chargeNo}/cancel-payment { reason } → paymentCanceledAt. 사유는 토스에도 보낸다.
+// 409에 토스 취소 거절 포함, 503이면 다시 눌러도 두 번 취소되지 않는다
+export async function cancelChargePayment(
+  chargeNo: string,
+  body: ChargeReasonRequest,
+): Promise<AdminCharge> {
+  const { data } = await apiClient.post<AdminCharge>(`${chargePath(chargeNo)}/cancel-payment`, body)
   return data
 }
 
@@ -240,5 +316,33 @@ export async function analyzeReviewSentiment(
   body: ReviewAnalysisRequest,
 ): Promise<SentimentAnalysis> {
   const { data } = await apiClient.post<SentimentAnalysis>(`${reviewAnalysis}/sentiment`, body)
+  return data
+}
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+const productSearch = '/api/v1/admin/product-search'
+
+// ✅ GET /api/v1/admin/product-search/zero-result-keywords?from&to&limit → 0건 횟수 많은 순(같으면 마지막 검색이 늦은 순).
+// from·to는 yyyy-MM-dd(둘 다 포함, KST), limit 1~100(기본 20). 0건 검색이 없으면 빈 목록.
+// 400 시작일 > 종료일(product/invalid-search-log-period) · 시작일이 보존 기간(기본 90일) 밖(…/search-log-period-beyond-retention) · 형식 · limit 범위
+export async function getZeroResultKeywords(
+  params: SearchInsightsParams,
+): Promise<ZeroResultKeyword[]> {
+  const { data } = await apiClient.get<ZeroResultKeyword[]>(
+    `${productSearch}/zero-result-keywords`,
+    { params },
+  )
+  return data
+}
+
+// ✅ GET /api/v1/admin/product-search/untagged-products?from&to&limit → 판정을 마쳤는데 태그가 0개인 상품, 최근 판정 순.
+// 기간은 판정 시각 기준. 판정 대기·최종 실패·삭제 상품은 빠진다. 400 시작일 > 종료일(product/invalid-tag-judgment-period) · 형식 · limit 범위
+export async function getUntaggedProducts(
+  params: SearchInsightsParams,
+): Promise<UntaggedProduct[]> {
+  const { data } = await apiClient.get<UntaggedProduct[]>(`${productSearch}/untagged-products`, {
+    params,
+  })
   return data
 }

@@ -47,7 +47,13 @@
   text-decoration: none;
 }
 
+.search {
+  flex: 1 1 20rem;
+  max-width: 30rem;
+}
+
 .myMenu {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -151,6 +157,11 @@
 .mobileLogo {
   flex: none;
   text-decoration: none;
+}
+
+.mobileActions {
+  display: flex;
+  align-items: center;
 }
 
 /* ─── 본문: 최대 1200 ─── */

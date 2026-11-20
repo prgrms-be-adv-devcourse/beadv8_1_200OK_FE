@@ -332,6 +332,7 @@ const options: ProductOption[] = [
     salePrice: 12900,
     discountRate: 0,
     soldOut: false,
+    lowStock: false,
   },
   {
     optionId: 12,
@@ -340,8 +341,26 @@ const options: ProductOption[] = [
     salePrice: 23900,
     discountRate: 0,
     soldOut: false,
+    lowStock: false,
   },
-  { optionId: 13, name: '4입', listPrice: 17900, salePrice: 17900, discountRate: 0, soldOut: true },
+  {
+    optionId: 13,
+    name: '4입',
+    listPrice: 17900,
+    salePrice: 17900,
+    discountRate: 0,
+    soldOut: true,
+    lowStock: false,
+  },
+  {
+    optionId: 15,
+    name: '3kg (16~18과)',
+    listPrice: 33900,
+    salePrice: 33900,
+    discountRate: 0,
+    soldOut: false,
+    lowStock: true,
+  },
 ]
 
 export function OptionQuantitySection() {
@@ -352,10 +371,10 @@ export function OptionQuantitySection() {
     <GallerySection
       id="option-card"
       title="OptionCard · QuantityStepper"
-      meta="옵션 카드 56 · 이름 왼쪽 가격 오른쪽 · 재고 수량은 API에 없어 ‘N개 남았어요’ 없음(A-7) · 스테퍼 36, 한도 버튼 비활성 + 도움말"
+      meta="옵션 카드 56 · 이름 왼쪽 가격 오른쪽 · 재고 수량은 API에 없어 ‘N개 남았어요’ 대신 서버 lowStock으로 ‘품절 임박’ 배지(품절이 우선, A-7) · 스테퍼 36, 한도 버튼 비활성 + 도움말"
     >
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <Panel title="옵션 카드 (default · hover · selected · 품절)">
+        <Panel title="옵션 카드 (default · hover · selected · 품절 · 품절 임박)">
           <Radio.Group value={option} onChange={setOption} aria-label="옵션">
             <Stack gap="xs">
               <OptionCard option={options[0] as ProductOption} />
@@ -370,6 +389,7 @@ export function OptionQuantitySection() {
               </div>
               <OptionCard option={options[1] as ProductOption} />
               <OptionCard option={options[2] as ProductOption} />
+              <OptionCard option={options[3] as ProductOption} />
             </Stack>
           </Radio.Group>
         </Panel>

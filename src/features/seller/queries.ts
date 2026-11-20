@@ -456,7 +456,11 @@ export function useSaveMyProfile() {
       queryClient.getQueryData(sellerKeys.profile()) === null
         ? createMyProfile(body)
         : updateMyProfile(body),
-    onSuccess: (profile) => queryClient.setQueryData(sellerKeys.profile(), profile),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(sellerKeys.profile(), profile)
+      // 구매자가 보는 내 상점(GET /stores/{sellerId}) 캐시도 비운다
+      void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix.farms] })
+    },
     // 409(이미 등록) · 404(미등록)는 캐시가 어긋난 것이라 다시 받는다
     onError: (error) => {
       if (error.status === 409 || error.status === 404) {

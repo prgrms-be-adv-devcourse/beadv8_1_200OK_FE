@@ -1,9 +1,14 @@
 import { getClient, sentry } from '@sentry/hono/node'
 import { Hono } from 'hono'
 import { type AppEnv, authMiddleware } from './auth.ts'
+import { type BackendReport, sentryBackendReport } from './backendReport.ts'
+import { requestBodyLimit } from './bodyLimit.ts'
+import { responseCompression } from './compression.ts'
 import type { Config } from './config.ts'
+import { devRoutes } from './devRoutes.ts'
 import { originGuard } from './originGuard.ts'
 import { problem, problemDetail } from './problem.ts'
+import { ProductDetailCache } from './productCache.ts'
 import { proxyRoutes } from './proxy.ts'
 import { productDetailRoutes } from './screens/productDetail.ts'
 import { TokenCookies } from './session/cookie.ts'
@@ -11,19 +16,33 @@ import { TokenRefresher } from './session/refresher.ts'
 import { sessionRoutes } from './session/routes.ts'
 import { Upstream, UpstreamError } from './upstream.ts'
 
-export function createApp(options: { config: Config; now?: () => number }) {
+export function createApp(options: {
+  config: Config
+  now?: () => number
+  /** 백엔드 5xx·X-Trace-Id 보고. 테스트는 가짜를 넣는다 */
+  backendReport?: BackendReport
+}) {
   const { config } = options
   const now = options.now ?? Date.now
-  const upstream = new Upstream(config)
+  const upstream = new Upstream(config, options.backendReport ?? sentryBackendReport)
   const refresher = new TokenRefresher({ upstream, timeoutMs: config.timeouts.upstream, now })
   const cookies = new TokenCookies(config.cookieSecure, now)
+  const productCache = new ProductDetailCache({
+    upstream,
+    timeoutMs: config.timeouts.upstream,
+    ...config.productCache,
+    now,
+  })
 
   const base = new Hono<AppEnv>()
   // instrument.ts가 Sentry를 켰을 때만 단다. 테스트처럼 켜지 않은 곳에서는 경고만 남기므로 건너뛴다
   if (getClient()) base.use(sentry(base))
+  // 개발 환경 전용 테스트 경로. AppType에 넣지 않으려고 체인 밖에서 단다
+  if (config.devRoutes) base.route('/', devRoutes())
 
   const app = base
     .get('/health', (c) => c.json({ status: 'UP' }))
+    .use(responseCompression())
     .use(
       originGuard({
         allowedOrigins: config.allowedOrigins,
@@ -31,11 +50,12 @@ export function createApp(options: { config: Config; now?: () => number }) {
         cookies,
       }),
     )
+    .use(requestBodyLimit(config.requestBodyLimitBytes))
     .use('/api/*', authMiddleware({ refresher, cookies }))
     .use('/bff/*', authMiddleware({ refresher, cookies }))
     .route('/', sessionRoutes({ upstream, timeoutMs: config.timeouts.upstream }))
-    .route('/', productDetailRoutes({ upstream, timeouts: config.timeouts }))
-    .route('/', proxyRoutes({ upstream, config }))
+    .route('/', productDetailRoutes({ upstream, productCache, timeouts: config.timeouts }))
+    .route('/', proxyRoutes({ upstream, productCache, config }))
 
   app.notFound((c) => problem(404, problemDetail.notFound, c.req.path))
   app.onError((error, c) => {

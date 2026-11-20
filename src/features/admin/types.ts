@@ -1,4 +1,6 @@
 import type {
+  PayoutAdjustmentCreateRequest,
+  PayoutAdjustmentCreateResponse,
   PayoutEventType,
   ReviewAspect,
   ReviewKeywordAspect,
@@ -29,8 +31,8 @@ export type SellerReviewHistory = {
 }
 
 // ─── 정산 관리 ───────────────────────────────────────────
-// ✅ GET /api/v1/admin/payouts(?payeeId&system&from&to), 상세·항목·후보, POST …/run, …/run/skip-wait.
-// POST …/run/order-items/{id}, …/adjustments는 서버가 501로 막아 두었다.
+// ✅ GET /api/v1/admin/payouts(?payeeId&system&from&to), 상세·항목·후보(기간 또는 orderId), POST …/run, …/run/skip-wait,
+// POST …/adjustments(201). POST …/run/order-items/{id}만 서버가 501로 막아 두었다.
 
 /** 받는 사람 필터. seller면 payeeId(회원 번호)를 직접 입력한다. TODO(api): ❌ 판매자 이름 목록 API 없음 */
 export type PayoutPayeeFilter = 'all' | 'system' | 'seller'
@@ -55,54 +57,20 @@ export type SinglePayoutResult =
   | { kind: 'success'; orderItemId: number }
   | { kind: 'error'; message: string }
 
-/**
- * 조정할 주문 상품의 지금 정산 금액 (미리보기 · 0원 미만 검사).
- * TODO(api): ❌ 주문 상품별 정산 금액 조회 API 없음 → 화면은 항상 idle로 두고 서버 검증에 맡긴다.
- */
-export type AdjustTarget = {
-  orderItemId: number
-  payeeName: string
-  payoutId: number
-  payoutCreatedAt: string
-  /** 이전 조정까지 반영한 지금 금액 */
-  currentAmount: number
-  priorAdjustmentCount: number
-  priorAdjustmentTotal: number
-}
-
-export type AdjustLookup =
-  | { status: 'idle' }
-  | { status: 'pending' }
-  | { status: 'notFound' }
-  | { status: 'found'; target: AdjustTarget }
-
 /** POST /admin/payouts/adjustments 본문과 같다 */
-export type AdjustmentInput = {
-  orderItemId: number
-  eventType: PayoutEventType
-  amount: number
-  reason: string
-}
+export type AdjustmentInput = PayoutAdjustmentCreateRequest
 
-/** TODO(api): ❌ 조정 내역 목록 API 없음 → 화면은 빈 목록을 넘긴다 */
-export type AdjustmentLog = {
-  adjustmentId: number
-  orderItemId: number
-  payeeName: string
-  amount: number
-  before: number
-  after: number
-  reason: string
-  adminName: string
-  createdAt: string
-}
-
-/** 방금 저장한 조정. 조정 전후 금액은 API가 주지 않아 입력값만 보여 준다 */
-export type AdjustmentResult = AdjustmentInput
+/**
+ * 이 화면에서 방금 저장한 조정 (201 응답). 조정만 모아 보는 목록 API는 없어서,
+ * 화면을 연 동안 저장한 것만 ‘조정 내역’에 쌓고 지난 조정은 정산후보 조회(orderId)의 adjustment로 본다.
+ */
+export type AdjustmentLog = PayoutAdjustmentCreateResponse
+export type AdjustmentResult = PayoutAdjustmentCreateResponse
 
 // ─── 막힌 주문 · 대사 확인 ───────────────────────────────
-// ✅ GET /api/v1/admin/payouts/blocked-orders, POST …/orders/{orderId}/resolution,
-// GET …/orders/{orderId}/resolutions · …/resolution-requests, GET …/deposit-checks (백엔드 dev).
+// ✅ GET /api/v1/admin/payouts/blocked-orders(?orderId&status…), POST …/orders/{orderId}/resolution,
+// GET …/orders/{orderId}/resolutions · …/resolution-requests, 해결 기록 전체 GET …/resolution-requests(?from&to&adminId),
+// GET …/deposit-checks (백엔드 dev #790).
 // 관리자 화면만 쓰는 응답이라 shared가 아니라 여기에 둔다. 시각은 서버 LocalDateTime 문자열.
 // 실패 사유(reason)·원인 범주(category)는 서버가 늘릴 수 있는 문자열이라 enum으로 막지 않는다(labels.ts에서 아는 값만 바꾼다).
 
@@ -150,6 +118,48 @@ export type BlockedOrder = {
   causes: BlockedOrderCause[]
   evidenceAtBlock: OverchargeEvidence | null
   evidenceNow: OverchargeEvidence | null
+  /**
+   * 지금 해결하면 금액 검사에 들어갈 판매 대금(SALE_AMOUNT) 조정 합계(원). 없으면 0.
+   * 해결 안 된 금액·수수료 불일치 실패 뒤에 넣은 조정만 더한다. evidenceNow 합계에는 섞이지 않는다
+   */
+  pendingSaleAmountAdjustment: number
+  /** 위와 같은 조건의 수수료(SALE_FEE) 조정 합계(원). 없으면 0 */
+  pendingSaleFeeAdjustment: number
+}
+
+/** 막힌 주문 목록 조건. 주소(?status=&orderId=)에 남긴다 */
+export type BlockedOrderFilter = {
+  /** 고른 상태. 셋 다면 조건 없이 보낸다 */
+  statuses: PayoutBlockStatus[]
+  /** 주문 번호. 있으면 그 주문 줄만 보고(상태 조건은 쓰지 않는다), 정산후보·조정을 같이 보여 준다 */
+  orderId: number | null
+}
+
+/** GET …/blocked-orders 파라미터. status는 status=LOCKED&status=STOPPED처럼 반복해 보낸다 */
+export type BlockedOrderParams = {
+  orderId?: number
+  status?: PayoutBlockStatus[]
+  page: number
+  size: number
+}
+
+/** 해결 기록 전체 목록 조건 (화면 값). 기간은 해결 시각 기준 */
+export type ResolutionRequestFilter = {
+  /** 시작일 (포함) YYYY-MM-DD */
+  from: string
+  /** 끝일 (포함) YYYY-MM-DD. API to는 미포함이라 하루 더해 보낸다 */
+  to: string
+  /** 해결한 관리자 회원 번호 입력값. 비면 전체 관리자 */
+  adminId: string
+}
+
+/** GET …/resolution-requests 파라미터. from(포함)·to(미포함) 필수, 최대 1년 */
+export type ResolutionRequestParams = {
+  from: string
+  to: string
+  adminId?: number
+  page: number
+  size: number
 }
 
 /** POST …/orders/{orderId}/resolution 본문. 메모는 1~255자(서버가 앞뒤 공백을 지운다) */
@@ -219,6 +229,9 @@ export type DepositCheckReview = {
   lastAskedAt: string
 }
 
+/** 막힌 주문 탭 안의 보기. 주소 ?view=resolutions면 해결 기록 전체 목록 */
+export type BlockedOrdersMode = 'orders' | 'resolutions'
+
 /** 정산 관리 안의 화면 3개. 주소: /admin/payouts, …/blocked-orders, …/deposit-checks */
 export enum PayoutSection {
   PAYOUTS = 'payouts',
@@ -278,3 +291,37 @@ export type AnalysisPanel<T> =
   | { status: 'pending' }
   | { status: 'error'; message: string }
   | { status: 'success'; data: T }
+
+// ─── 검색 점검 ───────────────────────────────────────────
+
+/** ✅ GET /admin/product-search/zero-result-keywords 한 항목 */
+export type ZeroResultKeyword = {
+  /** 공백을 없앤 검색어. 띄어쓰기만 다른 검색어를 이 값으로 묶는다 */
+  normalizedKeyword: string
+  /** 기간 안에 결과가 0건이었던 횟수 */
+  zeroResultCount: number
+  /** 기간 안의 마지막 0건 검색 시각 (KST, zone 없음) */
+  lastSearchedAt: string
+  /** 묶음에서 가장 최근에 들어온 검색어 원문 */
+  sampleKeyword: string
+}
+
+/** ✅ GET /admin/product-search/untagged-products 한 항목 */
+export type UntaggedProduct = {
+  productId: number
+  productName: string
+  /** 마지막 판정 시각 (KST, zone 없음) */
+  judgedAt: string
+  /** 확률이 가장 높았던 태그 이름. 판정 뒤 태그 목록에서 빠진 태그면 null */
+  topTagLabel: string | null
+  /** 그 태그의 "해당" 확률(0~1). 기준값 0.9에 얼마나 못 미쳤는지 본다 */
+  topScore: number | null
+}
+
+/** 두 API가 같이 받는 조건. from·to는 yyyy-MM-dd(둘 다 포함, KST), limit 1~100 */
+export type SearchInsightsParams = { from: string; to: string; limit: number }
+
+export enum SearchInsightsTab {
+  ZERO_RESULT = 'zero-result',
+  UNTAGGED = 'untagged',
+}

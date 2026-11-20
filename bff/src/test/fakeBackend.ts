@@ -1,5 +1,6 @@
 import { HttpResponse, http } from 'msw'
 import { createApp } from '../app.ts'
+import type { BackendFailure } from '../backendReport.ts'
 import { loadConfig } from '../config.ts'
 import { server } from './server.ts'
 
@@ -22,15 +23,18 @@ export const fakeJwt = (claims: { sub: string; roles: string[]; n: number }) =>
 
 /**
  * 시계를 움직일 수 있는 BFF + 1회용 refresh를 흉내 내는 가짜 인증 서버.
- * 백엔드처럼 access 30분·refresh 14일, 쓴 refresh는 다시 쓰면 401이다
+ * 백엔드처럼 access 30분·refresh 14일, 쓴 refresh는 다시 쓰면 401이다.
+ * 로그아웃은 받은 refresh를 폐기하고(이후 재발급 401) 없는 토큰에도 204다. calls.logout에 받은 refresh를 모은다
  */
-export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}) {
+export function setup(
+  options: { roles?: string[]; cookieSecure?: boolean; env?: Record<string, string> } = {},
+) {
   const clock = { now: Date.parse('2026-10-27T00:00:00Z') }
   const roles = options.roles ?? ['BUYER']
   let issued = 0
   const validRefresh = new Set<string>()
   const validAccess = new Map<string, number>()
-  const calls = { login: 0, reissue: 0 }
+  const calls = { login: 0, reissue: 0, logout: [] as string[] }
 
   const issue = () => {
     issued += 1
@@ -74,6 +78,12 @@ export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}
       }
       return HttpResponse.json(issue())
     }),
+    http.post(`${BACKEND}/api/v1/auth/logout`, async ({ request }) => {
+      const { refreshToken } = (await request.json()) as { refreshToken: string }
+      calls.logout.push(refreshToken)
+      validRefresh.delete(refreshToken)
+      return new HttpResponse(null, { status: 204 })
+    }),
   )
 
   const config = loadConfig({
@@ -81,8 +91,18 @@ export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}
     BACKEND_URL: BACKEND,
     ALLOWED_ORIGINS: ORIGIN,
     COOKIE_SECURE: String(options.cookieSecure ?? false),
+    ...options.env,
   })
-  const app = createApp({ config, now: () => clock.now })
+  // Sentry 대신 무엇을 보고했는지 모은다
+  const reported = { traceIds: [] as string[], serverErrors: [] as BackendFailure[] }
+  const app = createApp({
+    config,
+    now: () => clock.now,
+    backendReport: {
+      traceId: (traceId) => reported.traceIds.push(traceId),
+      serverError: (failure) => reported.serverErrors.push(failure),
+    },
+  })
 
   /** 브라우저처럼 같은 오리진에서 보낸다. jar를 주면 경로·만료가 맞는 쿠키를 싣고 받은 Set-Cookie를 담는다 */
   const request = async (
@@ -113,7 +133,7 @@ export function setup(options: { roles?: string[]; cookieSecure?: boolean } = {}
     return { response, jar }
   }
 
-  return { app, clock, calls, request, login, authenticate, ACCESS_MS, REFRESH_MS }
+  return { app, clock, calls, reported, request, login, authenticate, ACCESS_MS, REFRESH_MS }
 }
 
 /** 브라우저 쿠키 저장소. Path가 요청 경로의 접두어이고 Max-Age가 남은 쿠키만 보낸다 */

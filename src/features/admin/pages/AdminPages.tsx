@@ -4,9 +4,18 @@ import { useNavigate, useParams, useSearchParams } from 'react-router'
 import type { ApiError } from '@/shared/api/ApiError'
 import { productDetailQueryOptions } from '@/shared/api/productDetail'
 import type { PayoutAdjustmentCreateRequest } from '@/shared/api/types'
+import { PayoutBlockStatus } from '@/shared/lib/payoutBlockState'
 import { SellerApplicationStatus } from '@/shared/lib/sellerApplicationState'
 import { showToast } from '@/shared/ui'
 import {
+  blockedOrderSearch,
+  defaultResolutionRequestFilter,
+  needsAdjustment,
+  parseBlockedOrderFilter,
+} from '../blockedOrderFilter'
+import type { AdjustmentPanelProps } from '../components/AdjustmentPanel'
+import {
+  adjustmentErrorMessage,
   adminErrorMessage,
   isConflict,
   NOTHING_TO_RESOLVE_MESSAGE,
@@ -22,9 +31,11 @@ import {
   useBlockedOrders,
   useCreatePayoutAdjustment,
   useDepositCheckReviews,
+  useOrderCandidates,
   usePendingCandidateCount,
   useProductChoices,
   useResolutionHistory,
+  useResolutionRequestsInPeriod,
   useResolveBlockedOrder,
   useRunPayoutForOrderItem,
   useRunPayouts,
@@ -34,11 +45,16 @@ import {
   useSellerApplications,
 } from '../queries'
 import {
+  type AdjustmentLog,
   type AdjustmentResult,
   type AnalysisPanel,
+  type BlockedOrder,
+  type BlockedOrderFilter,
+  type BlockedOrdersMode,
   type PayoutFilter,
   type PayoutRunResult,
   PayoutSection,
+  type ResolutionRequestFilter,
   type ResolutionView,
   type ReviewAnalysisRequest,
   SellerReviewAction,
@@ -56,8 +72,9 @@ import {
 
 // M-01 · M-02 · M-03 · M-04 라우트 (관리자 콘솔 청크). 모두 Bearer ADMIN.
 // 판매자 심사 ✅ GET/POST /admin/seller-applications…, 정산 ✅ GET /admin/payouts…, POST …/run · run/skip-wait,
-// 막힌 주문 ✅ GET …/blocked-orders · POST …/orders/{id}/resolution · 해결 기록, 대사 확인 ✅ GET …/deposit-checks.
-// 1건 정산 · 수동 조정은 서버가 501이라 안내 문구만 보인다(errors.ts).
+// 수동 조정 ✅ POST …/adjustments, 막힌 주문 ✅ GET …/blocked-orders(?orderId&status) · 주문 정산후보 GET …/candidates?orderId ·
+// POST …/orders/{id}/resolution · 해결 기록(주문별 · 기간 전체), 대사 확인 ✅ GET …/deposit-checks.
+// 1건 정산만 서버가 501이라 안내 문구가 보인다(errors.ts).
 
 const S = SellerApplicationStatus
 
@@ -75,6 +92,35 @@ const payoutSectionPaths: Record<PayoutSection, string> = {
 function usePayoutSectionNavigate() {
   const navigate = useNavigate()
   return (section: PayoutSection) => navigate(payoutSectionPaths[section])
+}
+
+/**
+ * 정산 조정 패널 연결 (정산 탭 · 막힌 주문 한 건 처리가 같이 쓴다).
+ * 201 응답을 결과로 보여 주고 ‘조정 내역’에 쌓는다. 조정 목록 API가 없어 내역은 이 화면을 연 동안만 남는다.
+ */
+function useAdjustmentPanel(): Omit<AdjustmentPanelProps, 'candidates' | 'preset'> {
+  const adjust = useCreatePayoutAdjustment()
+  const [result, setResult] = useState<AdjustmentResult | null>(null)
+  const [logs, setLogs] = useState<AdjustmentLog[]>([])
+  const error = adjust.error
+  // 422 칸 오류는 칸에 붙이고, 칸이 없는 422(원래 정산후보 없음 등)·409 등은 패널 위에 보여 준다
+  const fieldErrors =
+    error?.status === 422 && Object.keys(error.fieldErrors).length > 0
+      ? (error.fieldErrors as Partial<Record<keyof PayoutAdjustmentCreateRequest, string>>)
+      : undefined
+  return {
+    submitting: adjust.isPending,
+    result,
+    logs,
+    errorMessage: error && !fieldErrors ? adjustmentErrorMessage(error) : null,
+    serverErrors: fieldErrors,
+    onSubmit: async (input) => {
+      setResult(null)
+      const saved = await adjust.mutateAsync(input)
+      setResult(saved)
+      setLogs((prev) => [saved, ...prev])
+    },
+  }
 }
 
 /** 라우트 파라미터 → 양의 정수. 아니면 null(없는 것으로 다룬다) */
@@ -190,8 +236,7 @@ export function AdminPayoutsPage() {
   const [runResult, setRunResult] = useState<PayoutRunResult | null>(null)
   const single = useRunPayoutForOrderItem()
   const [singleResult, setSingleResult] = useState<SinglePayoutResult | null>(null)
-  const adjust = useCreatePayoutAdjustment()
-  const [adjustResult, setAdjustResult] = useState<AdjustmentResult | null>(null)
+  const adjustment = useAdjustmentPanel()
 
   const openId = idOf(payoutId)
   const detail = useAdminPayout(openId)
@@ -217,11 +262,6 @@ export function AdminPayoutsPage() {
       )
   }
 
-  const adjustFieldErrors =
-    adjust.error?.status === 422
-      ? (adjust.error.fieldErrors as Partial<Record<keyof PayoutAdjustmentCreateRequest, string>>)
-      : undefined
-
   return (
     <AdminPayoutsView
       onSectionChange={onSectionChange}
@@ -243,22 +283,7 @@ export function AdminPayoutsPage() {
             .catch((error) => setSingleResult({ kind: 'error', message: adminErrorMessage(error) }))
         },
       }}
-      adjustment={{
-        // TODO(api): ❌ 주문 상품별 정산 금액 조회 · 조정 내역 목록 API 없음 → 미리보기 없이, 내역은 빈 목록
-        lookup: { status: 'idle' },
-        onOrderItemChange: () => {},
-        submitting: adjust.isPending,
-        result: adjustResult,
-        logs: [],
-        errorMessage:
-          adjust.error && adjust.error.status !== 422 ? adminErrorMessage(adjust.error) : null,
-        serverErrors: adjustFieldErrors,
-        onSubmit: async (input) => {
-          setAdjustResult(null)
-          await adjust.mutateAsync(input)
-          setAdjustResult(input)
-        },
-      }}
+      adjustment={adjustment}
       status={list.isError ? 'error' : list.isPending ? 'pending' : 'success'}
       errorMessage={list.error?.detail}
       payouts={list.data?.content ?? []}
@@ -294,18 +319,54 @@ export function AdminPayoutsPage() {
   )
 }
 
-/** /admin/payouts/blocked-orders?page=. 해결 · 해결 기록은 목록 위 모달 */
+/** 금액·수수료 불일치인데 대기 조정이 0원이면 해결 전에 한 번 더 알린다 */
+function resolveWarningOf(order: BlockedOrder | undefined): string | null {
+  if (!order || order.status === PayoutBlockStatus.RESOLVED || !needsAdjustment(order)) return null
+  if (order.pendingSaleAmountAdjustment !== 0 || order.pendingSaleFeeAdjustment !== 0) return null
+  return '금액·수수료 불일치인데 대기 조정 합계가 0원이에요. 조정 없이 해결하면 다음 금액 검사에서 다시 막힐 수 있어요. 원인을 확인했다면 그대로 해결해도 돼요.'
+}
+
+/**
+ * /admin/payouts/blocked-orders?status=&orderId=&page=, 해결 기록 전체 목록은 ?view=resolutions.
+ * 주문 번호로 찾으면 그 주문의 정산후보 · 조정을 같이 보여 준다. 해결 · 주문별 해결 기록은 목록 위 모달
+ */
 export function AdminBlockedOrdersPage() {
   const [params, setParams] = useSearchParams()
   const onSectionChange = usePayoutSectionNavigate()
+  const mode: BlockedOrdersMode = params.get('view') === 'resolutions' ? 'resolutions' : 'orders'
   const page = pageOf(params)
-  const list = useBlockedOrders(page - 1)
+  const filter = parseBlockedOrderFilter(params)
+  const list = useBlockedOrders(filter, page - 1, mode === 'orders')
+  const orders = list.data?.content ?? []
+
+  const candidates = useOrderCandidates(mode === 'orders' ? filter.orderId : null)
+  const adjustment = useAdjustmentPanel()
+
+  const [resolutionFilter, setResolutionFilter] = useState<ResolutionRequestFilter>(
+    defaultResolutionRequestFilter,
+  )
+  const resolutions = useResolutionRequestsInPeriod(
+    resolutionFilter,
+    page - 1,
+    mode === 'resolutions',
+  )
 
   const [resolveId, setResolveId] = useState<number | null>(null)
   const resolve = useResolveBlockedOrder()
   const [historyId, setHistoryId] = useState<number | null>(null)
   const [historyView, setHistoryView] = useState<ResolutionView>('requests')
   const { query: history, history: historyRows } = useResolutionHistory(historyId, historyView)
+
+  const setFilter = (next: BlockedOrderFilter) => setParams(blockedOrderSearch(next))
+  const setMode = (next: BlockedOrdersMode) =>
+    setParams(next === 'resolutions' ? { view: 'resolutions' } : {})
+  const setPage = (next: number) => {
+    if (mode === 'resolutions') {
+      setParams(next === 1 ? { view: 'resolutions' } : { view: 'resolutions', page: String(next) })
+      return
+    }
+    setParams(blockedOrderSearch(filter, next))
+  }
 
   const resolveError = resolve.error
   const closeResolve = () => {
@@ -316,26 +377,63 @@ export function AdminBlockedOrdersPage() {
   return (
     <BlockedOrdersView
       onSectionChange={onSectionChange}
+      mode={mode}
+      onModeChange={setMode}
+      filter={filter}
+      onFilterChange={setFilter}
       status={list.isError ? 'error' : list.isPending ? 'pending' : 'success'}
       errorMessage={list.error ? adminErrorMessage(list.error) : undefined}
       onRetry={() => void list.refetch()}
-      orders={list.data?.content ?? []}
+      orders={orders}
       totalElements={list.data?.totalElements ?? 0}
       page={page}
       totalPages={list.data?.totalPages ?? 1}
-      onPageChange={(next) => setParams(next === 1 ? {} : { page: String(next) })}
+      onPageChange={setPage}
       onResolve={(order) => {
         resolve.reset()
         setResolveId(order.orderId)
       }}
       onShowHistory={(orderId) => {
-        setHistoryView('requests')
+        // 해결 기록 전체 목록에서 열면 막혔던 이유가 보이는 실패 기록별로 연다
+        setHistoryView(mode === 'resolutions' ? 'lines' : 'requests')
         setHistoryId(orderId)
+      }}
+      focus={
+        filter.orderId === null
+          ? null
+          : {
+              candidates: {
+                status: candidates.isError ? 'error' : candidates.isPending ? 'pending' : 'success',
+                candidates: candidates.data?.pages.flatMap((p) => p.content) ?? [],
+                errorMessage: candidates.error ? adminErrorMessage(candidates.error) : undefined,
+                onRetry: () => void candidates.refetch(),
+                hasMore: candidates.hasNextPage,
+                loadingMore: candidates.isFetchingNextPage,
+                onLoadMore: () => void candidates.fetchNextPage(),
+              },
+              adjustment,
+            }
+      }
+      resolutions={{
+        filter: resolutionFilter,
+        onFilterChange: (next) => {
+          setResolutionFilter(next)
+          if (params.has('page')) setParams({ view: 'resolutions' })
+        },
+        status: resolutions.isError ? 'error' : resolutions.isPending ? 'pending' : 'success',
+        errorMessage: resolutions.error ? adminErrorMessage(resolutions.error) : undefined,
+        onRetry: () => void resolutions.refetch(),
+        rows: resolutions.data?.content ?? [],
+        totalElements: resolutions.data?.totalElements ?? 0,
+        page,
+        totalPages: resolutions.data?.totalPages ?? 1,
+        onPageChange: setPage,
       }}
       resolve={{
         orderId: resolveId,
         onClose: closeResolve,
         submitting: resolve.isPending,
+        warning: resolveWarningOf(orders.find((o) => o.orderId === resolveId)),
         serverError: resolveError?.status === 422 ? (resolveError.fieldErrors.memo ?? null) : null,
         errorMessage: !resolveError
           ? null

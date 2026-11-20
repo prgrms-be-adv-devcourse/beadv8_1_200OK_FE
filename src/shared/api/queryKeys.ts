@@ -19,6 +19,7 @@ export const queryKeyPrefix = {
   sellerApply: 'sellerApply',
   payouts: 'payouts',
   admin: 'admin',
+  wishes: 'wishes',
 } as const
 
 export type QueryKeyPrefix = (typeof queryKeyPrefix)[keyof typeof queryKeyPrefix]

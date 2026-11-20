@@ -2,18 +2,16 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { PayoutEventType } from '@/shared/api/types'
-import { MINUS } from '@/shared/lib/format'
 import { render } from '@/test/render'
-import { adminPayouts, defaultPayoutFilter, filterPayouts, sampleAdjustTarget } from '../fixtures'
-import type { AdjustLookup } from '../types'
+import { DUPLICATE_ADJUSTMENT_MESSAGE } from '../errors'
+import { adminPayouts, defaultPayoutFilter, filterPayouts, orderCandidates } from '../fixtures'
 import { AdminPayoutsView, type AdminPayoutsViewProps } from './AdminPayoutsView'
 
 const visible = filterPayouts(adminPayouts, defaultPayoutFilter)
-const found: AdjustLookup = { status: 'found', target: sampleAdjustTarget }
 
 function renderPayouts(
   props: Partial<AdminPayoutsViewProps> = {},
-  lookup: AdjustLookup = { status: 'idle' },
+  candidates?: typeof orderCandidates,
 ) {
   const handlers = {
     onRun: vi.fn(),
@@ -34,8 +32,7 @@ function renderPayouts(
         }}
         single={{ result: null, onRun: handlers.onRunSingle }}
         adjustment={{
-          lookup,
-          onOrderItemChange: () => {},
+          candidates,
           onSubmit: handlers.onAdjust,
           result: null,
           logs: [],
@@ -121,17 +118,17 @@ describe('AdminPayoutsView', () => {
     expect(within(card).getByText('아직 지원하지 않는 기능이에요')).toBeInTheDocument()
   })
 
-  it('조정 후 0원보다 적어지면 막고 뺄 수 있는 금액을 알려 준다 (금액 조회가 있을 때)', async () => {
-    const { user, onAdjust } = renderPayouts({}, found)
+  it('조정 후 0원보다 적어지면 막고 뺄 수 있는 금액을 알려 준다 (주문의 정산후보를 알 때)', async () => {
+    const { user, onAdjust } = renderPayouts({}, orderCandidates)
     const form = screen.getByRole('heading', { name: '정산 조정' }).closest('form') as HTMLElement
-    await user.type(within(form).getByLabelText('주문 상품 번호'), '1210')
-    await user.type(within(form).getByLabelText('조정 금액'), '-30000')
+    await user.type(within(form).getByLabelText('주문 상품 번호'), '1301')
+    await user.type(within(form).getByLabelText('조정 금액'), '-10000')
     await user.type(within(form).getByLabelText('사유'), '구매확정 후 환불 회수')
-    expect(within(form).getByLabelText('조정 금액')).toHaveValue('-30,000')
+    expect(within(form).getByLabelText('조정 금액')).toHaveValue('-10,000')
     await user.click(within(form).getByRole('button', { name: '조정하기' }))
     expect(
       await within(form).findByText(
-        `조정 후 금액이 0원보다 적어져요. 이 주문 상품은 ${MINUS}26,183원까지 뺄 수 있어요`,
+        '조정 후 금액이 0원보다 적어져요. 이 항목은 4,850원까지 뺄 수 있어요',
       ),
     ).toBeInTheDocument()
     expect(within(form).getByLabelText('조정 금액')).toHaveFocus()
@@ -150,39 +147,39 @@ describe('AdminPayoutsView', () => {
     ).toBeInTheDocument()
   })
 
-  it('맞게 입력하면 확인 모달에서 항목 종류와 함께 저장한다', async () => {
+  it('항목에는 배송비가 없고, 맞게 입력하면 확인 모달에서 항목 종류와 함께 저장한다', async () => {
     const { user, onAdjust } = renderPayouts()
     const form = screen.getByRole('heading', { name: '정산 조정' }).closest('form') as HTMLElement
+    const select = within(form).getByLabelText('항목')
+    expect(
+      within(select).queryByRole('option', { name: '상품판매 배송비' }),
+    ).not.toBeInTheDocument()
     await user.type(within(form).getByLabelText('주문 상품 번호'), '1210')
-    await user.selectOptions(within(form).getByLabelText('항목'), PayoutEventType.SALE_SHIPPING_FEE)
-    await user.type(within(form).getByLabelText('조정 금액'), '3000')
-    await user.type(within(form).getByLabelText('사유'), '배송비 누락 보정')
+    await user.selectOptions(select, PayoutEventType.SALE_FEE)
+    await user.type(within(form).getByLabelText('조정 금액'), '-300')
+    await user.type(within(form).getByLabelText('사유'), '  수수료 재계산 ')
     await user.click(within(form).getByRole('button', { name: '조정하기' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('상품판매 배송비')).toBeInTheDocument()
+    expect(within(dialog).getByText('상품판매 수수료')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: '조정 저장' }))
     expect(onAdjust).toHaveBeenCalledWith({
       orderItemId: 1210,
-      eventType: PayoutEventType.SALE_SHIPPING_FEE,
-      amount: 3000,
-      reason: '배송비 누락 보정',
+      eventType: PayoutEventType.SALE_FEE,
+      amount: -300,
+      reason: '수수료 재계산',
     })
   })
 
-  it('조정 서버 오류(501 등)는 패널 위에 보여 준다', () => {
+  it('조정 서버 오류(409 같은 조정 등)는 패널 위에 보여 준다', () => {
     renderPayouts({
       adjustment: {
-        lookup: { status: 'idle' },
-        onOrderItemChange: () => {},
         onSubmit: () => {},
         result: null,
         logs: [],
-        errorMessage: '아직 지원하지 않는 기능이에요. 서버에서 준비되면 쓸 수 있어요',
+        errorMessage: DUPLICATE_ADJUSTMENT_MESSAGE,
       },
     })
-    expect(
-      screen.getByText('아직 지원하지 않는 기능이에요. 서버에서 준비되면 쓸 수 있어요'),
-    ).toBeInTheDocument()
+    expect(screen.getByText(DUPLICATE_ADJUSTMENT_MESSAGE)).toBeInTheDocument()
   })
 
   it('기간이 거꾸로면 목록 대신 오류를 보여 준다', () => {

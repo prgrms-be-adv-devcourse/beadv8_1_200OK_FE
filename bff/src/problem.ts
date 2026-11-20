@@ -6,6 +6,7 @@ const titles: Record<number, string> = {
   401: 'Unauthorized',
   403: 'Forbidden',
   404: 'Not Found',
+  413: 'Content Too Large',
   500: 'Internal Server Error',
   502: 'Bad Gateway',
   503: 'Service Unavailable',
@@ -26,6 +27,7 @@ export const problemDetail = {
   upstreamUnreachable: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요',
   upstreamTimeout: '서버 응답이 늦어지고 있어요. 잠시 뒤 다시 시도해 주세요',
   notFound: '찾는 정보가 없어요',
+  payloadTooLarge: '보낸 내용이 너무 커요. 내용을 줄인 뒤 다시 시도해 주세요',
   internal: '서버에 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요',
 } as const
 

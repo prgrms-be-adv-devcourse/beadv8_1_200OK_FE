@@ -1,14 +1,16 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import dayjs from 'dayjs'
 import { HttpResponse, http } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
 import { MemberRole } from '@/shared/api/types'
+import { MINUS } from '@/shared/lib/format'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
 import { NOTHING_TO_RESOLVE_MESSAGE } from '../errors'
-import { blockedOrders } from '../fixtures'
+import { blockedOrders, orderCandidates, periodResolutionRequests } from '../fixtures'
 import { AdminBlockedOrdersPage, AdminDepositChecksPage, AdminPayoutsPage } from './AdminPages'
 
 const base = '*/api/v1/admin/payouts'
@@ -209,6 +211,274 @@ describe('AdminBlockedOrdersPage', () => {
     )
     renderAt('/admin/payouts/blocked-orders')
     expect(await screen.findByText('막힌 주문이 없어요')).toBeInTheDocument()
+  })
+})
+
+/** 막힌 주문 목록 요청 주소(쿼리 문자열)를 기록하고 조건대로 거른 fixtures를 돌려준다 */
+function recordBlockedRequests() {
+  const urls: URL[] = []
+  server.use(
+    http.get(`${base}/blocked-orders`, ({ request }) => {
+      const url = new URL(request.url)
+      urls.push(url)
+      const statuses = url.searchParams.getAll('status')
+      const orderId = url.searchParams.get('orderId')
+      const content = blockedOrders.filter(
+        (o) =>
+          (!orderId || String(o.orderId) === orderId) &&
+          (statuses.length === 0 || statuses.includes(o.status)),
+      )
+      return HttpResponse.json({
+        content,
+        page: 0,
+        size: 20,
+        totalElements: content.length,
+        totalPages: 1,
+      })
+    }),
+  )
+  return urls
+}
+
+/** 주문별 정산후보 요청 주소를 기록하고 그 주문의 fixtures를 돌려준다 */
+function recordOrderCandidates() {
+  const urls: URL[] = []
+  server.use(
+    http.get(`${base}/candidates`, ({ request }) => {
+      const url = new URL(request.url)
+      urls.push(url)
+      const content = orderCandidates.filter(
+        (c) => String(c.orderId) === url.searchParams.get('orderId'),
+      )
+      return HttpResponse.json({
+        content,
+        page: 0,
+        size: 100,
+        totalElements: content.length,
+        totalPages: 1,
+      })
+    }),
+  )
+  return urls
+}
+
+describe('막힌 주문 조건 · 주문 하나 처리', () => {
+  it('상태를 고르면 status=LOCKED&status=STOPPED처럼 반복해 보내고, 셋 다면 보내지 않는다', async () => {
+    const urls = recordBlockedRequests()
+    const user = renderAt('/admin/payouts/blocked-orders')
+    await screen.findByRole('list', { name: '막힌 주문 목록' })
+    expect(urls[0]?.searchParams.has('status')).toBe(false)
+
+    await user.click(screen.getByRole('checkbox', { name: '해결됨' }))
+    await waitFor(() => expect(urls.at(-1)?.search).toContain('status=LOCKED&status=STOPPED'))
+    expect(urls.at(-1)?.search).not.toContain('status%5B%5D')
+    expect(screen.queryByRole('heading', { name: '주문 2003' })).not.toBeInTheDocument()
+
+    // 하나만 남으면 그 상태는 끌 수 없다
+    await user.click(screen.getByRole('checkbox', { name: '잠김' }))
+    await waitFor(() => expect(urls.at(-1)?.search).toBe('?status=STOPPED&page=0&size=20'))
+    expect(screen.getByRole('checkbox', { name: '멈춤' })).toBeDisabled()
+  })
+
+  it('주문 번호로 찾으면 그 주문 줄과 기간 없는 정산후보(orderId)를 보여 준다', async () => {
+    const urls = recordBlockedRequests()
+    const candidateUrls = recordOrderCandidates()
+    const user = renderAt('/admin/payouts/blocked-orders')
+    await screen.findByRole('list', { name: '막힌 주문 목록' })
+
+    await user.type(screen.getByLabelText('주문 번호'), '2001')
+    await user.click(screen.getByRole('button', { name: '찾기' }))
+
+    const table = await screen.findByRole('table', { name: '주문 2001 정산후보' })
+    expect(urls.at(-1)?.searchParams.get('orderId')).toBe('2001')
+    expect(urls.at(-1)?.searchParams.has('status')).toBe(false)
+    const candidateUrl = candidateUrls.at(-1)
+    expect(candidateUrl?.searchParams.get('orderId')).toBe('2001')
+    expect(candidateUrl?.searchParams.get('size')).toBe('100')
+    expect(candidateUrl?.searchParams.has('from')).toBe(false)
+    expect(candidateUrl?.searchParams.has('to')).toBe(false)
+    expect(screen.queryByRole('heading', { name: '주문 2002' })).not.toBeInTheDocument()
+    // 원래 후보(정산된 것 포함)는 조정할 수 있고, 배송비 줄은 조정할 수 없다
+    expect(within(table).getAllByRole('button', { name: /조정$/ })).toHaveLength(6)
+    expect(
+      within(within(table).getByRole('row', { name: /배송비/ })).queryByRole('button'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('후보 줄의 조정으로 칸을 채워 저장하고, 대기 조정 합계를 보려고 주문 줄과 후보를 다시 받는다', async () => {
+    const urls = recordBlockedRequests()
+    const candidateUrls = recordOrderCandidates()
+    const bodies: unknown[] = []
+    server.use(
+      http.post(`${base}/adjustments`, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json(
+          {
+            candidateId: 49001,
+            adjustmentId: 1,
+            orderId: 2001,
+            orderItemId: 1302,
+            sellerId: 7,
+            eventType: 'SALE_FEE',
+            amount: -150,
+            reason: '정정',
+            adminId: 1,
+            createdAt: '2026-11-16T10:00:00',
+            adjustmentCheckStatus: 'AWAITING_RESOLUTION',
+          },
+          { status: 201 },
+        )
+      }),
+    )
+    const user = renderAt('/admin/payouts/blocked-orders?orderId=2001')
+    const table = await screen.findByRole('table', { name: '주문 2001 정산후보' })
+
+    await user.click(
+      within(table).getByRole('button', { name: '주문상품 1302 상품판매 수수료 조정' }),
+    )
+    const form = screen.getByRole('heading', { name: '정산 조정' }).closest('form') as HTMLElement
+    expect(within(form).getByLabelText('주문 상품 번호')).toHaveValue('1302')
+    expect(within(form).getByLabelText('항목')).toHaveValue('SALE_FEE')
+    expect(within(form).getByLabelText('조정 금액')).toHaveFocus()
+    expect(within(form).getByRole('region', { name: '조정 미리보기' })).toHaveTextContent('600원')
+
+    await user.type(within(form).getByLabelText('조정 금액'), '-150')
+    await user.type(within(form).getByLabelText('사유'), '정정')
+    await user.click(within(form).getByRole('button', { name: '조정하기' }))
+    const listBefore = urls.length
+    const candidatesBefore = candidateUrls.length
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '조정 저장' }),
+    )
+    expect(
+      await within(form).findByText(/대기 조정 합계에 들어갔는지 확인한 뒤 해결해 주세요/),
+    ).toBeInTheDocument()
+    expect(within(form).getByText('해결 대기')).toBeInTheDocument()
+    expect(bodies).toEqual([
+      { orderItemId: 1302, eventType: 'SALE_FEE', amount: -150, reason: '정정' },
+    ])
+    await waitFor(() => expect(urls.length).toBeGreaterThan(listBefore))
+    await waitFor(() => expect(candidateUrls.length).toBeGreaterThan(candidatesBefore))
+  })
+
+  it('주문별 정산후보의 조정 줄에만 금액 검사 상태 배지를 붙이고 상태 안내를 보여 준다', async () => {
+    renderAt('/admin/payouts/blocked-orders?orderId=2004')
+    const table = await screen.findByRole('table', { name: '주문 2004 정산후보' })
+    // 원래 후보 2줄(null)에는 없고, 조정 3줄에만 있다
+    expect(within(table).getAllByText('금액 검사')).toHaveLength(3)
+    expect(within(table).getAllByText('확인됨')).toHaveLength(2)
+    expect(within(table).getAllByText('검사 밖')).toHaveLength(1)
+    const guides = screen.getByRole('list', { name: '조정의 금액 검사 상태' })
+    expect(guides).toHaveTextContent(/반대 금액으로 상쇄하지 마세요/)
+    expect(guides).toHaveTextContent(/의도한 조정이 아니면 다음 정산 실행 전에/)
+    expect(guides).not.toHaveTextContent('해결 대기')
+  })
+
+  it('조정이 없는 주문은 금액 검사 배지와 안내가 없다', async () => {
+    renderAt('/admin/payouts/blocked-orders?orderId=2001')
+    const table = await screen.findByRole('table', { name: '주문 2001 정산후보' })
+    expect(within(table).queryByText('금액 검사')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '조정의 금액 검사 상태' })).not.toBeInTheDocument()
+  })
+
+  it('막힌 주문이 아닌 번호는 빈 상태와 정산후보를 보여 주고 조정은 열지 않는다', async () => {
+    renderAt('/admin/payouts/blocked-orders?orderId=1300')
+    expect(await screen.findByText('막힌 주문이 아니에요 · 주문 1300')).toBeInTheDocument()
+    expect(await screen.findByText('이 주문의 정산후보가 없어요')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '정산 조정' })).not.toBeInTheDocument()
+  })
+
+  it('해결한 주문은 정산후보만 보이고 조정은 열지 않는다', async () => {
+    renderAt('/admin/payouts/blocked-orders?orderId=2003')
+    await screen.findByRole('heading', { name: '주문 2003' })
+    expect(await screen.findByText(/해결한 주문이라 조정하지 않아요/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '정산 조정' })).not.toBeInTheDocument()
+  })
+
+  it('막힌 주문 줄에 대기 조정 합계 두 칸을 보여 준다', async () => {
+    renderAt('/admin/payouts/blocked-orders')
+    await screen.findByRole('list', { name: '막힌 주문 목록' })
+    const fee = orderItem(2002)
+    expect(within(fee).getByText('대기 조정 · 판매 대금').nextElementSibling).toHaveTextContent(
+      '+200원',
+    )
+    expect(within(fee).getByText('대기 조정 · 수수료').nextElementSibling).toHaveTextContent(
+      `${MINUS}200원`,
+    )
+    // 금액 불일치가 아닌 해결한 주문에는 없다
+    expect(within(orderItem(2003)).queryByText('대기 조정 · 판매 대금')).not.toBeInTheDocument()
+  })
+
+  it('금액 불일치인데 대기 조정이 0원이면 해결 모달에서 한 번 더 알린다', async () => {
+    const user = renderAt('/admin/payouts/blocked-orders')
+    await screen.findByRole('list', { name: '막힌 주문 목록' })
+    await user.click(screen.getByRole('button', { name: '주문 2001 해결' }))
+    const dialog = await screen.findByRole('dialog', { name: '주문 2001 해결' })
+    expect(within(dialog).getByText(/대기 조정 합계가 0원이에요/)).toBeInTheDocument()
+  })
+})
+
+describe('해결 기록 전체 목록', () => {
+  function recordResolutionRequests() {
+    const urls: URL[] = []
+    server.use(
+      http.get(`${base}/resolution-requests`, ({ request }) => {
+        urls.push(new URL(request.url))
+        return HttpResponse.json({
+          content: periodResolutionRequests,
+          page: 0,
+          size: 20,
+          totalElements: periodResolutionRequests.length,
+          totalPages: 1,
+        })
+      }),
+    )
+    return urls
+  }
+
+  it('최근 30일을 해결 시각 from(포함)·to(다음 날 0시)로 보내고, 관리자 번호를 거른다', async () => {
+    const urls = recordResolutionRequests()
+    const user = renderAt('/admin/payouts/blocked-orders')
+    await screen.findByRole('list', { name: '막힌 주문 목록' })
+    await user.click(screen.getByRole('radio', { name: '해결 기록' }))
+
+    const list = await screen.findByRole('list', { name: '해결 기록 전체 목록' })
+    const today = dayjs().startOf('day')
+    expect(urls[0]?.searchParams.get('from')).toBe(
+      today.subtract(29, 'day').format('YYYY-MM-DD[T]00:00:00'),
+    )
+    expect(urls[0]?.searchParams.get('to')).toBe(
+      today.add(1, 'day').format('YYYY-MM-DD[T]00:00:00'),
+    )
+    expect(urls[0]?.searchParams.has('adminId')).toBe(false)
+    expect(within(list).getByText('지갑 결제 기록 들어온 것 확인')).toBeInTheDocument()
+    expect(screen.getByText('해결 요청 2건')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('관리자 회원 번호'), '2')
+    await waitFor(() => expect(urls.at(-1)?.searchParams.get('adminId')).toBe('2'))
+  })
+
+  it('관리자 번호가 숫자가 아니면 부르지 않고 칸에 오류를 보여 준다', async () => {
+    const urls = recordResolutionRequests()
+    const user = renderAt('/admin/payouts/blocked-orders?view=resolutions')
+    await screen.findByRole('list', { name: '해결 기록 전체 목록' })
+    const sent = urls.length
+    await user.type(screen.getByLabelText('관리자 회원 번호'), 'a')
+    expect(
+      await screen.findByText('관리자 회원 번호는 1 이상의 숫자로 입력해 주세요'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '해결 기록 전체 목록' })).not.toBeInTheDocument()
+    expect(urls).toHaveLength(sent)
+  })
+
+  it('줄의 주문 기록 보기는 그 주문의 해결 기록을 실패 기록별로 연다', async () => {
+    const user = renderAt('/admin/payouts/blocked-orders?view=resolutions')
+    const list = await screen.findByRole('list', { name: '해결 기록 전체 목록' })
+    await user.click(within(list).getByRole('button', { name: '주문 2003 해결 기록 보기' }))
+    const dialog = await screen.findByRole('dialog', { name: '주문 2003 해결 기록' })
+    expect(
+      await within(dialog).findByText('결과 검증 불일치: 스냅샷에 없는 항목'),
+    ).toBeInTheDocument()
   })
 })
 

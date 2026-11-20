@@ -289,6 +289,17 @@
   }
 }
 
+.csLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  min-height: var(--pd-touch-min);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .noteIcon {
   flex: none;
   margin-top: 0.125rem;

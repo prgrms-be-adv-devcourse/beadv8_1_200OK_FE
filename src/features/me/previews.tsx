@@ -1,4 +1,6 @@
+import { WISH_ADMIN_REASON } from '@/shared/api/wishes'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
+import { PASSWORD_CHANGED_CONCURRENTLY_MESSAGE } from './errors'
 import {
   followedFarms,
   likedProducts,
@@ -11,6 +13,7 @@ import {
   type AccountAddressPanelProps,
   type AccountInfoPanelProps,
   AccountNotConnectedView,
+  type AccountPasswordPanelProps,
   type AccountTab,
   AccountView,
   type AccountViewProps,
@@ -31,11 +34,18 @@ const addressPanel = (props: Partial<AccountAddressPanelProps> = {}): AccountAdd
   ...props,
 })
 
-const accountLive = (tab: AccountTab, address: Partial<AccountAddressPanelProps> = {}) => (
+const passwordPanel: AccountPasswordPanelProps = { onSave: noop }
+
+const accountLive = (
+  tab: AccountTab,
+  address: Partial<AccountAddressPanelProps> = {},
+  password: Partial<AccountPasswordPanelProps> = {},
+) => (
   <AccountNotConnectedView
     tab={tab}
     onTabChange={noop}
     info={infoPanel}
+    password={{ ...passwordPanel, ...password }}
     address={addressPanel(address)}
   />
 )
@@ -61,8 +71,9 @@ const likes = (props: Partial<LikesViewProps> = {}) => (
     tab="products"
     onTabChange={noop}
     products={likedProducts}
+    totalCount={likedProducts.length}
     farms={followedFarms}
-    onUnlike={noop}
+    onToggleLike={noop}
     onUnfollow={noop}
     {...props}
   />
@@ -94,13 +105,11 @@ export const mePreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면: 개수·배송지)',
+        label: '연결 전 (지금 화면: 주문 현황·팔로우)',
         render: () =>
           my({
             orderCounts: undefined,
-            likedCount: undefined,
             followingCount: undefined,
-            addressSummary: undefined,
           }),
       },
       {
@@ -143,29 +152,77 @@ export const mePreviews: ScreenPreview[] = [
     path: '/me/likes?tab=products',
     tabBar: true,
     states: [
-      {
-        id: 'not-connected',
-        label: '연결 전 (지금 화면)',
-        render: () => likes({ status: 'notConnected', products: undefined, farms: undefined }),
-      },
-      {
-        id: 'not-connected-farms',
-        label: '연결 전 · 팔로우 탭',
-        path: '/me/likes?tab=farms',
-        render: () =>
-          likes({ status: 'notConnected', tab: 'farms', products: undefined, farms: undefined }),
-      },
       { id: 'products', label: '관심 상품 (품절·판매 종료)', render: () => likes() },
       {
+        id: 'not-connected-farms',
+        label: '팔로우 탭 연결 전 (지금 화면)',
+        path: '/me/likes?tab=farms',
+        render: () => likes({ tab: 'farms', farms: undefined }),
+      },
+      {
+        id: 'hidden',
+        label: '숨김·삭제된 상품이 빠짐',
+        render: () => likes({ products: likedProducts.slice(0, 2), totalCount: 5, hiddenCount: 3 }),
+      },
+      {
+        id: 'all-hidden',
+        label: '이 페이지가 모두 숨김·삭제',
+        render: () => likes({ products: [], totalCount: 2, hiddenCount: 2 }),
+      },
+      {
+        id: 'pages',
+        label: '여러 페이지',
+        render: () => likes({ totalCount: 57, page: 2, totalPages: 3, onPageChange: noop }),
+      },
+      {
+        id: 'unliked-card',
+        label: '하트를 뺀 카드 (다시 불러오기 전)',
+        render: () =>
+          likes({
+            products: likedProducts.map((item, index) => ({ ...item, liked: index !== 0 })),
+          }),
+      },
+      {
+        id: 'loading',
+        label: '로딩',
+        render: () => likes({ status: 'pending', totalCount: undefined }),
+      },
+      {
+        id: 'error',
+        label: '불러오기 실패',
+        render: () =>
+          likes({
+            status: 'error',
+            totalCount: undefined,
+            errorMessage: '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요',
+            onRetry: noop,
+          }),
+      },
+      {
+        id: 'admin',
+        label: '관리자 계정',
+        render: () =>
+          likes({
+            status: 'error',
+            totalCount: undefined,
+            errorMessage: WISH_ADMIN_REASON,
+            onToggleLike: undefined,
+          }),
+      },
+      {
         id: 'farms',
-        label: '팔로우한 농가 (판매 중지)',
+        label: '팔로우한 농가 (판매 중지, 시안)',
         path: '/me/likes?tab=farms',
         render: () => likes({ tab: 'farms' }),
       },
-      { id: 'empty-products', label: '관심 상품 없음', render: () => likes({ products: [] }) },
+      {
+        id: 'empty-products',
+        label: '관심 상품 없음',
+        render: () => likes({ products: [], totalCount: 0 }),
+      },
       {
         id: 'empty-farms',
-        label: '팔로우 없음',
+        label: '팔로우 없음 (시안)',
         path: '/me/likes?tab=farms',
         render: () => likes({ tab: 'farms', farms: [] }),
       },
@@ -185,9 +242,54 @@ export const mePreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 · 비밀번호 탭',
+        label: '연결 전 · 탈퇴 탭',
+        path: '/me/account?tab=withdraw',
+        render: () => accountLive('withdraw'),
+      },
+      {
+        id: 'password-live',
+        label: '비밀번호 (지금 화면)',
         path: '/me/account?tab=password',
         render: () => accountLive('password'),
+      },
+      {
+        id: 'password-submitting',
+        label: '비밀번호 · 바꾸는 중',
+        path: '/me/account?tab=password',
+        render: () => accountLive('password', {}, { submitting: true }),
+      },
+      {
+        id: 'password-wrong-live',
+        label: '비밀번호 · 현재 비밀번호 틀림(400)',
+        path: '/me/account?tab=password',
+        render: () =>
+          accountLive(
+            'password',
+            {},
+            { serverErrors: { currentPassword: '현재 비밀번호가 맞지 않아요' } },
+          ),
+      },
+      {
+        id: 'password-field-error-live',
+        label: '비밀번호 · 칸 오류(422)',
+        path: '/me/account?tab=password',
+        render: () =>
+          accountLive(
+            'password',
+            {},
+            {
+              serverErrors: {
+                newPassword: '비밀번호는 영문, 숫자, 특수문자를 모두 포함해 8~20자여야 합니다.',
+              },
+            },
+          ),
+      },
+      {
+        id: 'password-conflict-live',
+        label: '비밀번호 · 다른 요청이 먼저 바꿈(409)',
+        path: '/me/account?tab=password',
+        render: () =>
+          accountLive('password', {}, { errorMessage: PASSWORD_CHANGED_CONCURRENTLY_MESSAGE }),
       },
       {
         id: 'address-live',
@@ -242,6 +344,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{ ...infoPanel, saved: true }}
           />
@@ -254,6 +357,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{
               ...infoPanel,
@@ -269,6 +373,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{
               ...infoPanel,
@@ -284,6 +389,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{
               status: 'error',
@@ -301,6 +407,7 @@ export const mePreviews: ScreenPreview[] = [
           <AccountNotConnectedView
             tab="info"
             onTabChange={noop}
+            password={passwordPanel}
             address={addressPanel()}
             info={{ status: 'pending', onSave: noop }}
           />

@@ -43,6 +43,7 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - API 계약의 기준은 백엔드 `dev` 브랜치의 Swagger(`{백엔드}/v3/api-docs`)예요. 아직 API 서버가 배포 전이라 로컬 서버 기준이에요. `bruno_for_front/`는 dev 기준 요청 예시·오류 케이스·타입 참고용이에요.
 - **인증**: 로그인 accessToken(30분)·refreshToken은 메모리 + sessionStorage에 둬요(`shared/api/authToken.ts`). 새로고침해도 유지되고, 탭을 닫으면 다시 로그인해요. 역할·회원 번호는 토큰 payload(`sub`·`roles[]`)에서 읽어요(`app/session.ts`의 `useSession`). 판매자 승인처럼 권한이 바뀌면 새 토큰을 받아야 해요(`reissueSession()`).
   - 토큰이 만료돼 401이 오면(또는 보내기 전에 만료를 알면) `POST /auth/reissue`로 한 번 재발급하고 같은 요청을 다시 보내요(`shared/api/reissue.ts`, 동시 요청은 재발급 1회). 재발급이 안 되거나 만료가 아닌 거절이면 세션을 끝내고 토큰 없이 한 번 더 보내요. 그래도 401이면 `/login?returnTo=`로 보내요.
+  - 로그아웃(`logout()`)은 토큰을 바로 지우고 `POST /auth/logout {refreshToken}`(204)을 뒤에서 보내 서버의 refresh 세션을 끊어요(`shared/api/reissue.ts`의 `logoutSession`). 화면은 기다리지 않고, 실패해도 로그아웃은 끝나요. 재발급 중이면 그 응답의 새 refresh로 보내고, 그 재발급은 세션을 되살리지 않아요.
   - 역할은 서버가 확인해요(SELLER·ADMIN API는 권한이 없으면 403). 임시 `X-Member-*` 헤더는 없어졌어요.
 - **쿼리 키**: 키 팩토리는 feature가 갖고, 첫 칸은 `queryKeyPrefix.*`(`shared/api/queryKeys.ts`)예요. 다른 feature의 캐시는 접두어로 무효화해요(`invalidateQueries({ queryKey: [queryKeyPrefix.products] })`).
 - **오류**: 모든 오류는 `ApiError{status, detail, fieldErrors}`로 와요. 사용자에게는 `detail`을 보여 줘요.
@@ -57,7 +58,12 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - 오류·트레이스·로그를 Sentry로 보내요(이슈 #33). 프로젝트는 프론트 `paldo-frontend`, BFF `paldo-bff` 두 개예요. DSN이 비어 있으면 아무것도 보내지 않아요(테스트도 그래서 조용해요).
 - 프론트: `src/app/instrument.ts`에서 init하고 `main.tsx`가 맨 먼저 읽어요(`router.tsx`의 `wrapCreateBrowserRouter`보다 먼저 떠야 라우트 패턴으로 트레이스가 남아요). 라우트 오류는 `RootErrorBoundary`가 `captureException`으로 보내요. DSN은 `VITE_SENTRY_DSN`(빌드 때 들어가요).
 - BFF: `bff/src/instrument.ts`를 `node --import`로 앱보다 먼저 읽어요(`package.json` scripts·Dockerfile CMD). `createApp`은 Sentry가 켜졌을 때만 `sentry()` 미들웨어를 달아요. DSN은 `SENTRY_DSN`(운영은 서버 `/opt/paldo-gotgan-bff/.env` → `deploy/compose.prod.yml`). 500과 백엔드 연결 실패(`UpstreamError`)가 이슈로 올라가요.
-- 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 샘플링은 개발 1.0, 운영 0.1이에요.
+  - 설정은 `bff/src/sentry.ts`예요(이슈 #48). 프록시가 `/api/v1/*` 하나라 Sentry Hono가 이름을 `GET /api/v1/*`로 뭉쳐서, 프록시가 `nameTransaction`으로 `GET /api/v1/products/:id`처럼 바꿔요(정규화는 `bff/src/routeName.ts`).
+  - `/health`(Docker HEALTHCHECK, 10초마다)는 트레이스하지 않아요. v11 서버 span은 샘플링할 때 이름이 메서드뿐이라 `tracesSampler`가 `url.path` 속성으로 걸러요.
+  - 샘플링은 `SENTRY_TRACES_SAMPLE_RATE`(기본 1.0, 잘못된 값은 경고하고 1.0). 브라우저가 보낸 트레이스는 프론트의 결정을 따라요. release는 `SENTRY_RELEASE`로, 이미지는 `bff-image.yml`이 커밋 SHA를 build-arg로 넣어요(compose에서 넘기지 않아요).
+  - 백엔드에는 Sentry가 없어서 BFF가 백엔드 5xx를 대신 올려요(#49). `Upstream.fetch`가 응답을 받을 때마다 보고해요: 5xx면 모듈·정규화한 경로(`routeName.ts`)·상태·`X-Trace-Id`·problem `detail`을 이슈로(fingerprint `[모듈, 경로, 상태]`), `X-Trace-Id`가 있으면 요청 트랜잭션의 `backend.trace_id` 속성으로 남겨요. 상세 라우트의 부가 호출(리뷰) 5xx도 올라가요. 브라우저 응답은 바꾸지 않고(본문은 clone으로 읽음), Authorization·쿠키·요청 본문은 넣지 않아요.
+  - 보고 함수는 `createApp({ backendReport })`로 주입받아요(기본 `sentryBackendReport`, `backendReport.ts`). 테스트는 `setup()`의 `reported`로 무엇을 보고했는지 봐요.
+- 트레이스 헤더(`sentry-trace`·`baggage`)는 같은 오리진(`/api`·`/bff`)에만 붙어 브라우저 → BFF가 한 트레이스로 이어져요. 프론트 샘플링은 개발 1.0, 운영 0.1이에요.
 
 ## BFF
 
@@ -69,8 +75,15 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 - 백엔드 모듈별 클라이언트 주소는 env로 받아요(`MEMBER_API_URL` 등, 없으면 `BACKEND_URL`). 경로 → 모듈 표는 `bff/src/upstream.ts`예요. 공개 계약 `/api/v1`만 부르고 `/internal`은 쓰지 않아요.
 - 세션 저장소는 없어요. 백엔드 토큰을 HttpOnly 쿠키 두 개에 담아요(`bff/src/session/cookie.ts`, ADR-0009): access는 `__Host-paldo_at`(`Path=/`), refresh는 `__Secure-paldo_rt`(`Path=/bff/session`, 재발급 요청에만 실림). 개발(http)은 접두어 없이 `paldo_at`·`paldo_rt`예요.
   - BFF는 `/api` 요청 중에 재발급하지 않아요. 백엔드가 만료로 401을 주면 그대로 돌려주고 프론트가 재발급해요. 같은 refresh로 온 재발급은 한 번만 하고 결과를 10초 기억해요(`refresher.ts`, 여러 탭 대비). BFF가 한 대라 메모리로 충분해요.
-  - 로그아웃은 쿠키만 지워요. 백엔드에 logout API가 없어 refresh를 서버에서 끊지 못해요.
+  - 로그아웃은 refresh 쿠키로 백엔드 `POST /api/v1/auth/logout`을 불러 그 기기의 refresh 세션을 끊고 두 쿠키를 지워요(#61). 백엔드가 실패하거나 닿지 않아도 쿠키는 지우고 204예요. 같은 refresh로 재발급이 진행 중이거나 막 끝났으면 새 refresh로 끊고 기억한 결과도 버려요(`refresher.ts`). 이미 받은 access는 만료(30분)까지 백엔드에서 유효해요.
   - **Redis 세션 저장소는 만들어 두고 쓰지 않아요**(`session/redis.ts`·`store.ts`·`manager.ts`·`sealed.ts`). BFF가 여러 대가 되거나 서버에서 세션을 끊어야 할 때 되살려요. 다시 만들지 말고 `redis.ts` 맨 위 설명부터 봐요.
+- 요청 본문 상한(`bodyLimit.ts`): multipart가 아닌 본문은 `proxy.ts`가 메모리에 통째로 담아서 2MB(`REQUEST_BODY_LIMIT_BYTES`)를 넘으면 413이에요. chunked도 상한까지만 읽고 끊어요. 업로드(multipart)는 흘려보내서 대상이 아니에요. 상한 근거는 상품 상세설명 `@Size(max = 200_000)`(한글 약 600KB)예요.
+- 응답 압축(`compression.ts`): nginx에 gzip이 없어 BFF가 `Accept-Encoding`에 따라 1KB 이상 응답을 압축해요. 백엔드가 작은 응답도 chunked로 보내서 길이를 모르는 본문은 앞 1KB만 읽어 보고 정해요. `/api/v1/auth/*`·`/bff/session/*`는 토큰이 담겨서 압축하지 않아요(BREACH).
+- **상품 상세 캐시**(ADR-0011, `bff/src/productCache.ts`): `GET /api/v1/products/{id}`(쿼리 없이) 응답을 메모리에 5초 두고, 같은 상품 동시 요청은 백엔드 1번으로 합쳐요(single-flight). 한 상품에 몰릴 때 백엔드 DB 커넥션을 덜 쓰려는 예방책이에요.
+  - 200만 담아요. 키는 상품 번호이고, 캐시를 채울 때 토큰 없이 불러요(상세에 사용자별 필드가 없고, 숨김·삭제 상품은 주인 토큰으로도 404). 상세에 사용자별 필드가 생기면 이 캐시부터 다시 봐요.
+  - BFF를 지나는 판매자 수정·상태·노출 변경·삭제가 성공하면 그 상품을 지워요. BFF가 모르는 변경(주문 품절·리뷰 수·관리자·배치)은 TTL이 끝나면 반영돼요.
+  - `/bff/products/:id/detail`의 상품 부분도 같은 캐시를 써요. 응답에 `X-Cache: HIT|MISS`가 붙고, 그 밖의 헤더(`Cache-Control: no-store` 등)는 백엔드 그대로예요.
+  - TTL·상한은 `PRODUCT_CACHE_TTL_MS`(0이면 합치기만)·`PRODUCT_CACHE_MAX_ENTRIES`·`PRODUCT_CACHE_MAX_BYTES`(본문 합계, 기본 16MB — 운영 mem_limit 256MB)예요. 넘으면 LRU로 버려요. 길게 두는 캐시는 무효화를 아는 백엔드 몫이라 BFF에 더하지 않아요.
 - BFF가 내는 오류도 `application/problem+json`이고 `detail`은 해요체예요. 상태를 바꾸는 요청은 `Origin`을 확인해요(`ALLOWED_ORIGINS`, 개발 환경은 localhost 아무 포트). 단, 세션 쿠키 없는 `/api/*`는 보지 않아요(Vercel 미리보기 배포용, ADR-0008).
 - 테스트는 `bff/src/**/*.test.ts`(Vitest + `app.request()` + MSW node). 가짜 백엔드는 `bff/src/test/fakeBackend.ts`예요(1회용 refresh·시계 조절, 경로·만료를 지키는 쿠키 저장소 `CookieJar`). 쓰지 않는 Redis 저장소 테스트는 기본 실행에서 빠져 있고 `pnpm --filter @paldo/bff test:redis`로 돌려요(Testcontainers, Docker 필요).
 - 프론트가 BFF 코드를 가져올 때는 `import type { AppType } from '@paldo/bff'`만 써요. 패키지가 타입만 내보내서(`exports.types`) 서버 코드가 번들에 들어갈 수 없어요.
@@ -80,8 +93,8 @@ bff/           Hono BFF (pnpm workspace 패키지 @paldo/bff). 아래 'BFF'
 
 ## API가 없는 곳
 
-- API로 연결된 feature: auth(재발급 포함) · products · cart · checkout(배송비 견적) · wallet(약관·잔액·충전(토스)·이용 내역) · reviews · orders(목록·상세·배송 조회·구매확정·출고 전 취소 요청·철회·취소 요청 내역 `/orders/refunds`) · me(내 정보 조회·수정, 기본 배송지 `/shipments/addresses/default` 조회·저장 — 주문서 처음 값에도 씀) · seller(내 상품·상품 상세·출고 목록·송장·배송지 변경 승인·거절·취소 요청 처리 `/seller/refunds`·프로필·잔액·정산 `/payouts/me`) · sellerApply · admin(판매자 심사·정산 조회·실행).
-- 아직 연결 전(`NotConnected`)인 곳: me(관심·팔로우·비밀번호·탈퇴·배송지 삭제), farms, 아이디·비밀번호 찾기, orders의 배송지 변경 요청 화면·문의, products의 인기 농가·판매자 정보·관심·팔로우, 비회원 약관, seller의 출고 지연·판매자 취소·출금·팔로워·홈 주문 집계, admin의 수취인 이름·조정 내역·1건 정산·조정(서버 501).
+- API로 연결된 feature: auth(재발급 포함) · products · cart · checkout(배송비 견적) · wallet(약관·잔액·충전(토스)·이용 내역) · reviews · orders(목록·상세·배송 조회·구매확정·출고 전 취소 요청·철회·취소 요청 내역 `/orders/refunds`) · me(관심 상품 `/me/likes` — 찜 목록 → `GET /products/summaries`로 카드, 내 정보 조회·수정, 비밀번호 변경 `PATCH /members/me/password` — 성공하면 토큰이 모두 무효라 세션을 끝내고 `/login`으로, 기본 배송지 `/shipments/addresses/default` 조회·저장 — 주문서 처음 값에도 씀) · seller(내 상품·상품 상세·출고 목록·송장·배송지 변경 승인·거절·취소 요청 처리 `/seller/refunds`·프로필·잔액·정산 `/payouts/me`) · sellerApply · admin(판매자 심사·정산 조회·실행·수동 조정·막힌 주문(상태·주문 번호 거르기, 주문 정산후보 `candidates?orderId`)·해결·해결 기록 전체 목록) · 관심 상품(찜) `shared/api/wishes.ts`(등록·해제·목록. 상세·목록 응답에 찜 여부 칸이 없어 로그인한 구매자·판매자의 찜 ID를 목록 API size 50으로 끝까지 모아 캐시하고 카드 하트·상세 관심 버튼이 그 집합을 씀. 누르면 집합을 먼저 바꾸고 실패하면 되돌림. 관리자는 부르지 않음) · farms(상점 프로필 `GET /stores/{sellerId}` — 로그인 없이 부름, 상품 상세도 sellerId가 생기면(BE #741) `shared/api/storeProfile.ts`로 씀).
+- 아직 연결 전(`NotConnected`)인 곳: me(팔로우·탈퇴·배송지 삭제), farms의 판매자별 상품·팔로우·팔로워 수, 아이디·비밀번호 찾기, orders의 배송지 변경 요청 화면·문의, products의 인기 농가·판매자 정보·팔로우, 비회원 약관, seller의 출고 지연·판매자 취소·출금·팔로워·홈 주문 집계, admin의 수취인 이름·조정 내역 목록(이 화면에서 저장한 조정만 보여 줌)·1건 정산(서버 501).
 - **실제 화면은 fixtures를 그리지 않아요.** API가 없는 화면·섹션은 `NotConnected`(`shared/ui`, "아직 연결되지 않은 화면이에요", 개발 서버에선 필요한 API 이름도 표시), 모르는 숫자는 `NotConnectedValue`(–), 서버를 부르지 못하는 버튼은 막고 `DisabledReason reason={NOT_CONNECTED_REASON}`으로 보여 줘요. 토스트만 띄우는 가짜 동작은 만들지 않아요. 비어 보이는 이유가 '데이터 없음'인지 '연결 전'인지 구분되게 하려는 규칙이에요.
   - Biome이 pages·views·components·`app/layouts`에서 fixtures import를 막아요. 화면 상태를 보려면 `previews.tsx`에서 fixtures로 그려요.
 - API가 없어 임시로 처리한 곳에는 `TODO(api)` 주석이 있어요(`grep -rn "TODO(api)" src`). API가 생기면 이 주석을 따라 걷어내요.

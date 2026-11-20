@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { PayoutEventType } from '@/shared/api/types'
 
-// 관리자 화면 검증. 제약은 Swagger 기준: 반려 사유 500자, 조정 사유 255자, 조정 금액 0 불가.
+// 관리자 화면 검증. 제약은 Swagger 기준: 반려 사유 500자, 조정 사유 1~255자(공백만 안 됨), 조정 금액 0 불가, 해결 메모 1~255자.
 
 // ─── 반려 사유 ───────────────────────────────────────────
 
@@ -12,6 +12,17 @@ export const reviewReasonSchema = z
   .trim()
   .min(1, '사유를 입력해 주세요')
   .max(REVIEW_REASON_MAX, `사유는 ${REVIEW_REASON_MAX}자까지 쓸 수 있어요`)
+
+// ─── 충전 건 실패 처리 · 결제 취소 사유 ──────────────────
+
+/** 결제 취소 사유는 토스에도 보내서 토스 상한(200자)에 맞춘다 (ChargeAdminReasonRequest) */
+export const CHARGE_REASON_MAX = 200
+
+export const chargeReasonSchema = z
+  .string()
+  .trim()
+  .min(1, '사유를 입력해 주세요. 충전 건 기록에 남아요')
+  .max(CHARGE_REASON_MAX, `사유는 ${CHARGE_REASON_MAX}자까지 쓸 수 있어요`)
 
 // ─── 정산 조정 ───────────────────────────────────────────
 
@@ -39,7 +50,8 @@ export const adjustmentSchema = z.object({
     .trim()
     .min(1, '주문 상품 번호를 입력해 주세요')
     .regex(/^\d+$/, '주문 상품 번호는 숫자로 입력해 주세요'),
-  eventType: z.nativeEnum(PayoutEventType),
+  // 배송비(SALE_SHIPPING_FEE)는 주문 항목 ID가 없어 조정할 수 없다 (서버도 422)
+  eventType: z.enum([PayoutEventType.SALE_AMOUNT, PayoutEventType.SALE_FEE]),
   amount: z
     .string()
     .refine(
