@@ -3,7 +3,10 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { productSummaries } from '@/features/products/fixtures'
+import { pageOf } from '@/mocks/handlers/_shared'
 import { sampleDefaultAddress } from '@/mocks/handlers/addresses'
+import { wishesOf } from '@/mocks/handlers/wishes'
 import { server } from '@/mocks/server'
 import {
   clearAccessToken,
@@ -26,6 +29,12 @@ vi.mock('@/shared/lib/daumPostcode', () => ({ openPostcode }))
 const registered = http.get('*/api/v1/shipments/addresses/default', () =>
   HttpResponse.json(sampleDefaultAddress),
 )
+
+/** 찜 목록 응답 (최근 찜 순 ID) */
+const wishList = (ids: number[]) =>
+  http.get('*/api/v1/members/me/wishes', ({ request }) =>
+    HttpResponse.json(pageOf(wishesOf(ids), new URL(request.url).searchParams)),
+  )
 
 // 마이페이지 예치금: GET /wallets/me/balance(기본 128,000 / 한도 500,000)
 
@@ -78,6 +87,16 @@ describe('MyPage', () => {
     expect(screen.getByRole('link', { name: /관심 상품.*연결 전/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /팔로우한 농가.*연결 전/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /배송지.*연결 전/ })).toBeInTheDocument()
+  })
+
+  it('구매자는 관심 상품 수(찜 목록 totalElements)를 바로가기에 보여 준다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    server.use(wishList(Array.from({ length: 37 }, (_, i) => 101 + i)))
+    renderMy()
+    expect(await screen.findByRole('link', { name: /관심 상품\s*37/ })).toHaveAttribute(
+      'href',
+      '/me/likes?tab=products',
+    )
   })
 
   it('구매자는 기본 배송지 요약(시·구)을 바로가기에 보여 준다', async () => {
@@ -178,14 +197,116 @@ function renderAt(path: string) {
   render(<RouterProvider router={router} />)
 }
 
-describe('LikesPage (연결 전)', () => {
-  it.each([
-    ['/me/likes?tab=products', '관심 상품은 아직 연결되지 않았어요'],
-    ['/me/likes?tab=farms', '팔로우한 농가는 아직 연결되지 않았어요'],
-  ])('%s는 목록 대신 연결 전 안내를 보여 준다', async (path, title) => {
-    renderAt(path)
-    expect(await screen.findByText(title)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /팔로잉 취소|관심 상품$/ })).not.toBeInTheDocument()
+describe('LikesPage', () => {
+  const apple = '청송 꿀사과 부사' // 101
+  const gyul = '제주 노지 조생 감귤' // 103
+
+  beforeEach(() => setAccessToken(fakeToken({ role: MemberRole.BUYER })))
+  afterEach(() => notifications.clean())
+
+  it('찜 목록을 상품 카드로 그리고, 숨김·삭제돼 빠진 상품 수를 알린다', async () => {
+    const summaryIds: (string | null)[] = []
+    server.use(
+      wishList([103, 9999, 101]),
+      http.get('*/api/v1/products/summaries', ({ request }) => {
+        summaryIds.push(new URL(request.url).searchParams.get('ids'))
+        return HttpResponse.json(
+          [103, 101].map((id) => productSummaries.find((p) => p.productId === id)),
+        )
+      }),
+    )
+    renderAt('/me/likes?tab=products')
+
+    expect(await screen.findByText(gyul)).toBeInTheDocument()
+    expect(screen.getByText(apple)).toBeInTheDocument()
+    expect(summaryIds).toEqual(['103,9999,101'])
+    expect(
+      screen.getByText(/판매자가 숨기거나 삭제한 상품 1개는 이 페이지에 보이지 않아요/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /관심 상품\s*3/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `${apple} 관심 상품` })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('하트를 누르면 해제 요청을 보내고 목록을 다시 불러와 카드를 뺀다', async () => {
+    let ids = [103, 101]
+    const deleted: string[] = []
+    server.use(
+      http.get('*/api/v1/members/me/wishes', ({ request }) =>
+        HttpResponse.json(pageOf(wishesOf(ids), new URL(request.url).searchParams)),
+      ),
+      http.delete('*/api/v1/members/me/wishes/:productId', ({ params }) => {
+        deleted.push(String(params.productId))
+        ids = ids.filter((id) => id !== Number(params.productId))
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    renderAt('/me/likes?tab=products')
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: `${apple} 관심 상품` }))
+    expect(await screen.findByText('관심 상품에서 뺐어요')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText(apple)).not.toBeInTheDocument())
+    expect(deleted).toEqual(['101'])
+    expect(screen.getByText(gyul)).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /관심 상품\s*1/ })).toBeInTheDocument()
+  })
+
+  it('페이지를 옮기면 그 페이지의 찜을 부른다', async () => {
+    const requested: string[] = []
+    const ids = [...Array.from({ length: 20 }, (_, i) => 9000 + i), 103]
+    server.use(
+      http.get('*/api/v1/members/me/wishes', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        requested.push(`${params.get('page')}/${params.get('size')}`)
+        return HttpResponse.json(pageOf(wishesOf(ids), params))
+      }),
+    )
+    renderAt('/me/likes?tab=products')
+    const user = userEvent.setup()
+
+    expect(
+      await screen.findByText(/판매자가 숨기거나 삭제한 상품 20개는 이 페이지에 보이지 않아요/),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '2페이지' }))
+    expect(await screen.findByText(gyul)).toBeInTheDocument()
+    expect(requested).toContain('1/20')
+  })
+
+  it('찜이 없으면 빈 화면을 보이고 상품 카드는 부르지 않는다', async () => {
+    const summaries = vi.fn()
+    server.use(
+      wishList([]),
+      http.get('*/api/v1/products/summaries', () => {
+        summaries()
+        return HttpResponse.json([])
+      }),
+    )
+    renderAt('/me/likes?tab=products')
+    expect(await screen.findByText('아직 관심 상품이 없어요')).toBeInTheDocument()
+    expect(summaries).not.toHaveBeenCalled()
+  })
+
+  it('관리자는 찜 목록을 부르지 않고 쓸 수 없다고 안내한다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.ADMIN }))
+    const wishes = vi.fn()
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () => {
+        wishes()
+        return HttpResponse.json({})
+      }),
+    )
+    renderAt('/me/likes?tab=products')
+    expect(await screen.findByText('관리자 계정은 관심 상품을 쓸 수 없어요')).toBeInTheDocument()
+    expect(wishes).not.toHaveBeenCalled()
+  })
+
+  it('팔로우 탭은 목록 대신 연결 전 안내를 보여 준다', async () => {
+    renderAt('/me/likes?tab=farms')
+    expect(await screen.findByText('팔로우한 농가는 아직 연결되지 않았어요')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /팔로잉 취소/ })).not.toBeInTheDocument()
   })
 })
 

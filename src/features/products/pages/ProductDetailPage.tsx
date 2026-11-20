@@ -3,7 +3,8 @@ import { useParams } from 'react-router'
 import { useAddToCart } from '@/features/cart'
 import { isApiError } from '@/shared/api/ApiError'
 import { getAuthSession, subscribeAuth } from '@/shared/api/authToken'
-import type { LoginReason } from '@/shared/ui'
+import { WISH_ADMIN_REASON } from '@/shared/api/wishes'
+import { type LoginReason, useWishToggle } from '@/shared/ui'
 import {
   errorMessageOf,
   isNotFound,
@@ -18,8 +19,9 @@ import { type DetailStatus, ProductDetailView } from '../views/ProductDetailView
 // 리뷰 키워드 칩을 누르면 목록을 그 키워드로 거르고, 다시 누르면 전체 목록으로 돌아간다.
 // 로그인했으면 이 상품의 내 리뷰(GET /products/{productId}/reviews/me)를 목록 맨 위에 둔다. ‘내 리뷰’ 표시는 리뷰의 memberId와 토큰의 회원 번호로 판단한다.
 // 담기는 features/cart 공개 hook(products → cart 예외). 비회원이면 로그인 안내 모달을 띄운다.
+// 관심 버튼은 찜 ID 집합(shared/api/wishes.ts)으로 그린다. 비회원은 로그인 안내, 관리자는 막고 이유를 보인다.
 // TODO(api): 상세 응답에 sellerId가 없어(BE #741) 판매자 정보(✅ GET /stores/{sellerId}, shared/api/storeProfile.ts)를 부르지 못한다.
-//   관심·팔로우 API도 없다(📝). 판매자는 넘기지 않고(‘연결 전’ 안내), 관심·팔로우 핸들러도 넘기지 않아 버튼을 막고 이유를 보인다.
+//   팔로우 API도 없다(📝). 판매자는 넘기지 않고(‘연결 전’ 안내), 팔로우 핸들러도 넘기지 않아 버튼을 막고 이유를 보인다.
 
 const asProductId = (value: string | undefined) => {
   const id = Number(value)
@@ -50,6 +52,7 @@ export function ProductDetailPage() {
   )
   const { addToCart, adding } = useAddToCart()
   const [loginPrompt, setLoginPrompt] = useState<LoginReason | null>(null)
+  const wishes = useWishToggle(() => setLoginPrompt('like'))
 
   // 내 리뷰는 몇 번째 페이지에 있든 수정·삭제할 수 있게 맨 위에 둔다. 못 불러오면 목록만 그린다.
   // 키워드로 거를 때는 내 리뷰가 그 키워드를 표현했는지 모르므로 올리지 않는다
@@ -102,6 +105,9 @@ export function ProductDetailPage() {
       currentMemberId={auth?.memberId}
       onRetry={() => product.refetch()}
       errorMessage={errorMessageOf(product.error)}
+      liked={id !== null && wishes.isWished(id)}
+      onToggleLike={wishes.access === 'admin' || id === null ? undefined : () => wishes.toggle(id)}
+      likeDisabledReason={wishes.access === 'admin' ? WISH_ADMIN_REASON : undefined}
       adding={adding}
       onAddToCart={({ optionId, quantity }) => {
         if (!auth) return setLoginPrompt('cart')

@@ -1,7 +1,7 @@
 import { notifications } from '@mantine/notifications'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HttpResponse, http } from 'msw'
+import { delay, HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
@@ -509,23 +509,246 @@ describe('ProductDetailPage 장바구니 담기', () => {
   })
 })
 
-describe('관심·팔로우·판매자 정보 (연결 전)', () => {
-  it('홈은 상품 카드에 하트를 그리지 않고 인기 농가 자리에 연결 전 안내를 보여 준다', async () => {
+describe('관심 상품(찜)', () => {
+  const apple = productSummaries[0]?.name ?? ''
+  const gyul = productSummaries[2]?.name ?? '' // 기본 찜(103)
+  const heart = (name: string) => screen.findByRole('button', { name: `${name} 관심 상품` })
+
+  // 토스트는 테스트 사이에 남으므로 지운다
+  afterEach(() => notifications.clean())
+
+  it('구매자는 찜한 상품의 하트가 채워져 있고, 누르면 바로 채운 뒤 등록 요청을 보낸다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    const sent: string[] = []
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () =>
+        HttpResponse.json({
+          content: [{ productId: 103, wishedAt: '2026-11-20T12:00:00' }],
+          page: 0,
+          size: 50,
+          totalElements: 1,
+          totalPages: 1,
+        }),
+      ),
+      http.put('*/api/v1/members/me/wishes/:productId', async ({ params }) => {
+        sent.push(`PUT ${params.productId}`)
+        await delay(30)
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/')
+
+    expect(
+      await screen.findByRole('button', { name: `${gyul} 관심 상품`, pressed: true }),
+    ).toBeInTheDocument()
+    const appleHeart = screen.getByRole('button', { name: `${apple} 관심 상품` })
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(appleHeart)
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('관심 상품에 담았어요')).toBeInTheDocument()
+    expect(sent).toEqual(['PUT 101'])
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('해제하면 하트를 바로 비우고 해제 요청을 보낸다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    const sent: string[] = []
+    server.use(
+      http.delete('*/api/v1/members/me/wishes/:productId', async ({ params }) => {
+        sent.push(`DELETE ${params.productId}`)
+        await delay(30)
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/')
+    const gyulHeart = await screen.findByRole('button', {
+      name: `${gyul} 관심 상품`,
+      pressed: true,
+    })
+
+    await user.click(gyulHeart)
+    expect(gyulHeart).toHaveAttribute('aria-pressed', 'false')
+    expect(await screen.findByText('관심 상품에서 뺐어요')).toBeInTheDocument()
+    expect(sent).toEqual(['DELETE 103'])
+  })
+
+  it('등록에 실패하면 하트를 되돌리고 다시 시도할 수 있게 알린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () =>
+        HttpResponse.json({ content: [], page: 0, size: 50, totalElements: 0, totalPages: 0 }),
+      ),
+      http.put('*/api/v1/members/me/wishes/:productId', async () => {
+        await delay(30)
+        return problem(500, '서버 오류')
+      }),
+    )
+    const { user } = renderAt('/')
+    const appleHeart = await heart(apple)
+
+    await user.click(appleHeart)
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      await screen.findByText('관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요'),
+    ).toBeInTheDocument()
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
+  })
+
+  it('하트를 연달아 누르면 요청마다 결과를 알린다(앞 요청의 실패도 되돌리고 알린다)', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () =>
+        HttpResponse.json({ content: [], page: 0, size: 50, totalElements: 0, totalPages: 0 }),
+      ),
+      http.put('*/api/v1/members/me/wishes/:productId', async ({ params }) => {
+        await delay(30)
+        return params.productId === '101'
+          ? problem(500, '서버 오류')
+          : new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/')
+    const appleHeart = await heart(apple)
+    const gyulHeart = await heart(gyul)
+
+    await user.click(appleHeart)
+    await user.click(gyulHeart)
+    expect(
+      await screen.findByText('관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요'),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('관심 상품에 담았어요')).toBeInTheDocument()
+    expect(appleHeart).toHaveAttribute('aria-pressed', 'false')
+    expect(gyulHeart).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('찜 ID를 여러 페이지(size 50)로 끝까지 모아 하트를 그린다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    // 120건: 앞 119건은 목록에 없는 상품, 마지막(세 번째 페이지)에 감귤(103)
+    const ids = [...Array.from({ length: 119 }, (_, i) => 9000 + i), 103]
+    const pages: string[] = []
+    server.use(
+      http.get('*/api/v1/members/me/wishes', ({ request }) => {
+        const params = new URL(request.url).searchParams
+        const page = Number(params.get('page'))
+        const size = Number(params.get('size'))
+        pages.push(`${page}/${size}`)
+        return HttpResponse.json({
+          content: ids
+            .slice(page * size, page * size + size)
+            .map((productId) => ({ productId, wishedAt: '2026-11-20T12:00:00' })),
+          page,
+          size,
+          totalElements: ids.length,
+          totalPages: Math.ceil(ids.length / size),
+        })
+      }),
+    )
+    renderAt('/')
+
+    expect(
+      await screen.findByRole('button', { name: `${gyul} 관심 상품`, pressed: true }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `${apple} 관심 상품` })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(pages).toEqual(['0/50', '1/50', '2/50'])
+  })
+
+  it('비회원은 찜 목록을 부르지 않고, 하트를 누르면 로그인 안내(돌아올 주소 포함)를 띄운다', async () => {
+    const wishRequests = vi.fn()
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () => {
+        wishRequests()
+        return HttpResponse.json({})
+      }),
+    )
+    server.use(categoriesHandler)
+    const { user } = renderAt('/products?category=FRUIT')
+
+    await user.click(await heart(apple))
+    expect(await screen.findByText('로그인하고 관심 상품을 모아 보세요.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '로그인하기' })).toHaveAttribute(
+      'href',
+      `/login?returnTo=${encodeURIComponent('/products?category=FRUIT')}`,
+    )
+    expect(wishRequests).not.toHaveBeenCalled()
+  })
+
+  it('관리자는 찜 목록을 부르지 않고 카드에 하트를 그리지 않는다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.ADMIN }))
+    const wishRequests = vi.fn()
+    server.use(
+      http.get('*/api/v1/members/me/wishes', () => {
+        wishRequests()
+        return HttpResponse.json({})
+      }),
+    )
+    renderAt('/')
+    expect(await screen.findByText(apple)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /관심 상품/ })).not.toBeInTheDocument()
+    expect(wishRequests).not.toHaveBeenCalled()
+  })
+
+  it('상품 상세: 관리자는 관심 버튼을 막고 이유를 보인다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.ADMIN }))
+    server.use(
+      http.get('*/api/v1/products/:productId', () => HttpResponse.json(productDetailOf(101))),
+    )
+    renderAt('/products/101')
+
+    const likes = await screen.findAllByRole('button', { name: '관심 상품' })
+    for (const like of likes) {
+      expect(like).toBeDisabled()
+      expect(like).toHaveAccessibleDescription('관리자 계정은 관심 상품을 쓸 수 없어요')
+    }
+  })
+
+  it('상품 상세: 구매자는 찜 상태를 보고 눌러 해제한다', async () => {
+    setAccessToken(fakeToken({ role: MemberRole.BUYER }))
+    const sent: string[] = []
+    server.use(
+      http.get('*/api/v1/products/:productId', () => HttpResponse.json(productDetailOf(101))),
+      http.delete('*/api/v1/members/me/wishes/:productId', ({ params }) => {
+        sent.push(`DELETE ${params.productId}`)
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderAt('/products/101')
+
+    const [like] = await screen.findAllByRole('button', { name: '관심 상품', pressed: true })
+    if (!like) throw new Error('관심 버튼이 없어요')
+    await user.click(like)
+    expect(await screen.findByText('관심 상품에서 뺐어요')).toBeInTheDocument()
+    expect(sent).toEqual(['DELETE 101'])
+    for (const button of screen.getAllByRole('button', { name: '관심 상품' })) {
+      expect(button).toHaveAttribute('aria-pressed', 'false')
+    }
+  })
+
+  it('상품 상세: 비회원이 관심을 누르면 로그인 안내를 띄운다', async () => {
+    server.use(
+      http.get('*/api/v1/products/:productId', () => HttpResponse.json(productDetailOf(101))),
+    )
+    const { user } = renderAt('/products/101')
+    const [like] = await screen.findAllByRole('button', { name: '관심 상품' })
+    if (!like) throw new Error('관심 버튼이 없어요')
+    await user.click(like)
+    expect(await screen.findByText('로그인하고 관심 상품을 모아 보세요.')).toBeInTheDocument()
+  })
+})
+
+describe('팔로우·판매자 정보 (연결 전)', () => {
+  it('홈은 인기 농가 자리에 연결 전 안내를 보이고 팔로우 버튼을 그리지 않는다', async () => {
     renderAt('/')
     expect(await screen.findByText(productSummaries[0]?.name ?? '')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /관심 상품/ })).not.toBeInTheDocument()
     expect(screen.getByText('인기 농가는 아직 연결되지 않았어요')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /팔로우/ })).not.toBeInTheDocument()
   })
 
-  it('상품 목록은 카드에 하트를 그리지 않는다', async () => {
-    server.use(categoriesHandler)
-    renderAt('/products')
-    expect(await screen.findByText(productSummaries[0]?.name ?? '')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /관심 상품/ })).not.toBeInTheDocument()
-  })
-
-  it('상품 상세는 판매자 정보 대신 연결 전 안내를, 관심·팔로우는 막고 이유를 보여 준다', async () => {
+  it('상품 상세는 판매자 정보 대신 연결 전 안내를, 팔로우는 막고 이유를 보여 준다', async () => {
     server.use(
       http.get('*/api/v1/products/:productId', () => HttpResponse.json(productDetailOf(101))),
     )
@@ -533,10 +756,6 @@ describe('관심·팔로우·판매자 정보 (연결 전)', () => {
 
     expect(await screen.findByText('판매자 정보는 아직 연결되지 않았어요')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /햇살농원/ })).not.toBeInTheDocument()
-    for (const like of screen.getAllByRole('button', { name: '관심 상품' })) {
-      expect(like).toBeDisabled()
-      expect(like).toHaveAccessibleDescription(NOT_CONNECTED_REASON)
-    }
     const follow = screen.getByRole('button', { name: '팔로우' })
     expect(follow).toBeDisabled()
     expect(follow).toHaveAccessibleDescription(NOT_CONNECTED_REASON)

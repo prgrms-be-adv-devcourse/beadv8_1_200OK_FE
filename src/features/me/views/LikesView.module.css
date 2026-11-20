@@ -3,3 +3,13 @@
   flex-direction: column;
   gap: var(--mantine-spacing-md);
 }
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+}
+
+.pagination {
+  align-self: center;
+}

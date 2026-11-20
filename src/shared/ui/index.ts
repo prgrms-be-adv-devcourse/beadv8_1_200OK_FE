@@ -71,3 +71,4 @@ export {
   type StatusBadgeProps,
 } from './StatusBadge/StatusBadge'
 export { showToast, type ToastAction } from './toast'
+export { useWishToggle, type WishToggle } from './WishToggle/useWishToggle'

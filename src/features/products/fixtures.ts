@@ -274,7 +274,7 @@ const entries: Entry[] = [
 
 export const productSummaries: ProductSummary[] = entries.map((e) => e.summary)
 
-// TODO(api): 판매자 상호·옵션 수·관심 여부는 상품 목록 API에 없다(A-2). 2단계에서 보강 방법을 정한다.
+// TODO(api): 판매자 상호·옵션 수는 상품 목록 API에 없다(A-2). 관심 여부는 찜 ID 집합(shared/api/wishes.ts)으로 붙인다.
 export const productCardItems: ProductCardItem[] = entries.map((e) => ({
   product: e.summary,
   sellerName: e.seller.storeName,

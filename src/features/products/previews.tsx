@@ -1,4 +1,5 @@
 import { ProductCategory, ProductRegion, ProductSort, ProductStatus } from '@/shared/api/types'
+import { WISH_ADMIN_REASON } from '@/shared/api/wishes'
 import type { ScreenPreview } from '@/shared/lib/screenPreview'
 import {
   appleLowStockOptions,
@@ -99,7 +100,12 @@ export const productPreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면: 농가·하트·팔로우)',
+        label: '연결 전 (지금 화면: 농가·팔로우)',
+        render: () => home({ farms: undefined, onToggleFollow: undefined }),
+      },
+      {
+        id: 'admin',
+        label: '관리자 (하트 없음)',
         render: () =>
           home({ farms: undefined, onToggleLike: undefined, onToggleFollow: undefined }),
       },
@@ -116,7 +122,7 @@ export const productPreviews: ScreenPreview[] = [
       {
         id: 'liked',
         label: '관심 담음 토스트',
-        toast: { message: '관심 상품에 담았어요' },
+        toast: { message: '관심 상품에 담았어요', actionLabel: '관심 상품 보기' },
         render: () => home(),
       },
     ],
@@ -136,9 +142,15 @@ export const productPreviews: ScreenPreview[] = [
       },
       { id: 'all', label: '전체', render: () => list() },
       {
-        id: 'not-connected',
-        label: '연결 전 (지금 화면: 하트 없음)',
+        id: 'admin',
+        label: '관리자 (하트 없음)',
         render: () => list({ onToggleLike: undefined }),
+      },
+      {
+        id: 'guest-like',
+        label: '비회원 관심 → 로그인',
+        session: 'guest',
+        render: () => list({ loginPrompt: 'like' }),
       },
       {
         id: 'empty-category',
@@ -245,9 +257,41 @@ export const productPreviews: ScreenPreview[] = [
     states: [
       {
         id: 'not-connected',
-        label: '연결 전 (지금 화면: 판매자·관심·팔로우)',
+        label: '연결 전 (지금 화면: 판매자·팔로우)',
+        render: () => detail({ seller: undefined, onToggleFollow: undefined }),
+      },
+      {
+        id: 'liked',
+        label: '관심 담음',
+        toast: { message: '관심 상품에 담았어요', actionLabel: '관심 상품 보기' },
+        render: () => detail({ seller: undefined, onToggleFollow: undefined, liked: true }),
+      },
+      {
+        id: 'like-failed',
+        label: '관심 실패 (되돌림)',
+        toast: {
+          message: '관심 상품에 담지 못했어요. 잠시 뒤 다시 시도해 주세요',
+          actionLabel: '다시 시도',
+        },
+        render: () => detail({ seller: undefined, onToggleFollow: undefined }),
+      },
+      {
+        id: 'admin',
+        label: '관리자 (관심 막힘)',
         render: () =>
-          detail({ seller: undefined, onToggleLike: undefined, onToggleFollow: undefined }),
+          detail({
+            seller: undefined,
+            onToggleLike: undefined,
+            likeDisabledReason: WISH_ADMIN_REASON,
+            onToggleFollow: undefined,
+          }),
+      },
+      {
+        id: 'guest-like',
+        label: '비회원 관심 → 로그인',
+        session: 'guest',
+        render: () =>
+          detail({ seller: undefined, loginPrompt: 'like', currentMemberId: undefined }),
       },
       { id: 'on-sale', label: '판매 중', render: () => detail() },
       {

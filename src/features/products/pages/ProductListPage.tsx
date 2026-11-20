@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { ProductCategory, ProductRegion, ProductSort } from '@/shared/api/types'
 import { categoryLabels } from '@/shared/lib/labels'
-import { showToast } from '@/shared/ui'
+import { type LoginReason, showToast, useWishToggle } from '@/shared/ui'
 import { defaultSortOf, productListPath, sortOptionsOf } from '../listUrl'
 import { errorMessageOf, useCategories, useProductPages } from '../queries'
 import type { CategoryOption } from '../types'
@@ -13,7 +13,7 @@ import { ProductListView } from '../views/ProductListView'
 // q는 요청의 keyword, sort는 고른 정렬(기본이면 주소·요청에 넣지 않아 서버 기본을 따른다).
 // 검색어·필터·정렬이 바뀌면 page를 지워 첫 페이지부터 다시 부른다.
 // page는 ‘더 보기’로 불러온 마지막 페이지(0부터)라 새로 고쳐도 본 데까지 다시 그린다.
-// TODO(api): 📝 관심 상품 API가 없어 onToggleLike를 넘기지 않는다(카드에 하트를 그리지 않는다).
+// 하트는 찜 ID 집합(shared/api/wishes.ts)으로 그린다. 비회원이 누르면 로그인 안내, 관리자는 하트를 그리지 않는다.
 
 const asEnum = <T extends string>(values: Record<string, T>, value: string | null): T | null =>
   value && (Object.values(values) as string[]).includes(value) ? (value as T) : null
@@ -46,6 +46,8 @@ export function ProductListPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const queryClient = useQueryClient()
   const categories = useCategories()
+  const [loginPrompt, setLoginPrompt] = useState<LoginReason | null>(null)
+  const wishes = useWishToggle(() => setLoginPrompt('like'))
 
   const list = useProductPages(
     {
@@ -97,7 +99,10 @@ export function ProductListPage() {
   return (
     <ProductListView
       status={list.status}
-      items={visible.map((product) => ({ product }))}
+      items={visible.map((product) => ({
+        product,
+        liked: wishes.isWished(product.productId),
+      }))}
       totalCount={list.totalCount - hiddenSoldOutCount}
       categories={categories.data ?? fallbackCategories}
       category={category}
@@ -115,8 +120,11 @@ export function ProductListPage() {
       hasMore={list.hasMore}
       loadingMore={loadingMore}
       onLoadMore={loadMore}
+      onToggleLike={wishes.access === 'admin' ? undefined : wishes.toggle}
       onRetry={list.retry}
       errorMessage={errorMessageOf(list.error)}
+      loginPrompt={loginPrompt}
+      onLoginPromptClose={() => setLoginPrompt(null)}
     />
   )
 }

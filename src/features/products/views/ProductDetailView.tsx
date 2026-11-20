@@ -42,8 +42,9 @@ import classes from './ProductDetailView.module.css'
 // 재고 수량은 내지 않고, 옵션의 lowStock(서버 판단)으로 옵션 선택에서만 ‘품절 임박’을 보인다. 품절이 우선(A-7).
 // 배송비는 상품 API에 없고 정책도 미정이라(A-8, C-1) 주문서에서 안내한다고만 쓴다.
 // TODO(api): 상세 응답에 sellerId가 없어(BE #741) 판매자를 모른다. sellerId가 생기면 ✅ GET /stores/{sellerId}
-//   (shared/api/storeProfile.ts의 storeProfileQueryOptions)로 받아 넘긴다. 📝 관심·팔로우 API.
-//   seller가 없으면 생산 정보에 ‘연결 전’ 안내, onToggleLike·onToggleFollow가 없으면 버튼을 막고 이유(NOT_CONNECTED_REASON)를 보인다.
+//   (shared/api/storeProfile.ts의 storeProfileQueryOptions)로 받아 넘긴다. 📝 팔로우 API.
+//   seller가 없으면 생산 정보에 ‘연결 전’ 안내, onToggleFollow가 없으면 팔로우 버튼을 막고 이유(NOT_CONNECTED_REASON)를 보인다.
+// 관심 버튼: onToggleLike가 있으면 누를 수 있고, 없고 likeDisabledReason이 있으면 막고 그 이유를 보인다(관리자).
 
 export type DetailStatus = 'pending' | 'error' | 'notFound' | 'success'
 
@@ -78,8 +79,10 @@ export type ProductDetailViewProps = {
   defaultQuantity?: number
   adding?: boolean
   onAddToCart: (selection: CartSelection) => void
-  /** TODO(api): 📝 관심 상품. 없으면 관심 버튼을 막고 이유를 보인다(연결 전) */
+  /** 관심 버튼. 없으면 버튼을 그리지 않는다(likeDisabledReason이 있으면 막고 이유를 보인다) */
   onToggleLike?: () => void
+  /** 관심 버튼을 막은 이유 (예: 관리자 계정). onToggleLike가 없을 때만 본다 */
+  likeDisabledReason?: string
   /** TODO(api): 📝 팔로우. 없으면 팔로우 버튼을 막고 이유를 보인다(연결 전) */
   onToggleFollow?: () => void
   onDeleteReview?: (reviewId: number) => void
@@ -198,6 +201,7 @@ export function ProductDetailView({
   adding = false,
   onAddToCart,
   onToggleLike,
+  likeDisabledReason,
   onToggleFollow,
   onDeleteReview,
   onRetry,
@@ -276,9 +280,9 @@ export function ProductDetailView({
       <Heart size={22} aria-hidden="true" />
     </ActionIcon>
   )
-  // 관심 API가 없을 때: 버튼은 보이되 막고 이유를 붙인다
-  const likeNotConnected = !onToggleLike && !isOwner && (
-    <DisabledReason reason={NOT_CONNECTED_REASON}>
+  // 관심을 쓸 수 없는 계정(관리자): 버튼은 보이되 막고 이유를 붙인다
+  const likeBlocked = !onToggleLike && !isOwner && likeDisabledReason && (
+    <DisabledReason reason={likeDisabledReason}>
       <Button variant="default" leftSection={<Heart size={18} aria-hidden="true" />} disabled>
         관심 상품
       </Button>
@@ -422,7 +426,7 @@ export function ProductDetailView({
                       </Button>
                     </DisabledReason>
                   </div>
-                  {likeNotConnected}
+                  {likeBlocked}
                 </>
               )}
             </Stack>
@@ -431,7 +435,7 @@ export function ProductDetailView({
           <Box hiddenFrom="md">
             <Stack gap="md">
               <ShippingSummary />
-              {likeNotConnected}
+              {likeBlocked}
             </Stack>
           </Box>
         </div>

@@ -52,7 +52,7 @@ export type ProductListViewProps = {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
-  /** TODO(api): 📝 관심 상품. 없으면 카드에 하트를 그리지 않는다 */
+  /** 관심 하트. 없으면 카드에 하트를 그리지 않는다(관리자) */
   onToggleLike?: (productId: number) => void
   onRetry?: () => void
   errorMessage?: string

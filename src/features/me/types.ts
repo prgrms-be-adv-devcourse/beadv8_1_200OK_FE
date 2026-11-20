@@ -1,6 +1,6 @@
 import type { MemberInfo, SellerProfile } from '@/shared/api/types'
 
-// TODO(api): ❌ 배송지·관심·팔로우·탈퇴 API 없음. 필드는 시안 기준 임시.
+// TODO(api): ❌ 팔로우·탈퇴 API 없음. 필드는 시안 기준 임시.
 
 /** ✅ GET /members/me */
 export type MyProfile = MemberInfo
