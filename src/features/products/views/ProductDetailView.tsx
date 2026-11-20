@@ -1,8 +1,9 @@
 import { ActionIcon, Alert, Box, Button, Drawer, Group, Skeleton, Stack, Text } from '@mantine/core'
-import { CircleAlert, Heart, Info, PackageX, Truck } from 'lucide-react'
+import { CircleAlert, Heart, Info, PackageX, Phone, TriangleAlert, Truck } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import type { ProductDetail, ProductReview, ReviewKeyword, SellerProfile } from '@/shared/api/types'
+import { SITE_INFO } from '@/shared/lib/constants'
 import { formatAmount } from '@/shared/lib/format'
 import { categoryLabels } from '@/shared/lib/labels'
 import {
@@ -109,6 +110,33 @@ const shippingNotes = [
   '배송 후 상품에 문제가 있으면 사진과 함께 고객센터로 문의해 주세요.',
   '구매확정 후에는 취소·환불이 안 돼요.',
 ]
+
+/**
+ * 판매자 본문 위에 고정으로 두는 플랫폼 안내(#45). 판매자가 쓴 내용과 섞이지 않게 본문 밖에 둔다.
+ * 정적 안내라 열 때마다 읽히지 않게 Mantine Alert 기본값 role="alert" 대신 note로 둔다.
+ * 고객센터는 푸터와 같은 전화번호(SITE_INFO.csPhone)를 쓴다.
+ */
+function DirectDepositWarning() {
+  return (
+    <Alert
+      role="note"
+      color="warning"
+      icon={<TriangleAlert />}
+      title="계좌로 직접 입금하라는 안내는 따르지 마세요"
+    >
+      <Stack gap={4} align="flex-start">
+        <span>
+          판매자가 팔도곳간 결제 밖에서 입금을 요청하면 입금하지 말고 팔도곳간 고객센터로 알려
+          주세요. 직접 입금한 금액은 보호받을 수 없어요.
+        </span>
+        <a className={classes.csLink} href={`tel:${SITE_INFO.csPhone}`}>
+          <Phone size={16} aria-hidden="true" />
+          고객센터 {SITE_INFO.csPhone}
+        </a>
+      </Stack>
+    </Alert>
+  )
+}
 
 function DetailSkeleton() {
   return (
@@ -432,6 +460,7 @@ export function ProductDetailView({
           <h2 id="product-info-title" className={classes.sectionTitle}>
             상품 정보
           </h2>
+          <DirectDepositWarning />
           <RichContent html={product.descriptionHtml} />
         </section>
 
