@@ -1,5 +1,5 @@
 import { HttpResponse, http } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { BACKEND, problemJson, setup } from '../test/fakeBackend.ts'
 import { server } from '../test/server.ts'
 
@@ -213,16 +213,99 @@ describe('토큰 쿠키 세션', () => {
     expect(calls.reissue).toBe(2)
   })
 
-  it('로그아웃하면 두 쿠키를 지운다', async () => {
-    const { request, login } = setup()
+  it('로그아웃하면 refresh로 백엔드 세션을 끊고 두 쿠키를 지운다', async () => {
+    const { request, login, calls } = setup()
     const { jar } = await login()
 
     const logout = await request('/bff/session/logout', { method: 'POST', jar })
     const after = await request('/bff/session', { jar })
 
     expect(logout.status).toBe(204)
+    expect(calls.logout).toEqual(['refresh-1'])
     expect(jar.names()).toEqual([])
     expect(after.status).toBe(401)
+  })
+
+  it('로그아웃한 refresh로는 다시 재발급할 수 없다 — 쿠키를 빼돌렸어도 세션이 끝난다', async () => {
+    const { request, login } = setup()
+    const { jar } = await login()
+    const stolen = jar.header('/bff/session/refresh')
+
+    await request('/bff/session/logout', { method: 'POST', jar })
+    const replay = await request('/bff/session/refresh', { method: 'POST', cookie: stolen })
+
+    expect(replay.status).toBe(401)
+  })
+
+  it.each([
+    ['5xx', () => problemJson(503, '잠시 후 다시 시도해 주세요.')],
+    ['연결 실패', () => HttpResponse.error()],
+  ])('백엔드 로그아웃이 %s여도 쿠키를 지우고 204다', async (_, failure) => {
+    const { request, login } = setup()
+    const { jar } = await login()
+    server.use(http.post(`${BACKEND}/api/v1/auth/logout`, failure))
+
+    const logout = await request('/bff/session/logout', { method: 'POST', jar })
+
+    expect(logout.status).toBe(204)
+    expect(jar.names()).toEqual([])
+  })
+
+  it('refresh 쿠키가 없으면 백엔드를 부르지 않고 204다', async () => {
+    const { request, calls } = setup()
+
+    const logout = await request('/bff/session/logout', { method: 'POST' })
+
+    expect(logout.status).toBe(204)
+    expect(calls.logout).toEqual([])
+  })
+
+  it('다른 탭이 막 재발급한 옛 refresh로 로그아웃해도 새 refresh의 세션을 끊는다', async () => {
+    const { request, login, calls } = setup()
+    const { jar } = await login()
+    const stale = jar.header('/bff/session/refresh')
+    await request('/bff/session/refresh', { method: 'POST', jar })
+
+    // 쿠키가 바뀌기 전의 탭이 옛 refresh(refresh-1)로 로그아웃한다. 백엔드에서 refresh-1은 이미 refresh-2로 바뀌었다
+    const logout = await request('/bff/session/logout', { method: 'POST', cookie: stale })
+    // 10초 안에 다시 와도 기억한 새 토큰을 내주지 않는다
+    const lateOld = await request('/bff/session/refresh', { method: 'POST', cookie: stale })
+    const lateNew = await request('/bff/session/refresh', { method: 'POST', jar })
+
+    expect(logout.status).toBe(204)
+    expect(calls.logout).toEqual(['refresh-2'])
+    expect(lateOld.status).toBe(401)
+    expect(lateNew.status).toBe(401)
+  })
+
+  it('같은 refresh로 재발급이 진행 중이면 끝나기를 기다렸다가 새 refresh로 로그아웃한다', async () => {
+    const { request, login, calls } = setup()
+    const { jar } = await login()
+    const stale = jar.header('/bff/session/refresh')
+    // 백엔드 재발급 응답을 붙잡아 두고 그 사이 로그아웃한다(아무것도 돌려주지 않으면 가짜 백엔드로 넘어간다)
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let received = false
+    server.use(
+      http.post(`${BACKEND}/api/v1/auth/reissue`, async () => {
+        received = true
+        await held
+      }),
+    )
+
+    const refreshing = request('/bff/session/refresh', { method: 'POST', jar })
+    await vi.waitFor(() => expect(received).toBe(true))
+    const logingOut = request('/bff/session/logout', { method: 'POST', cookie: stale })
+    release()
+    const [refreshed, logout] = await Promise.all([refreshing, logingOut])
+
+    expect(refreshed.status).toBe(200)
+    expect(logout.status).toBe(204)
+    expect(calls.reissue).toBe(1)
+    expect(calls.logout).toEqual(['refresh-2'])
+    expect((await request('/bff/session/refresh', { method: 'POST', jar })).status).toBe(401)
   })
 })
 

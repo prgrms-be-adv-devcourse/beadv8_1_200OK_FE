@@ -23,7 +23,8 @@ export const fakeJwt = (claims: { sub: string; roles: string[]; n: number }) =>
 
 /**
  * 시계를 움직일 수 있는 BFF + 1회용 refresh를 흉내 내는 가짜 인증 서버.
- * 백엔드처럼 access 30분·refresh 14일, 쓴 refresh는 다시 쓰면 401이다
+ * 백엔드처럼 access 30분·refresh 14일, 쓴 refresh는 다시 쓰면 401이다.
+ * 로그아웃은 받은 refresh를 폐기하고(이후 재발급 401) 없는 토큰에도 204다. calls.logout에 받은 refresh를 모은다
  */
 export function setup(
   options: { roles?: string[]; cookieSecure?: boolean; env?: Record<string, string> } = {},
@@ -33,7 +34,7 @@ export function setup(
   let issued = 0
   const validRefresh = new Set<string>()
   const validAccess = new Map<string, number>()
-  const calls = { login: 0, reissue: 0 }
+  const calls = { login: 0, reissue: 0, logout: [] as string[] }
 
   const issue = () => {
     issued += 1
@@ -76,6 +77,12 @@ export function setup(
         return problemJson(401, '로그인이 만료되었습니다. 다시 로그인해 주세요.')
       }
       return HttpResponse.json(issue())
+    }),
+    http.post(`${BACKEND}/api/v1/auth/logout`, async ({ request }) => {
+      const { refreshToken } = (await request.json()) as { refreshToken: string }
+      calls.logout.push(refreshToken)
+      validRefresh.delete(refreshToken)
+      return new HttpResponse(null, { status: 204 })
     }),
   )
 
