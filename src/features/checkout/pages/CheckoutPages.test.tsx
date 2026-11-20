@@ -1,11 +1,12 @@
 import { notifications } from '@mantine/notifications'
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { orderPaymentSequence } from '@/mocks/handlers/checkout'
 import { server } from '@/mocks/server'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authToken'
-import { type Checkout, MemberRole } from '@/shared/api/types'
+import { type Checkout, MemberRole, OrderStatus } from '@/shared/api/types'
 import { render } from '@/test/render'
 import { fakeToken } from '@/test/token'
 import {
@@ -18,7 +19,8 @@ import { CheckoutCompletePage } from './CheckoutCompletePage'
 import { CheckoutPage } from './CheckoutPage'
 
 // 주문서 → 배송비 견적 → 주문 생성 → 주문 완료.
-// 기본 응답: 주문서 39,800원(checkout.ts), 견적 추가 운임 0(shipments.ts), 주문 생성 201 { orderId: 184 }, 잔액 128,000(wallet.ts), 주문 상세 184(orders.ts)
+// 기본 응답: 주문서 39,800원(checkout.ts), 견적 추가 운임 0(shipments.ts), 주문 생성 201 { orderId: 184 }, 잔액 128,000(wallet.ts), 주문 상세 184(orders.ts, 결제 완료)
+// 주문 직후 결제 대기(PAYMENT_PENDING)에서 바뀌는 경우는 orderPaymentSequence로 덮고, 1초 간격 조회·10초/30초 대기는 가짜 시계로 넘긴다(#76).
 
 const openPostcode = vi.hoisted(() =>
   vi.fn(async (onPick: (picked: { zipCode: string; address: string }) => void) =>
@@ -33,16 +35,20 @@ const problem = (status: number, detail: string) =>
     { status, headers: { 'Content-Type': 'application/problem+json' } },
   )
 
-function renderCheckout() {
+function renderCheckout(initialEntry = '/checkout') {
   const router = createMemoryRouter(
     [
       { path: '/checkout', Component: CheckoutPage },
       { path: '/checkout/complete', Component: CheckoutCompletePage },
     ],
-    { initialEntries: ['/checkout'] },
+    { initialEntries: [initialEntry] },
   )
   const { unmount } = render(<RouterProvider router={router} />)
-  return { router, unmount, user: userEvent.setup() }
+  // 가짜 시계를 쓰는 테스트에서도 입력이 멈추지 않게 시계를 같이 넘긴다
+  const advanceTimers = (ms: number) => {
+    if (vi.isFakeTimers()) vi.advanceTimersByTime(ms)
+  }
+  return { router, unmount, user: userEvent.setup({ advanceTimers }) }
 }
 
 type User = ReturnType<typeof userEvent.setup>
@@ -64,6 +70,7 @@ async function pay(user: User, label: string) {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   notifications.clean()
   clearAccessToken()
   clearCheckoutDraft()
@@ -75,6 +82,7 @@ describe('CheckoutPage', () => {
     const bodies: unknown[] = []
     let quoteBody: unknown
     server.use(
+      orderPaymentSequence([OrderStatus.PAID]).handler,
       http.post('*/api/v1/shipments/fee-quotes', async ({ request }) => {
         quoteBody = await request.json()
         return HttpResponse.json({
@@ -414,5 +422,165 @@ describe('CheckoutPage', () => {
       expect(await screen.findByRole('button', { name: '배송지 입력' })).toBeInTheDocument()
       expect(called).toBe(false)
     })
+  })
+})
+
+describe('결제 확인 (#76: 주문은 결제 대기로 만들어지고 지갑 결제는 뒤에서 끝난다)', () => {
+  const { PAYMENT_PENDING, PAID, PAYMENT_FAILED, CANCELED } = OrderStatus
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  /** 주문서·잔액 조회 횟수를 센다. 잔액은 결제를 확인한 뒤부터 결제 후 금액(88,200)을 준다 */
+  function countLoads(paidAfter: () => boolean) {
+    const loads = { checkout: 0, balance: 0 }
+    server.use(
+      http.get('*/api/v1/orders/checkout', () => {
+        loads.checkout += 1
+        return HttpResponse.json(checkoutSample)
+      }),
+      http.get('*/api/v1/wallets/me/balance', () => {
+        loads.balance += 1
+        return HttpResponse.json({ balance: paidAfter() ? 88200 : 128000, maxBalance: 500000 })
+      }),
+    )
+    return loads
+  }
+
+  const tick = (ms = 1000) => act(() => vi.advanceTimersByTimeAsync(ms))
+
+  describe('주문서', () => {
+    it('결제 대기 동안은 결제 중으로 남고 주문서·잔액을 다시 받지 않다가, 결제 완료가 되면 완료 화면에서 결제 후 잔액을 보여 준다', async () => {
+      const payment = orderPaymentSequence([PAYMENT_PENDING, PAYMENT_PENDING, PAID])
+      server.use(payment.handler)
+      const loads = countLoads(() => payment.calls() >= 3)
+      const { router, user } = renderCheckout()
+
+      await fillAndAgree(user)
+      await pay(user, '39,800원 결제하기')
+      await waitFor(() => expect(payment.calls()).toBe(1))
+      await tick()
+      expect(payment.calls()).toBe(2)
+
+      expect(router.state.location.pathname).toBe('/checkout')
+      expect(screen.getByText('결제를 확인하고 있어요')).toBeInTheDocument()
+      expect(loads).toEqual({ checkout: 1, balance: 1 })
+
+      await tick()
+      expect(await screen.findByText('주문이 완료됐어요')).toBeInTheDocument()
+      expect(router.state.location.search).toBe(`?orderId=${SAMPLE_ORDER_ID}`)
+      expect(await screen.findByText('남은 예치금')).toBeInTheDocument()
+      expect(screen.getByText('88,200')).toBeInTheDocument()
+      expect(screen.queryByText('128,000')).not.toBeInTheDocument()
+    })
+
+    it.each([
+      [PAYMENT_FAILED, '결제 실패'],
+      [CANCELED, '주문 취소'],
+    ])(
+      '%s(%s)면 주문서에 남아 실패를 알리고, 주문서·잔액을 다시 받고, 다시 결제할 때 새 멱등키를 보낸다',
+      async (status) => {
+        const keys: (string | null)[] = []
+        const nextOrderId = SAMPLE_ORDER_ID + 1
+        server.use(
+          orderPaymentSequence([PAYMENT_PENDING, status]).handler,
+          orderPaymentSequence([PAID], nextOrderId).handler,
+          http.post('*/api/v1/orders', ({ request }) => {
+            keys.push(request.headers.get('Idempotency-Key'))
+            const orderId = keys.length === 1 ? SAMPLE_ORDER_ID : nextOrderId
+            return HttpResponse.json({ orderId }, { status: 201 })
+          }),
+        )
+        const loads = countLoads(() => false)
+        const { router, user } = renderCheckout()
+
+        await fillAndAgree(user)
+        await pay(user, '39,800원 결제하기')
+        await tick()
+
+        expect(await screen.findByText('결제하지 못했어요')).toBeInTheDocument()
+        expect(screen.getByText(/예치금은 빠져나가지 않았어요/)).toBeInTheDocument()
+        expect(router.state.location.pathname).toBe('/checkout')
+        expect(screen.getByText('이서연')).toBeInTheDocument()
+        expect(screen.getAllByText('청송 꿀사과 부사').length).toBeGreaterThan(0)
+        await waitFor(() => expect(loads).toEqual({ checkout: 2, balance: 2 }))
+
+        await user.click(screen.getByRole('button', { name: '다시 결제하기' }))
+        expect(await screen.findByText('주문이 완료됐어요')).toBeInTheDocument()
+        expect(router.state.location.search).toBe(`?orderId=${nextOrderId}`)
+        expect(keys).toHaveLength(2)
+        expect(keys[1]).not.toBe(keys[0])
+      },
+    )
+
+    it('10초가 지나도 결제 대기면 완료 화면으로 넘기고, 완료 화면이 결제 확인 중으로 이어 간다', async () => {
+      const payment = orderPaymentSequence([PAYMENT_PENDING])
+      server.use(payment.handler)
+      const { router, user } = renderCheckout()
+
+      await fillAndAgree(user)
+      await pay(user, '39,800원 결제하기')
+      await tick(9000)
+      expect(router.state.location.pathname).toBe('/checkout')
+
+      await tick(1000)
+      expect(await screen.findByText('결제 확인 중이에요')).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/checkout/complete')
+      expect(screen.queryByText('남은 예치금')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('완료 화면', () => {
+    it('결제 대기면 결제 확인 중으로 두고 잔액 줄을 숨기다가, 결제 완료가 되면 잔액을 보여 준다', async () => {
+      const payment = orderPaymentSequence([PAYMENT_PENDING, PAID])
+      server.use(payment.handler)
+      const loads = countLoads(() => payment.calls() >= 2)
+      renderCheckout(`/checkout/complete?orderId=${SAMPLE_ORDER_ID}`)
+
+      expect(await screen.findByText('결제 확인 중이에요')).toBeInTheDocument()
+      expect(await screen.findByText('주문 금액')).toBeInTheDocument()
+      expect(screen.queryByText('남은 예치금')).not.toBeInTheDocument()
+      expect(loads.balance).toBe(0)
+
+      await tick()
+      expect(await screen.findByText('주문이 완료됐어요')).toBeInTheDocument()
+      expect(await screen.findByText('남은 예치금')).toBeInTheDocument()
+      expect(screen.getByText('88,200')).toBeInTheDocument()
+    })
+
+    it('30초가 지나도 결제 대기면 조회를 멈추고 주문 내역에서 확인하게 한다', async () => {
+      const payment = orderPaymentSequence([PAYMENT_PENDING])
+      server.use(payment.handler)
+      renderCheckout(`/checkout/complete?orderId=${SAMPLE_ORDER_ID}`)
+
+      expect(await screen.findByText('결제 확인 중이에요')).toBeInTheDocument()
+      await tick(30_000)
+
+      expect(await screen.findByText('결제 확인이 늦어지고 있어요')).toBeInTheDocument()
+      expect(screen.getByText('주문 내역에서 결제 결과를 확인해 주세요.')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '주문 내역 보기' })).toHaveAttribute(
+        'href',
+        '/orders',
+      )
+      expect(screen.queryByText('남은 예치금')).not.toBeInTheDocument()
+
+      const calls = payment.calls()
+      await tick(5000)
+      expect(payment.calls()).toBe(calls)
+    })
+
+    it.each([PAYMENT_FAILED, CANCELED])(
+      '%s면 결제하지 못했다고 알리고 장바구니로 보낸다',
+      async (status) => {
+        server.use(orderPaymentSequence([status]).handler)
+        renderCheckout(`/checkout/complete?orderId=${SAMPLE_ORDER_ID}`)
+
+        expect(await screen.findByText('결제하지 못했어요')).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: '장바구니로' })).toHaveAttribute('href', '/cart')
+        expect(screen.queryByText('남은 예치금')).not.toBeInTheDocument()
+        expect(screen.queryByText('결제 금액')).not.toBeInTheDocument()
+      },
+    )
   })
 })

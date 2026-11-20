@@ -87,6 +87,26 @@ export const completedOrderSample: OrderDetail = {
   totalAmount: checkoutSample.totalProductAmount,
 }
 
+/** 주문 직후: 결제 대기(PAYMENT_PENDING). 지갑 결제는 보통 1초 안에 끝나 PAID가 된다(#76) */
+export const pendingOrderSample: OrderDetail = {
+  ...completedOrderSample,
+  status: OrderStatus.PAYMENT_PENDING,
+  sellerGroups: completedOrderSample.sellerGroups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({ ...item, status: OrderItemStatus.PAYMENT_PENDING })),
+  })),
+}
+
+/** 결제 실패(PAYMENT_FAILED). 주문 사이에 잔액이 줄어든 경우라 드물다. 서버가 재고를 풀고 장바구니는 그대로다 */
+export const failedOrderSample: OrderDetail = {
+  ...completedOrderSample,
+  status: OrderStatus.PAYMENT_FAILED,
+  sellerGroups: completedOrderSample.sellerGroups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({ ...item, status: OrderItemStatus.PAYMENT_FAILED })),
+  })),
+}
+
 // ─── 배송비 견적 (POST /shipments/fee-quotes) ───────────────────────────
 // 일반 지역(서울 04524): 추가 운임 0 → 총 39,800. 도서산간(제주 63000): 판매자마다 +3,000 → 총 45,800
 
