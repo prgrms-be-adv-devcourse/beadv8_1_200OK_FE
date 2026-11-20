@@ -117,6 +117,23 @@ describe('/api/v1 프록시', () => {
     expect(size).toBeGreaterThan(1024)
   })
 
+  it('로그인 없이 부르는 공개 GET(상점 프로필)은 Authorization 없이 그대로 넘긴다', async () => {
+    const { request } = setup()
+    let authorization: string | null = 'not-called'
+    server.use(
+      http.get(`${BACKEND}/api/v1/stores/7`, ({ request }) => {
+        authorization = request.headers.get('Authorization')
+        return HttpResponse.json({ sellerId: 7, storeName: '청송 햇살농원' })
+      }),
+    )
+
+    const response = await request('/api/v1/stores/7')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ sellerId: 7, storeName: '청송 햇살농원' })
+    expect(authorization).toBeNull()
+  })
+
   it('백엔드에 닿지 못하면 problem+json 502를 준다', async () => {
     const { request } = setup()
     server.use(http.get(`${BACKEND}/api/v1/products`, () => HttpResponse.error()))

@@ -12,6 +12,7 @@ const routes: [prefix: string, module: UpstreamModule][] = [
   ['/api/v1/seller/shipments', 'delivery'],
   ['/api/v1/auth', 'member'],
   ['/api/v1/members', 'member'],
+  ['/api/v1/stores', 'member'], // 상점 프로필 공개 조회(판매자 하위 도메인이 member에 있다)
   ['/api/v1/products', 'product'],
   ['/api/v1/reviews', 'product'],
   ['/api/v1/cart', 'order'],
