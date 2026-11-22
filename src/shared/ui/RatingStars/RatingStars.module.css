@@ -28,15 +28,10 @@
 
 /* 채운 별·반 별 straw-ink, 빈 별은 border-input 테두리. 주황·녹색은 쓰지 않는다 */
 .star {
-  position: relative;
-  display: inline-flex;
+  display: block;
   flex: none;
-
-  & svg {
-    display: block;
-    stroke-width: 1.75;
-    stroke-linejoin: round;
-  }
+  stroke-width: 1.75;
+  stroke-linejoin: round;
 }
 
 .empty {
@@ -47,17 +42,6 @@
 .full {
   fill: var(--pd-color-straw-ink);
   stroke: var(--pd-color-straw-ink);
-}
-
-.fillClip {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-.star[data-fill="half"] .fillClip {
-  width: 50%;
 }
 
 .value {

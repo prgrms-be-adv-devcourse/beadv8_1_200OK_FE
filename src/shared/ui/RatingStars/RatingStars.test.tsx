@@ -19,6 +19,22 @@ describe('RatingStars', () => {
     expect(screen.getByText('별점 5점 만점에 4.8점, 리뷰 128개')).toBeInTheDocument()
   })
 
+  // #85: 반 별을 바깥 상자 폭으로 자르면 SVG가 줄어들어 작은 별이 됐다. 별 크기는 그대로 두고 왼쪽 절반만 칠한다.
+  it('반 별은 원래 크기 그대로 왼쪽 절반만 칠한다', () => {
+    const { container } = render(<RatingStars value={3.5} size={16} />)
+    const half = container.querySelector('svg[data-fill="half"]')
+    expect(half).toHaveAttribute('width', '16')
+    expect(half).toHaveAttribute('height', '16')
+
+    const clipRect = half?.querySelector('clipPath rect')
+    expect(clipRect).toHaveAttribute('x', '0')
+    expect(clipRect).toHaveAttribute('width', '12')
+
+    const polygons = half?.querySelectorAll('polygon') ?? []
+    expect(polygons).toHaveLength(2)
+    expect(polygons[1]).toHaveAttribute('clip-path', `url(#${half?.querySelector('clipPath')?.id})`)
+  })
+
   it('보이는 별과 숫자는 낭독에서 숨긴다', () => {
     const { container } = render(<RatingStars value={4.5} />)
     const hidden = container.querySelectorAll('[aria-hidden="true"]')
