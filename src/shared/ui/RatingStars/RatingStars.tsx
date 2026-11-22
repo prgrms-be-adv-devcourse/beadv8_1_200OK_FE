@@ -1,4 +1,5 @@
 import { VisuallyHidden } from '@mantine/core'
+import { useId } from 'react'
 import { formatAmount } from '@/shared/lib/format'
 import classes from './RatingStars.module.css'
 
@@ -30,34 +31,36 @@ export function starFills(value: number): Fill[] {
   })
 }
 
+const STAR_POLYGON =
+  '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26'
+
+// 반 별은 같은 SVG 안에서 clipPath로 왼쪽 절반(x 0~12)만 칠한다.
+// 바깥 상자를 width 50%로 잘라 내면 flex 안의 SVG가 잘리지 않고 줄어들어 작은 별이 된다(#85).
 function Star({ fill, size }: { fill: Fill; size: number }) {
-  const polygon =
-    '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26'
+  const clipId = useId()
   return (
-    <span className={classes.star} data-fill={fill} style={{ width: size, height: size }}>
-      <svg
-        viewBox="0 0 24 24"
-        width={size}
-        height={size}
-        className={classes.empty}
-        aria-hidden="true"
-      >
-        <polygon points={polygon} />
-      </svg>
-      {fill !== 'empty' && (
-        <span className={classes.fillClip}>
-          <svg
-            viewBox="0 0 24 24"
-            width={size}
-            height={size}
-            className={classes.full}
-            aria-hidden="true"
-          >
-            <polygon points={polygon} />
-          </svg>
-        </span>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      className={classes.star}
+      data-fill={fill}
+      aria-hidden="true"
+    >
+      <polygon points={STAR_POLYGON} className={classes.empty} />
+      {fill === 'half' && (
+        <clipPath id={clipId}>
+          <rect x="0" y="0" width="12" height="24" />
+        </clipPath>
       )}
-    </span>
+      {fill !== 'empty' && (
+        <polygon
+          points={STAR_POLYGON}
+          className={classes.full}
+          clipPath={fill === 'half' ? `url(#${clipId})` : undefined}
+        />
+      )}
+    </svg>
   )
 }
 
